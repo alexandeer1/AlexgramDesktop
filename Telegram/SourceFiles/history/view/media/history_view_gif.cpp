@@ -230,6 +230,15 @@ Gif::Gif(
 	ensureTranscribeButton();
 
 	_purchasedPriceTag = hasPurchasedTag();
+
+	Core::App().appDeactivatedValue(
+	) | rpl::on_next([=](bool deactivated) {
+		if (deactivated && Core::App().settings().autoPauseVideo()) {
+			if (_streamed) {
+				_streamed->instance.pause();
+			}
+		}
+	}, _autoPauseLifetime);
 }
 
 Gif::~Gif() {

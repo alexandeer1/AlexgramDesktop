@@ -254,6 +254,7 @@ private:
 	mutable bool _smallGroupPart : 1 = false;
 	const bool _sensitiveSpoiler : 1 = false;
 	const bool _hasVideoCover : 1 = false;
+	rpl::lifetime _autoPauseLifetime;
 
 };
 

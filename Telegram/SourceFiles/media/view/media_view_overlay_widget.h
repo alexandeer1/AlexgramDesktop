@@ -124,6 +124,8 @@ public:
 	void toggleFullScreen(bool fullscreen);
 
 	void notifyFileDialogShown(bool shown);
+	void playbackPause();
+	void storiesPause();
 
 	void clearSession();
 
