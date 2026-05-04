@@ -7994,6 +7994,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_show_online_status_about" = "Show a colored dot indicating the online status next to user profile photos in chats.";
 "lng_settings_alexgram_show_edited_icon" = "Show Icon instead of \"edited\"";
 "lng_settings_alexgram_show_edited_icon_about" = "Replace the \"edited\" text label with a pencil icon.";
+"lng_settings_alexgram_show_small_gifs" = "Show Small GIFs";
+"lng_settings_alexgram_show_small_gifs_about" = "Display GIFs at a smaller, sticker-like scale within conversations.";
+"lng_settings_alexgram_treat_gifs_as_videos" = "Take GIF as Video";
+"lng_settings_alexgram_treat_gifs_as_videos_about" = "If enabled, GIFs will be treated as regular videos, showing duration and requiring manual playback.";
 
 "lng_settings_show_translate_button" = "Show Translate Button";
 "lng_settings_show_translate_button_about" = "Show a translate button in the message context menu.";

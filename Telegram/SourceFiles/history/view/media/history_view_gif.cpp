@@ -264,7 +264,9 @@ QSize Gif::sizeForAspectRatio() const {
 }
 
 QSize Gif::countThumbSize(int &inOutWidthMax) const {
-	const auto maxSize = _data->isVideoFile()
+	const auto maxSize = Core::App().settings().showSmallGifs()
+		? st::maxStickerSize
+		: (_data->isVideoFile() || Core::App().settings().treatGifsAsVideos())
 		? st::maxMediaSize
 		: _data->isVideoMessage()
 		? st::maxVideoMessageSize
@@ -426,6 +428,9 @@ bool Gif::underCursor() const {
 bool Gif::autoplayEnabled() const {
 	if (_realParent->isSponsored()) {
 		return true;
+	}
+	if (Core::App().settings().treatGifsAsVideos()) {
+		return false;
 	}
 	return Data::AutoDownload::ShouldAutoPlay(
 		_data->session().settings().autoDownload(),
@@ -2012,7 +2017,9 @@ void Gif::setStatusSize(int64 newSize) const {
 		File::setStatusSize(
 			newSize,
 			_data->size,
-			_data->isVideoFile() ? (_data->duration() / 1000) : -2,
+			(_data->isVideoFile() || Core::App().settings().treatGifsAsVideos())
+				? (_data->duration() / 1000)
+				: -2,
 			0);
 	}
 }
@@ -2354,6 +2361,7 @@ bool Gif::needInfoDisplay() const {
 
 bool Gif::needCornerStatusDisplay() const {
 	return _data->isVideoFile()
+		|| Core::App().settings().treatGifsAsVideos()
 		|| needInfoDisplay();
 }
 

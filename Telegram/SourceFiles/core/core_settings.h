@@ -1060,6 +1060,14 @@ public:
 	[[nodiscard]] rpl::producer<bool> showOnlineStatusChanges();
 	void setShowOnlineStatus(bool value);
 
+	[[nodiscard]] bool showSmallGifs();
+	[[nodiscard]] rpl::producer<bool> showSmallGifsChanges();
+	void setShowSmallGifs(bool value);
+
+	[[nodiscard]] bool treatGifsAsVideos();
+	[[nodiscard]] rpl::producer<bool> treatGifsAsVideosChanges();
+	void setTreatGifsAsVideos(bool value);
+
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();
 

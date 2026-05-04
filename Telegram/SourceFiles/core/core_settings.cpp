@@ -150,6 +150,14 @@ rpl::event_stream<bool> &ShowOnlineStatusChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &ShowSmallGifsChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &TreatGifsAsVideosChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
 
 [[nodiscard]] WindowPosition AdjustToScale(WindowPosition position,
@@ -1938,6 +1946,32 @@ rpl::producer<bool> Settings::showOnlineStatusChanges() {
 void Settings::setShowOnlineStatus(bool value) {
 	writePref<bool>("show-online-status", value);
 	ShowOnlineStatusChanges().fire_copy(value);
+}
+
+bool Settings::showSmallGifs() {
+	return readPref<bool>("show-small-gifs", false);
+}
+
+rpl::producer<bool> Settings::showSmallGifsChanges() {
+	return ShowSmallGifsChanges().events_starting_with(showSmallGifs());
+}
+
+void Settings::setShowSmallGifs(bool value) {
+	writePref<bool>("show-small-gifs", value);
+	ShowSmallGifsChanges().fire_copy(value);
+}
+
+bool Settings::treatGifsAsVideos() {
+	return readPref<bool>("treat-gifs-as-videos", false);
+}
+
+rpl::producer<bool> Settings::treatGifsAsVideosChanges() {
+	return TreatGifsAsVideosChanges().events_starting_with(treatGifsAsVideos());
+}
+
+void Settings::setTreatGifsAsVideos(bool value) {
+	writePref<bool>("treat-gifs-as-videos", value);
+	TreatGifsAsVideosChanges().fire_copy(value);
 }
 
 } // namespace Core
