@@ -162,6 +162,10 @@ rpl::event_stream<bool> &AutoPauseVideoChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &NoAutoPlayNextVoiceChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
 
 [[nodiscard]] WindowPosition AdjustToScale(WindowPosition position,
@@ -1989,6 +1993,19 @@ rpl::producer<bool> Settings::autoPauseVideoChanges() {
 void Settings::setAutoPauseVideo(bool value) {
 	writePref<bool>("auto-pause-video", value);
 	AutoPauseVideoChanges().fire_copy(value);
+}
+
+bool Settings::noAutoPlayNextVoice() {
+	return readPref<bool>("no-autoplay-next-voice", false);
+}
+
+rpl::producer<bool> Settings::noAutoPlayNextVoiceChanges() {
+	return NoAutoPlayNextVoiceChanges().events_starting_with(noAutoPlayNextVoice());
+}
+
+void Settings::setNoAutoPlayNextVoice(bool value) {
+	writePref<bool>("no-autoplay-next-voice", value);
+	NoAutoPlayNextVoiceChanges().fire_copy(value);
 }
 
 } // namespace Core

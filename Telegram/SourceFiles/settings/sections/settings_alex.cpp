@@ -460,6 +460,19 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_auto_pause_video_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs noAutoPlayNextVoiceArgs;
+	noAutoPlayNextVoiceArgs.title = tr::lng_settings_alexgram_no_autoplay_next_voice();
+	noAutoPlayNextVoiceArgs.checked = Core::App().settings().noAutoPlayNextVoice();
+	const auto noAutoPlayNextVoiceCb = builder.addCheckbox(std::move(noAutoPlayNextVoiceArgs));
+	noAutoPlayNextVoiceCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setNoAutoPlayNextVoice(checked);
+		Core::App().saveSettingsDelayed();
+	}, noAutoPlayNextVoiceCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_no_autoplay_next_voice_about());
+	builder.addSkip();
+
 	Ui::ResizeFitChild(this, content);
 }
 

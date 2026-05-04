@@ -1302,6 +1302,8 @@ void Instance::emitUpdate(AudioMsgId::Type type, CheckCallback check) {
 				play(data->current);
 			} else if (OptionDisableAutoplayNext.value()) {
 				finished = true;
+			} else if (type == AudioMsgId::Type::Voice && Core::App().settings().noAutoPlayNextVoice()) {
+				finished = true;
 			} else if (!moveInPlaylist(data, 1, true)) {
 				finished = true;
 			}

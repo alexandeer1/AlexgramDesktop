@@ -273,7 +273,7 @@ QSize Gif::sizeForAspectRatio() const {
 }
 
 QSize Gif::countThumbSize(int &inOutWidthMax) const {
-	const auto maxSize = Core::App().settings().showSmallGifs()
+	const auto maxSize = (Core::App().settings().showSmallGifs() && _data->isAnimation() && !_data->isVideoMessage())
 		? st::maxStickerSize
 		: (_data->isVideoFile() || Core::App().settings().treatGifsAsVideos())
 		? st::maxMediaSize
