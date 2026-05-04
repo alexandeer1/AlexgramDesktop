@@ -45,6 +45,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "apiwrap.h"
 #include "api/api_who_reacted.h"
 #include "api/api_views.h"
+#include "data/data_peer_values.h"
 #include "layout/layout_selection.h"
 #include "payments/payments_reaction_process.h"
 #include "window/section_widget.h"
@@ -2636,7 +2637,6 @@ void ListWidget::paintUserpics(
 			}
 			if (const auto from = item->displayFrom()) {
 				const auto x = (rtl() ? (view->width() - st::historyPhotoLeft - st::msgPhotoSize) : st::historyPhotoLeft);
-				const auto y = userpicTop;
 				from->paintUserpicLeft(
 					p,
 					_userpics[from],
@@ -2644,34 +2644,6 @@ void ListWidget::paintUserpics(
 					userpicTop,
 					view->width(),
 					st::msgPhotoSize);
-				if (Core::App().settings().showOnlineStatus()) {
-					if (const auto user = item->from()->asUser()) {
-						user->owner().watchForOffline(user, base::unixtime::now());
-						if (!user->isBot() && Data::IsUserOnline(user)) {
-							auto hq = PainterHighQualityEnabler(p);
-							const auto dotSize = 12;
-							const auto stroke = 2;
-							const auto outerSize = dotSize + 2 * stroke;
-							const auto dotRect = QRect(
-								x + st::msgPhotoSize - dotSize - 1,
-								y + st::msgPhotoSize - dotSize - 1,
-								dotSize,
-								dotSize);
-							const auto outerRect = QRect(
-								x + st::msgPhotoSize - outerSize + 1,
-								y + st::msgPhotoSize - outerSize + 1,
-								outerSize,
-								outerSize);
-
-							p.setPen(Qt::NoPen);
-							p.setBrush(context.st->value(st::windowBg));
-							p.drawEllipse(outerRect);
-
-							p.setBrush(st::dialogsOnlineBadgeFg);
-							p.drawEllipse(dotRect);
-						}
-					}
-				}
 			} else if (const auto info = item->displayHiddenSenderInfo()) {
 				if (info->customUserpic.empty()) {
 					info->emptyUserpic.paintCircle(

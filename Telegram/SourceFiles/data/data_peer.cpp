@@ -29,7 +29,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "lang/lang_keys.h"
 #include "apiwrap.h"
 #include "api/api_chat_participants.h"
+#include "data/data_peer_values.h"
 #include "ui/boxes/confirm_box.h"
+#include "styles/style_dialogs.h"
+#include "styles/style_chat.h"
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
 #include "main/main_domain.h"
@@ -477,6 +480,36 @@ void PeerData::paintUserpic(
 		size * ratio,
 		context.shape);
 	p.drawImage(QRect(context.position, QSize(size, size)), view.cached);
+
+	if (Core::App().settings().showOnlineStatus() && size == st::msgPhotoSize) {
+		if (const auto user = asUser()) {
+			const auto now = base::unixtime::now();
+			if (!user->isBot() && Data::IsUserOnline(const_cast<UserData*>(user), now)) {
+				auto hq = PainterHighQualityEnabler(p);
+				const auto dotSize = st::dialogsOnlineBadgeSize;
+				const auto stroke = st::dialogsOnlineBadgeStroke;
+				const auto outerSize = dotSize + 2 * stroke;
+				const auto padding = 2;
+				const auto dotRect = QRectF(
+					context.position.x() + size - dotSize - padding,
+					context.position.y() + size - dotSize - padding,
+					dotSize,
+					dotSize);
+				const auto outerRect = QRectF(
+					context.position.x() + size - outerSize - padding,
+					context.position.y() + size - outerSize - padding,
+					outerSize,
+					outerSize);
+
+				p.setPen(Qt::NoPen);
+				p.setBrush(st::windowBg);
+				p.drawEllipse(outerRect);
+
+				p.setBrush(st::dialogsOnlineBadgeFg);
+				p.drawEllipse(dotRect);
+			}
+		}
+	}
 }
 
 void PeerData::loadUserpic() {

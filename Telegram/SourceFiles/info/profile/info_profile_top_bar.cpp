@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "chat_helpers/stickers_lottie.h"
 #include "core/application.h"
 #include "core/shortcuts.h"
+#include "core/core_settings.h"
 #include "data/components/recent_shared_media_gifts.h"
 #include "data/data_changes.h"
 #include "data/data_channel.h"
@@ -1826,6 +1827,33 @@ void TopBar::paintUserpic(QPainter &p, const QRect &geometry) {
 		auto hq = PainterHighQualityEnabler(p);
 		p.drawImage(geometry, _cachedUserpic);
 	}
+	if (Core::App().settings().showOnlineStatus()) {
+		if (const auto user = _peer->asUser()) {
+			if (!user->isBot() && Data::IsUserOnline(user, base::unixtime::now())) {
+				auto hq = PainterHighQualityEnabler(p);
+				const auto dotSize = 12;
+				const auto stroke = 2;
+				const auto outerSize = dotSize + 2 * stroke;
+				const auto dotRect = QRectF(
+					geometry.x() + geometry.width() - dotSize - stroke,
+					geometry.y() + geometry.height() - dotSize - stroke,
+					dotSize,
+					dotSize);
+				const auto outerRect = QRectF(
+					geometry.x() + geometry.width() - outerSize,
+					geometry.y() + geometry.height() - outerSize,
+					outerSize,
+					outerSize);
+
+				p.setPen(Qt::NoPen);
+				p.setBrush(st::windowBg);
+				p.drawEllipse(outerRect);
+
+				p.setBrush(st::dialogsOnlineBadgeFg);
+				p.drawEllipse(dotRect);
+			}
+		}
+	}
 	if (_uploadOverlay && _uploadOverlay->shown()) {
 		_uploadOverlay->paint(p, geometry, {
 			.lineWidth = st::defaultUserpicButton.uploadProgressLine,
@@ -2122,6 +2150,9 @@ void TopBar::setupShowLastSeen(
 			&& !premium
 			&& user->session().premiumPossible();
 		_showLastSeen->toggle(shown, anim::type::instant);
+		if (Core::App().settings().showOnlineStatus()) {
+			update();
+		}
 		if (wasShown && premium && hiddenByMe) {
 			user->updateFullForced();
 		}

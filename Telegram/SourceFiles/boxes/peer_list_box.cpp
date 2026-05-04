@@ -31,7 +31,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "data/data_changes.h"
 #include "data/stickers/data_custom_emoji.h"
+#include "data/data_user.h"
 #include "base/unixtime.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "styles/style_layers.h"
 #include "styles/style_boxes.h"
 #include "styles/style_dialogs.h"
@@ -940,6 +943,35 @@ void PeerListRow::paintUserpic(
 		callback(p, x, y, outerWidth, st.photoSize);
 	}
 	paintUserpicOverlay(p, st, x, y, outerWidth);
+
+	if (Core::App().settings().showOnlineStatus()) {
+		if (const auto user = peer()->asUser()) {
+			if (!user->isBot() && Data::IsUserOnline(user, base::unixtime::now())) {
+				auto hq = PainterHighQualityEnabler(p);
+				const auto size = st.photoSize;
+				const auto dotSize = 10;
+				const auto stroke = 2;
+				const auto outerSize = dotSize + 2 * stroke;
+
+				p.setPen(Qt::NoPen);
+				p.setBrush(st::windowBg);
+				p.drawEllipse(style::rtlrect(
+					x + size - outerSize + 1,
+					y + size - outerSize + 1,
+					outerSize,
+					outerSize,
+					outerWidth));
+
+				p.setBrush(st::dialogsOnlineBadgeFg);
+				p.drawEllipse(style::rtlrect(
+					x + size - dotSize - 1,
+					y + size - dotSize - 1,
+					dotSize,
+					dotSize,
+					outerWidth));
+			}
+		}
+	}
 }
 
 // Emulates Ui::RoundImageCheckbox::paint() in a checked state.
@@ -1065,9 +1097,9 @@ PeerListContent::PeerListContent(
 
 	using UpdateFlag = Data::PeerUpdate::Flag;
 	_controller->session().changes().peerUpdates(
-		UpdateFlag::Name | UpdateFlag::Photo | UpdateFlag::EmojiStatus
+		UpdateFlag::Name | UpdateFlag::Photo | UpdateFlag::EmojiStatus | UpdateFlag::OnlineStatus
 	) | rpl::on_next([=](const Data::PeerUpdate &update) {
-		if (update.flags & UpdateFlag::Name) {
+		if (update.flags & (UpdateFlag::Name | UpdateFlag::OnlineStatus)) {
 			handleNameChanged(update.peer);
 		}
 		if (update.flags & UpdateFlag::Photo) {
