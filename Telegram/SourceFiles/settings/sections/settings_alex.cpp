@@ -385,6 +385,68 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_show_online_status_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs showSmallGifsArgs;
+	showSmallGifsArgs.title = tr::lng_settings_alexgram_show_small_gifs();
+	showSmallGifsArgs.checked = Core::App().settings().showSmallGifs();
+	const auto showSmallGifsCb = builder.addCheckbox(std::move(showSmallGifsArgs));
+	showSmallGifsCb->checkedChanges(
+	) | rpl::filter([=](bool checked) {
+		return (checked != Core::App().settings().showSmallGifs());
+	}) | rpl::on_next([=](bool checked) {
+		const auto confirmed = crl::guard(showSmallGifsCb, [=](Fn<void()> close) {
+			Core::App().settings().setShowSmallGifs(checked);
+			Core::App().saveSettingsDelayed();
+			Core::Restart();
+			close();
+		});
+		const auto cancelled = crl::guard(showSmallGifsCb, [=](Fn<void()> close) {
+			showSmallGifsCb->setChecked(
+				Core::App().settings().showSmallGifs(),
+				Ui::Checkbox::NotifyAboutChange::DontNotify);
+			close();
+		});
+		controller()->show(Ui::MakeConfirmBox({
+			.text = tr::lng_settings_need_restart(),
+			.confirmed = confirmed,
+			.cancelled = cancelled,
+			.confirmText = tr::lng_settings_restart_now(),
+		}));
+	}, showSmallGifsCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_show_small_gifs_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs treatGifsAsVideosArgs;
+	treatGifsAsVideosArgs.title = tr::lng_settings_alexgram_treat_gifs_as_videos();
+	treatGifsAsVideosArgs.checked = Core::App().settings().treatGifsAsVideos();
+	const auto treatGifsAsVideosCb = builder.addCheckbox(std::move(treatGifsAsVideosArgs));
+	treatGifsAsVideosCb->checkedChanges(
+	) | rpl::filter([=](bool checked) {
+		return (checked != Core::App().settings().treatGifsAsVideos());
+	}) | rpl::on_next([=](bool checked) {
+		const auto confirmed = crl::guard(treatGifsAsVideosCb, [=](Fn<void()> close) {
+			Core::App().settings().setTreatGifsAsVideos(checked);
+			Core::App().saveSettingsDelayed();
+			Core::Restart();
+			close();
+		});
+		const auto cancelled = crl::guard(treatGifsAsVideosCb, [=](Fn<void()> close) {
+			treatGifsAsVideosCb->setChecked(
+				Core::App().settings().treatGifsAsVideos(),
+				Ui::Checkbox::NotifyAboutChange::DontNotify);
+			close();
+		});
+		controller()->show(Ui::MakeConfirmBox({
+			.text = tr::lng_settings_need_restart(),
+			.confirmed = confirmed,
+			.cancelled = cancelled,
+			.confirmText = tr::lng_settings_restart_now(),
+		}));
+	}, treatGifsAsVideosCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_treat_gifs_as_videos_about());
+	builder.addSkip();
+
 	Ui::ResizeFitChild(this, content);
 }
 
