@@ -473,6 +473,15 @@ HistoryInner::HistoryInner(
 		}
 	}, lifetime());
 
+	session().data().itemViewRefreshRequest(
+	) | rpl::on_next([=](not_null<const HistoryItem*> item) {
+		if (const auto view = viewByItem(item)) {
+			view->itemTextUpdated();
+			view->itemDataChanged();
+			session().data().requestViewResize(view);
+		}
+	}, lifetime());
+
 	session().changes().historyUpdates(
 		_history,
 		(Data::HistoryUpdate::Flag::OutboxRead
@@ -3348,10 +3357,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 							[=] { copyContextText(itemId); },
 							&st::menuIconCopy);
 					}
-					if ((!item->translation() || !_history->translatedTo())
-						&& (view->hasVisibleText() || mediaHasTextForCopy)) {
-						const auto peer = item->history()->peer;
-						const auto itemId = item->id;
+					const auto translation = item->translation();
+					const auto translated = translation && translation->used;
+					if (translated) {
+						_menu->addAction(tr::lng_context_hide_translation(tr::now), [=] {
+							if (const auto msg = session->data().message(itemId)) {
+								_translateTracker->toggleTranslation(msg);
+							}
+						}, &st::menuIconTranslate);
+					} else if (view->hasVisibleText() || mediaHasTextForCopy) {
 						const auto translate = mediaHasTextForCopy
 							? (HistoryView::TransribedText(item)
 								.append('\n')
@@ -3360,12 +3374,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						if (!translate.text.isEmpty()
 							&& !Ui::SkipTranslate(translate)) {
 							_menu->addAction(tr::lng_context_translate(tr::now), [=] {
-								_controller->show(Box(
-									Ui::TranslateBox,
-									peer,
-									mediaHasTextForCopy ? MsgId() : itemId,
-									translate,
-									hasRestriction));
+								if (const auto msg = session->data().message(itemId)) {
+									_translateTracker->toggleTranslation(msg);
+								}
 							}, &st::menuIconTranslate);
 						}
 					}

@@ -411,6 +411,8 @@ public:
 		QPoint position,
 		const TextState &replyState) const;
 	void toggleFavoriteReaction(not_null<Element*> view) const;
+	void toggleTranslation(not_null<HistoryItem*> item);
+
 
 
 	[[nodiscard]] auto scrollKeyEvents() const

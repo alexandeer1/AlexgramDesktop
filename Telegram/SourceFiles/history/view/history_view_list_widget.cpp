@@ -59,6 +59,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/scroll_area.h"
 #include "ui/toast/toast.h"
 #include "ui/inactive_press.h"
+#include "ui/painter.h"
+#include "data/data_user.h"
+#include "data/data_lastseen_status.h"
 #include "ui/effects/message_sending_animation_controller.h"
 #include "ui/effects/path_shift_gradient.h"
 #include "ui/effects/reaction_fly_animation.h"
@@ -87,6 +90,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_message_reactions.h"
 #include "data/data_peer_values.h"
 #include "styles/style_chat.h"
+#include "styles/style_dialogs.h"
 #include "styles/style_window.h" // columnMaximalWidthLeft
 
 #include <QtWidgets/QApplication>
@@ -491,6 +495,14 @@ ListWidget::ListWidget(
 	}
 
 	_scrollDateHideTimer.setCallback([this] { scrollDateHideByTimer(); });
+
+	_session->changes().peerUpdates(
+		Data::PeerUpdate::Flag::OnlineStatus
+	) | rpl::on_next([=](const Data::PeerUpdate &) {
+		if (Core::App().settings().showOnlineStatus()) {
+			this->update();
+		}
+	}, lifetime());
 	_session->data().viewRepaintRequest(
 	) | rpl::on_next([this](Data::RequestViewRepaint data) {
 		if (data.view->delegate() == this) {
@@ -637,7 +649,14 @@ not_null<ListDelegate*> ListWidget::delegate() const {
 	return _delegate;
 }
 
+void ListWidget::toggleTranslation(not_null<HistoryItem*> item) {
+	if (_translateTracker) {
+		_translateTracker->toggleTranslation(item);
+	}
+}
+
 void ListWidget::refreshViewer() {
+
 	_viewerLifetime.destroy();
 	_refreshingViewer = true;
 	_delegate->listSource(
@@ -1703,13 +1722,11 @@ bool ListWidget::isEmpty() const {
 }
 
 bool ListWidget::hasCopyRestriction(HistoryItem *item) const {
-	return _delegate->listCopyRestrictionType(item)
-		!= CopyRestrictionType::None;
+	return false;
 }
 
 bool ListWidget::hasCopyMediaRestriction(not_null<HistoryItem*> item) const {
-	return _delegate->listCopyMediaRestrictionType(item)
-		!= CopyRestrictionType::None;
+	return false;
 }
 
 bool ListWidget::showCopyRestriction(HistoryItem *item) {
@@ -1739,21 +1756,6 @@ bool ListWidget::showCopyMediaRestriction(not_null<HistoryItem*> item) {
 }
 
 bool ListWidget::hasCopyRestrictionForSelected() const {
-	if (hasCopyRestriction()) {
-		return true;
-	}
-	if (_selected.empty()) {
-		if (_selectedTextItem && _selectedTextItem->forbidsForward()) {
-			return true;
-		}
-	}
-	for (const auto &[itemId, selection] : _selected) {
-		if (const auto item = session().data().message(itemId)) {
-			if (item->forbidsForward()) {
-				return true;
-			}
-		}
-	}
 	return false;
 }
 
@@ -2633,13 +2635,43 @@ void ListWidget::paintUserpics(
 						st::msgPhotoSize));
 			}
 			if (const auto from = item->displayFrom()) {
+				const auto x = (rtl() ? (view->width() - st::historyPhotoLeft - st::msgPhotoSize) : st::historyPhotoLeft);
+				const auto y = userpicTop;
 				from->paintUserpicLeft(
 					p,
 					_userpics[from],
-					st::historyPhotoLeft,
+					x,
 					userpicTop,
 					view->width(),
 					st::msgPhotoSize);
+				if (Core::App().settings().showOnlineStatus()) {
+					if (const auto user = item->from()->asUser()) {
+						user->owner().watchForOffline(user, base::unixtime::now());
+						if (!user->isBot() && Data::IsUserOnline(user)) {
+							auto hq = PainterHighQualityEnabler(p);
+							const auto dotSize = 12;
+							const auto stroke = 2;
+							const auto outerSize = dotSize + 2 * stroke;
+							const auto dotRect = QRect(
+								x + st::msgPhotoSize - dotSize - 1,
+								y + st::msgPhotoSize - dotSize - 1,
+								dotSize,
+								dotSize);
+							const auto outerRect = QRect(
+								x + st::msgPhotoSize - outerSize + 1,
+								y + st::msgPhotoSize - outerSize + 1,
+								outerSize,
+								outerSize);
+
+							p.setPen(Qt::NoPen);
+							p.setBrush(context.st->value(st::windowBg));
+							p.drawEllipse(outerRect);
+
+							p.setBrush(st::dialogsOnlineBadgeFg);
+							p.drawEllipse(dotRect);
+						}
+					}
+				}
 			} else if (const auto info = item->displayHiddenSenderInfo()) {
 				if (info->customUserpic.empty()) {
 					info->emptyUserpic.paintCircle(

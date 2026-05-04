@@ -92,7 +92,7 @@ bool SkipTranslate(TextWithEntities textWithEntities) {
 	if (text.isEmpty()) {
 		return true;
 	}
-	if (!Core::App().settings().translateButtonEnabled()) {
+	if (!Core::App().settings().showTranslateButton()) {
 		return true;
 	}
 	constexpr auto kFirstChunk = size_t(100);
@@ -199,7 +199,24 @@ LanguageId ChooseTranslateTo(
 		LanguageId offeredFrom,
 		LanguageId savedTo,
 		const std::vector<LanguageId> &skip) {
-	return (offeredFrom != savedTo) ? savedTo : skip.front();
+	if (savedTo && offeredFrom != savedTo) {
+		return savedTo;
+	}
+	for (const auto &id : skip) {
+		if (id && id != offeredFrom) {
+			return id;
+		}
+	}
+	if (savedTo) {
+		return savedTo;
+	}
+	const auto app = LanguageId::FromName(Lang::GetInstance().id());
+	if (app && app != offeredFrom) {
+		return app;
+	}
+	return (offeredFrom != LanguageId{ QLocale::English })
+		? LanguageId{ QLocale::English }
+		: LanguageId{ QLocale::Russian }; // Last resort
 }
 
 } // namespace Ui

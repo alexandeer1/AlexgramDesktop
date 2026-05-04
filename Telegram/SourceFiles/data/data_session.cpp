@@ -340,6 +340,13 @@ Session::Session(not_null<Main::Session*> session)
 			requestItemViewRefresh(item);
 		}
 	}, _lifetime);
+
+	Core::App().settings().removeArchivedFromListChanges(
+	) | rpl::on_next([=] {
+		if (const auto folder = folderLoaded(Data::Folder::kId)) {
+			folder->updateChatListExistence();
+		}
+	}, _lifetime);
 }
 
 void Session::subscribeForTopicRepliesLists() {

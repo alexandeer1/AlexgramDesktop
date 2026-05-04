@@ -35,6 +35,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat.h"
 #include "styles/style_credits.h"
 #include "styles/style_dialogs.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 
 namespace HistoryView {
 namespace {
@@ -446,7 +448,9 @@ void BottomInfo::layout() {
 }
 
 void BottomInfo::layoutDateText() {
-	const auto edited = (_data.flags & Data::Flag::Edited)
+	const auto showEditedIcon = (_data.flags & Data::Flag::Edited)
+		&& Core::App().settings().showEditedIcon();
+	const auto edited = ((_data.flags & Data::Flag::Edited) && !showEditedIcon)
 		? (tr::lng_edited(tr::now) + ' ')
 		: (_data.flags & Data::Flag::EstimateDate)
 		? (tr::lng_approximate(tr::now) + ' ')
@@ -455,11 +459,29 @@ void BottomInfo::layoutDateText() {
 		: QString();
 	const auto author = _data.author;
 	const auto prefix = !author.isEmpty() ? u", "_q : QString();
-	const auto date = edited + ((_data.flags & Data::Flag::ForwardedDate)
+	auto timeFormat = QLocale().timeFormat(QLocale::ShortFormat);
+	if (Core::App().settings().showTimestampSeconds()) {
+		if (timeFormat.contains(u"mm"_q)) {
+			timeFormat.replace(u"mm"_q, u"mm:ss"_q);
+		} else if (timeFormat.contains(u"m"_q)) {
+			timeFormat.replace(u"m"_q, u"m:ss"_q);
+		}
+	}
+	const auto dateStr = edited + ((_data.flags & Data::Flag::ForwardedDate)
 		? Ui::FormatDateTimeSavedFrom(_data.date)
-		: QLocale().toString(_data.date.time(), QLocale::ShortFormat));
+		: QLocale().toString(_data.date.time(), timeFormat));
+	
+	auto finalDateStr = dateStr;
+	if (Core::App().settings().showMessageId() && _data.msgId) {
+		finalDateStr += u" | "_q + QString::number(_data.msgId.bare);
+	}
+	const auto date = finalDateStr;
 	const auto afterAuthor = prefix + date;
-	const auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
+	auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
+	if (showEditedIcon) {
+		afterAuthorWidth += st::historyEditedIconEmoji.icon.width()
+			+ st::msgDateFont->width(u" "_q);
+	}
 	const auto authorWidth = st::msgDateFont->width(author);
 	const auto maxWidth = st::maxSignatureSize;
 	_authorElided = !author.isEmpty()
@@ -467,13 +489,6 @@ void BottomInfo::layoutDateText() {
 	const auto name = _authorElided
 		? st::msgDateFont->elided(author, maxWidth - afterAuthorWidth)
 		: author;
-	const auto full = (_data.flags & Data::Flag::Sponsored)
-		? QString()
-		: (_data.flags & Data::Flag::Imported)
-		? (date + ' ' + tr::lng_imported(tr::now))
-		: name.isEmpty()
-		? date
-		: (name + afterAuthor);
 	auto helper = Ui::Text::CustomEmojiHelper(
 		Core::TextContext({ .session = &_reactionsOwner->session() }));
 	auto marked = TextWithEntities();
@@ -495,7 +510,24 @@ void BottomInfo::layoutDateText() {
 			.textColor = false,
 		})).append("  ");
 	}
-	marked.append(full);
+	if (_data.flags & Data::Flag::Sponsored) {
+	} else if (_data.flags & Data::Flag::Imported) {
+		if (showEditedIcon) {
+			marked.append(st::historyEditedIconEmoji).append(u" "_q);
+		}
+		marked.append(date).append(u" "_q).append(tr::lng_imported(tr::now));
+	} else if (name.isEmpty()) {
+		if (showEditedIcon) {
+			marked.append(st::historyEditedIconEmoji).append(u" "_q);
+		}
+		marked.append(date);
+	} else {
+		marked.append(name).append(prefix);
+		if (showEditedIcon) {
+			marked.append(st::historyEditedIconEmoji).append(u" "_q);
+		}
+		marked.append(date);
+	}
 	_authorEditedDate.setMarkedText(
 		st::msgDateTextStyle,
 		marked,
@@ -611,6 +643,7 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	auto result = BottomInfo::Data();
 	result.date = message->dateTime();
 	result.effectId = item->effectId();
+	result.msgId = item->id;
 	if (message->hasOutLayout()) {
 		result.flags |= Flag::OutLayout;
 	}

@@ -1002,6 +1002,7 @@ void TopBarWidget::refreshInfoButton() {
 			Ui::UserpicButton::Source::PeerPhoto,
 			st::topBarInfoButton,
 			infoPeer->userpicShape());
+		info->setShowOnline(true);
 		info->showSavedMessagesOnSelf(true);
 		info->showMyNotesOnSelf(true);
 		_info.destroy();

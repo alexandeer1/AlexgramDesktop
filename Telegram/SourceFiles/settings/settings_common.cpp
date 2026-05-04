@@ -300,7 +300,6 @@ AbstractSection::AbstractSection(
 SendMenu::Details AbstractSection::sendMenuDetails() const {
 	return {};
 }
-
 bool AbstractSection::processChosenSticker(ChatHelpers::FileChosen &&) {
 	return false;
 }

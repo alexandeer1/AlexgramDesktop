@@ -75,6 +75,7 @@ using namespace HistoryView;
 
 class ShortcutMessages
 	: public AbstractSection
+	, public SendMenuDetailsProvider
 	, private WindowListDelegate
 	, private CornerButtonsDelegate {
 public:
@@ -94,6 +95,7 @@ public:
 
 	[[nodiscard]] rpl::producer<QString> title() override;
 	[[nodiscard]] rpl::producer<> sectionShowBack() override;
+
 	bool processChosenSticker(ChatHelpers::FileChosen &&chosen) override;
 	void setInnerFocus() override;
 
@@ -1448,6 +1450,7 @@ void ShortcutMessages::finishSending() {
 	doSetInnerFocus();
 	showAtEnd();
 }
+
 
 bool ShortcutMessages::processChosenSticker(ChatHelpers::FileChosen &&chosen) {
 	if (!_composeControls) {

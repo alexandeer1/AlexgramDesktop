@@ -100,6 +100,7 @@ public:
 	void showSavedMessagesOnSelf(bool enabled);
 	void showMyNotesOnSelf(bool enabled);
 	void overrideShape(PeerUserpicShape shape);
+	void setShowOnline(bool show);
 
 	// Role::ChoosePhoto or Role::ChangePhoto
 	[[nodiscard]] rpl::producer<ChosenImage> chosenImages() const {
@@ -208,6 +209,7 @@ private:
 
 	std::unique_ptr<UploadProgressOverlay> _uploadOverlay;
 	rpl::lifetime _uploadLifetime;
+	bool _showOnline = false;
 
 };
 

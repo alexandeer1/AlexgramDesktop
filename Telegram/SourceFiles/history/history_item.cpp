@@ -2898,15 +2898,10 @@ bool HistoryItem::canStopPoll() const {
 }
 
 bool HistoryItem::forbidsForward() const {
-	return (_flags & MessageFlag::NoForwards);
+	return false;
 }
 
 bool HistoryItem::forbidsSaving() const {
-	if (forbidsForward()) {
-		return true;
-	} else if (const auto invoice = _media ? _media->invoice() : nullptr) {
-		return HasExtendedMedia(*invoice);
-	}
 	return false;
 }
 
@@ -3110,8 +3105,11 @@ bool HistoryItem::translationShowRequiresRequest(LanguageId to) {
 		}
 		return false;
 	} else if (const auto translation = Get<HistoryMessageTranslation>()) {
-		if (translation->to == to) {
+		if (translation->to == to && !translation->failed && !translation->text.empty()) {
 			translationToggle(translation, true);
+			return false;
+		}
+		if (translation->to == to && translation->requested) {
 			return false;
 		}
 		translationToggle(translation, false);
@@ -3134,7 +3132,7 @@ void HistoryItem::translationToggle(
 		bool used) {
 	if (translation->used != used && !translation->text.empty()) {
 		translation->used = used;
-		_history->owner().requestItemTextRefresh(this);
+		_history->owner().requestItemViewRefresh(this);
 		_history->owner().updateDependentMessages(this);
 	}
 }
@@ -3145,7 +3143,7 @@ void HistoryItem::translationDone(LanguageId to, TextWithEntities result) {
 			translation->failed = true;
 		} else {
 			translation->text = std::move(result);
-			if (_history->translatedTo() == to) {
+			if (_history->translatedTo() == to || !_history->translatedTo()) {
 				translationToggle(translation, true);
 			}
 		}
@@ -3543,14 +3541,12 @@ const TextWithEntities &HistoryItem::translatedText() const {
 	if (isService()) {
 		static const auto kEmpty = TextWithEntities();
 		return kEmpty;
-	} else if (const auto translation = this->translation()
-		; translation
-		&& translation->used
-		&& (translation->to == history()->translatedTo())) {
-		return translation->text;
-	} else {
-		return originalText();
+	} else if (const auto translation = this->translation()) {
+		if (translation->used && !translation->text.empty()) {
+			return translation->text;
+		}
 	}
+	return originalText();
 }
 
 TextWithEntities HistoryItem::translatedTextWithLocalEntities() const {

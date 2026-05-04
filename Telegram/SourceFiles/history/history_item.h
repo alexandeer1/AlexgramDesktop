@@ -482,6 +482,10 @@ public:
 	[[nodiscard]] bool translationShowRequiresCheck(LanguageId to) const;
 	bool translationShowRequiresRequest(LanguageId to);
 	void translationDone(LanguageId to, TextWithEntities result);
+	void translationToggle(
+		not_null<HistoryMessageTranslation*> translation,
+		bool used);
+
 
 	[[nodiscard]] bool canReact() const;
 	void toggleReaction(
@@ -686,9 +690,6 @@ private:
 	void setupChatThemeChange();
 	void setupTTLChange();
 
-	void translationToggle(
-		not_null<HistoryMessageTranslation*> translation,
-		bool used);
 	void setSelfDestruct(HistorySelfDestructType type, MTPint mtpTTLvalue);
 
 	void resolveDependent(not_null<HistoryServiceDependentData*> dependent);

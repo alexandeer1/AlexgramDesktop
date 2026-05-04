@@ -377,7 +377,16 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 	};
 
 	const auto rebuild = [=] {
-		const auto &list = session->data().chatsFilters().list();
+		const auto &fullList = session->data().chatsFilters().list();
+		const auto hideAll = Core::App().settings().hideAllChatsTab();
+		auto list = std::vector<Data::ChatFilter>();
+		list.reserve(fullList.size());
+		for (const auto &filter : fullList) {
+			if (hideAll && !filter.id()) {
+				continue;
+			}
+			list.push_back(filter);
+		}
 		if ((list.size() <= 1 && !slider->width()) || state->ignoreRefresh) {
 			return;
 		}
@@ -499,7 +508,8 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 	};
 	rpl::combine(
 		session->data().chatsFilters().changed(),
-		Data::AmPremiumValue(session) | rpl::to_empty
+		Data::AmPremiumValue(session) | rpl::to_empty,
+		Core::App().settings().hideAllChatsTabChanges() | rpl::to_empty
 	) | rpl::on_next(rebuild, wrap->lifetime());
 	rebuild();
 

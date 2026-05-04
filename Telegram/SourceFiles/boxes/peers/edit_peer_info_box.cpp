@@ -1238,7 +1238,7 @@ void Controller::fillAutoTranslateButton() {
 	autotranslate->toggleOn(rpl::single(
 		channel->autoTranslation()
 	) | rpl::then(state->toggled.events()));
-	state->isLocked = (channel->levelHint() < requiredLevel);
+	state->isLocked = false;
 	const auto reason = Ui::AskBoostReason{
 		.data = Ui::AskBoostAutotranslate{ .requiredLevel = requiredLevel },
 	};

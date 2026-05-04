@@ -16,6 +16,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item.h"
 #include "lang/translate_mtproto_provider.h"
 #include "lang/translate_url_provider.h"
+#include "main/main_session.h"
+#include "data/data_user.h"
 #include "platform/platform_translate_provider.h"
 
 namespace {
@@ -36,11 +38,16 @@ std::unique_ptr<TranslateProvider> CreateTranslateProvider(
 	const auto urlTemplate = OptionTranslateUrlTemplate.value();
 	if (!urlTemplate.isEmpty()
 		&& urlTemplate.contains(u"%q"_q)) {
-		return CreateUrlTranslateProvider(urlTemplate);
+		return CreateUrlTranslateProvider(session, urlTemplate);
 	}
 	if (Core::App().settings().usePlatformTranslation()
 		&& Platform::IsTranslateProviderAvailable()) {
 		return Platform::CreateTranslateProvider();
+	}
+	if (!session->premium()) {
+		return CreateUrlTranslateProvider(
+			session,
+			u"https://translate.googleapis.com/translate_a/single?client=gtx&sl=%f&tl=%t&dt=t&q=%q"_q);
 	}
 	return CreateMTProtoTranslateProvider(session);
 }
@@ -58,7 +65,7 @@ TranslateProviderRequest PrepareTranslateProviderRequest(
 	if (provider->supportsMessageId()) {
 		return result;
 	}
-	if (result.msgId) {
+	if (result.msgId && result.text.empty()) {
 		if (const auto i = peer->owner().message(peer, MsgId(result.msgId))) {
 			result.text = i->originalText();
 		}

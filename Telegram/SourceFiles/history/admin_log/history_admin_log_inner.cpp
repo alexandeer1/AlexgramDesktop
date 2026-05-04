@@ -2909,7 +2909,8 @@ void InnerWidget::resizeItem(not_null<Element*> view) {
 }
 
 void InnerWidget::refreshItem(not_null<const Element*> view) {
-	// No need to refresh views in admin log.
+	const_cast<Element*>(view.get())->itemTextUpdated();
+	resizeGetHeight(width());
 }
 
 QPoint InnerWidget::mapPointToItem(QPoint point, const Element *view) const {

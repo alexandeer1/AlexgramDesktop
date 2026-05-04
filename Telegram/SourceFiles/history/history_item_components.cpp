@@ -59,6 +59,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h" // dialogsMiniReplyStory.
 #include "styles/style_settings.h"
 #include "styles/style_widgets.h"
+#include "core/application.h"
+#include "core/core_settings.h"
+#include "base/unixtime.h"
 
 #include <QtGui/QGuiApplication>
 
@@ -373,6 +376,9 @@ void HistoryMessageForwarded::create(
 				Ui::Text::Wrapped(phrase, EntityType::CustomUrl, QString()), // Link 1.
 				tr::marked);
 		}
+	}
+	if (Core::App().settings().showForwardedDate() && originalDate) {
+		phrase.append(u", "_q).append(Ui::FormatDateTime(base::unixtime::parse(originalDate)));
 	}
 	text.setMarkedText(st::fwdTextStyle, phrase, kMarkupTextOptions, context);
 

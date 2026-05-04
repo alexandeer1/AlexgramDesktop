@@ -27,6 +27,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_forum.h"
 #include "data/data_session.h"
 #include "data/data_stories.h"
+#include "data/data_chat.h"
+#include "data/data_user.h"
 #include "data/data_peer_values.h"
 #include "data/data_user.h"
 #include "history/history.h"
@@ -507,7 +509,20 @@ void Row::PaintCornerBadgeFrame(
 	}
 	q.setCompositionMode(QPainter::CompositionMode_Source);
 
-	const auto online = peer && peer->isUser();
+	bool anyOnline = false;
+	if (peer) {
+		if (const auto user = peer->asUser()) {
+			anyOnline = Data::IsUserOnline(user, base::unixtime::now());
+		} else if (const auto chat = peer->asChat()) {
+			for (const auto &participant : chat->participants) {
+				if (Data::IsUserOnline(participant, base::unixtime::now())) {
+					anyOnline = true;
+					break;
+				}
+			}
+		}
+	}
+	const auto online = anyOnline;
 	const auto size = online
 		? st::dialogsOnlineBadgeSize
 		: st::dialogsCallBadgeSize;

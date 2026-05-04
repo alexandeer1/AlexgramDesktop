@@ -2,6 +2,7 @@
 Debug/
 Release/
 /ThirdParty/
+/Libraries/
 /Telegram/build/target
 /Telegram/tests/
 /Telegram/gyp/tests/*.test
@@ -21,6 +22,7 @@ ipch/
 .vscode/
 .cache/
 compile_commands.json
+*.log
 
 /Telegram/log.txt
 /Telegram/data
@@ -28,6 +30,18 @@ compile_commands.json
 /Telegram/DebugLogs/
 /Telegram/tdata/
 /Telegram/tdumps/
+
+# Local/Agent files
+.agents/
+.claude/
+scratch/
+build_log.txt
+modified_files.txt
+msbuild
+msbuild.bat
+build_run.bat
+build_config.bat
+run_prepare.bat
 
 .DS_Store
 ._*

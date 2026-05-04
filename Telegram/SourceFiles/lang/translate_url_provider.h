@@ -9,9 +9,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "translate_provider.h"
 
+namespace Main {
+class Session;
+} // namespace Main
+
 namespace Ui {
 
 [[nodiscard]] std::unique_ptr<TranslateProvider> CreateUrlTranslateProvider(
+	not_null<Main::Session*> session,
 	QString urlTemplate);
 
 } // namespace Ui

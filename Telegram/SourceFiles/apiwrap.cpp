@@ -60,6 +60,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_chat_filters.h"
 #include "data/data_histories.h"
 #include "data/data_history_messages.h"
+#include "data/data_document_media.h"
+#include "core/application.h"
+#include "core/core_settings.h"
+#include "data/data_photo_media.h"
 #include "core/core_cloud_password.h"
 #include "core/application.h"
 #include "base/unixtime.h"
@@ -96,6 +100,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/download_manager_mtproto.h"
 #include "storage/file_upload.h"
 #include "storage/storage_account.h"
+
+#include <QtCore/QFileInfo>
 
 namespace {
 
@@ -155,6 +161,18 @@ void ShowChannelsLimitBox(not_null<PeerData*> peer) {
 		: minutes
 		? u"%1m%2s"_q.arg(minutes).arg(seconds % 60)
 		: QString::number(seconds);
+}
+
+bool IsForwardingActuallyRestricted(PeerData *peer) {
+	if (const auto channel = peer->asChannel()) {
+		return (channel->flags() & ChannelData::Flag::NoForwards);
+	} else if (const auto chat = peer->asChat()) {
+		return (chat->flags() & ChatData::Flag::NoForwards);
+	} else if (const auto user = peer->asUser()) {
+		return (user->flags() & UserData::Flag::NoForwardsMyEnabled)
+			|| (user->flags() & UserData::Flag::NoForwardsPeerEnabled);
+	}
+	return false;
 }
 
 } // namespace
@@ -3518,6 +3536,154 @@ void ApiWrap::forwardMessages(
 		FnMut<void()> &&successCallback) {
 	Expects(!draft.items.empty());
 
+	if (ranges::any_of(draft.items, [&](HistoryItem *item) { return IsForwardingActuallyRestricted(item->history()->peer); })) {
+		auto groups = std::vector<std::vector<HistoryItem*>>();
+		for (const auto item : draft.items) {
+			if (groups.empty() || !item->groupId() || groups.back().front()->groupId() != item->groupId()) {
+				groups.push_back({ item });
+			} else {
+				groups.back().push_back(item);
+			}
+		}
+
+		for (const auto &group : groups) {
+			if (group.size() > 1) {
+				auto list = Ui::PreparedList();
+				auto album = std::make_shared<SendingAlbum>();
+				album->options = action.options;
+				auto hasMedia = false;
+				auto allLoaded = true;
+
+				for (const auto item : group) {
+					const auto media = item->media();
+					if (!media) continue;
+
+					const auto document = media->document();
+					const auto photo = media->photo();
+					const auto path = document
+						? document->filepath(true)
+						: photo
+						? photo->location(true).name()
+						: QString();
+					auto bytes = QByteArray();
+					if (path.isEmpty() || !QFileInfo(path).exists()) {
+						if (document) {
+							bytes = document->createMediaView()->bytes();
+						} else if (photo) {
+							bytes = photo->createMediaView()->imageBytes(Data::PhotoSize::Large);
+						}
+					}
+
+					if (!path.isEmpty() || !bytes.isEmpty()) {
+						auto file = Ui::PreparedFile(path);
+						file.content = bytes;
+						file.caption = {
+							item->originalText().text,
+							TextUtilities::ConvertEntitiesToTextTags(item->originalText().entities)
+						};
+						if (photo) {
+							file.type = Ui::PreparedFile::Type::Photo;
+						} else if (document) {
+							if (document->isVoiceMessage()) {
+								file.type = Ui::PreparedFile::Type::Music;
+							} else if (document->isVideoFile()) {
+								file.type = Ui::PreparedFile::Type::Video;
+							}
+						}
+						list.files.push_back(std::move(file));
+						hasMedia = true;
+					} else {
+						allLoaded = false;
+						if (document) document->save(item->fullId(), QString());
+						else if (photo) photo->load(Data::PhotoSize::Large, item->fullId());
+					}
+				}
+
+				if (hasMedia && allLoaded) {
+					sendFiles(
+						std::move(list),
+						SendMediaType::Photo,
+						album,
+						action);
+					continue;
+				} else if (!allLoaded) {
+					if (const auto show = ShowForPeer(action.history->peer)) {
+						show->showToast(u"Please wait, downloading album for re-upload..."_q);
+					}
+					continue;
+				}
+			}
+
+			// Single item or partially loaded album fallback
+			for (const auto item : group) {
+				auto message = Api::MessageToSend(action);
+				message.textWithTags = {
+					item->originalText().text,
+					TextUtilities::ConvertEntitiesToTextTags(item->originalText().entities)
+				};
+				const auto media = item->media();
+				if (media) {
+					const auto document = media->document();
+					const auto photo = media->photo();
+					const auto path = document
+						? document->filepath(true)
+						: photo
+						? photo->location(true).name()
+						: QString();
+					auto bytes = QByteArray();
+					if (path.isEmpty() || !QFileInfo(path).exists()) {
+						if (document) {
+							bytes = document->createMediaView()->bytes();
+						} else if (photo) {
+							bytes = photo->createMediaView()->imageBytes(Data::PhotoSize::Large);
+						}
+					}
+
+					if (!path.isEmpty() || !bytes.isEmpty()) {
+						auto list = Ui::PreparedList();
+						auto file = Ui::PreparedFile(path);
+						file.content = bytes;
+						file.caption = message.textWithTags;
+						if (photo) {
+							file.type = Ui::PreparedFile::Type::Photo;
+						} else if (document) {
+							if (document->isVoiceMessage()) {
+								file.type = Ui::PreparedFile::Type::Music;
+							} else if (document->isVideoFile()) {
+								file.type = Ui::PreparedFile::Type::Video;
+							}
+						}
+						list.files.push_back(std::move(file));
+						sendFiles(
+							std::move(list),
+							(photo
+								? SendMediaType::Photo
+								: (document->isVoiceMessage() || document->isAudioFile())
+								? SendMediaType::Audio
+								: SendMediaType::File),
+							nullptr,
+							message.action);
+					} else {
+						if (const auto show = ShowForPeer(action.history->peer)) {
+							show->showToast(u"Please wait, downloading media for re-upload..."_q);
+						}
+						if (document) {
+							document->save(item->fullId(), QString());
+						} else if (photo) {
+							photo->load(Data::PhotoSize::Large, item->fullId());
+						}
+					}
+				} else {
+					sendMessage(std::move(message));
+				}
+			}
+		}
+		if (successCallback) {
+			successCallback();
+		}
+		return;
+	}
+
 	auto &histories = _session->data().histories();
 
 	for (auto i = begin(draft.items); i != end(draft.items);) {
@@ -4142,7 +4308,10 @@ void ApiWrap::sendMessage(
 			mediaFlags |= MTPmessages_SendMedia::Flag::f_reply_to;
 		}
 		const auto ignoreWebPage = message.webPage.removed
-			|| (exactWebPage && !isLast);
+			|| (exactWebPage && !isLast)
+			|| (exactWebPage
+				&& !message.webPage.manual
+				&& Core::App().settings().disableLinkPreviewByDefault());
 		const auto manualWebPage = exactWebPage
 			&& !ignoreWebPage
 			&& (message.webPage.manual || (isLast && !isFirst));

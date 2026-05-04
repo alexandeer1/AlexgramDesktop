@@ -15,6 +15,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 
 namespace HistoryView::Controls {
 
@@ -364,6 +366,12 @@ void WebpageProcessor::checkPreview() {
 	} else if (_draft.manual) {
 		return;
 	} else if (_links == _parsedLinks) {
+		return;
+	}
+	if (!_parsedLinks.empty()
+		&& _links.empty()
+		&& Core::App().settings().disableLinkPreviewByDefault()) {
+		_draft.removed = true;
 		return;
 	}
 	_links = _parsedLinks;

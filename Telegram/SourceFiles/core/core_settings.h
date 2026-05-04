@@ -521,6 +521,19 @@ public:
 		return _cornerReply.value();
 	}
 
+	void setShowTranslateButton(bool value) {
+		_showTranslateButton = value;
+	}
+	[[nodiscard]] bool showTranslateButton() const {
+		return _showTranslateButton.current();
+	}
+	[[nodiscard]] rpl::producer<bool> showTranslateButtonValue() const {
+		return _showTranslateButton.value();
+	}
+	[[nodiscard]] rpl::producer<bool> showTranslateButtonChanges() const {
+		return _showTranslateButton.changes();
+	}
+
 	void setSpellcheckerEnabled(bool value) {
 		_spellcheckerEnabled = value;
 	}
@@ -1000,6 +1013,53 @@ public:
 	[[nodiscard]] Media::VideoQuality videoQuality() const;
 	void setVideoQuality(Media::VideoQuality quality);
 
+	[[nodiscard]] bool hidePremium();
+	[[nodiscard]] rpl::producer<bool> hidePremiumChanges();
+	void setHidePremium(bool value);
+
+	[[nodiscard]] bool disableNumberRounding();
+	void setDisableNumberRounding(bool value);
+
+	[[nodiscard]] bool hideAllChatsTab();
+	[[nodiscard]] rpl::producer<bool> hideAllChatsTabChanges();
+	void setHideAllChatsTab(bool value);
+
+	[[nodiscard]] bool removeArchivedFromList();
+	[[nodiscard]] rpl::producer<bool> removeArchivedFromListChanges();
+	void setRemoveArchivedFromList(bool value);
+
+	[[nodiscard]] bool hideHelp();
+	[[nodiscard]] rpl::producer<bool> hideHelpChanges();
+	void setHideHelp(bool value);
+
+	[[nodiscard]] bool hidePhoneNumber();
+	[[nodiscard]] rpl::producer<bool> hidePhoneNumberChanges();
+	void setHidePhoneNumber(bool value);
+
+	[[nodiscard]] bool disableLinkPreviewByDefault();
+	[[nodiscard]] rpl::producer<bool> disableLinkPreviewByDefaultChanges();
+	void setDisableLinkPreviewByDefault(bool value);
+
+	[[nodiscard]] bool showMessageId();
+	[[nodiscard]] rpl::producer<bool> showMessageIdChanges();
+	void setShowMessageId(bool value);
+
+	[[nodiscard]] bool showTimestampSeconds();
+	[[nodiscard]] rpl::producer<bool> showTimestampSecondsChanges();
+	void setShowTimestampSeconds(bool value);
+
+	[[nodiscard]] bool showEditedIcon();
+	[[nodiscard]] rpl::producer<bool> showEditedIconChanges();
+	void setShowEditedIcon(bool value);
+
+	[[nodiscard]] bool showForwardedDate();
+	[[nodiscard]] rpl::producer<bool> showForwardedDateChanges();
+	void setShowForwardedDate(bool value);
+
+	[[nodiscard]] bool showOnlineStatus();
+	[[nodiscard]] rpl::producer<bool> showOnlineStatusChanges();
+	void setShowOnlineStatus(bool value);
+
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();
 
@@ -1115,6 +1175,8 @@ private:
 	bool _suggestStickersByEmoji = true;
 	bool _suggestAnimatedEmoji = true;
 	rpl::variable<bool> _cornerReply = true;
+
+	rpl::variable<bool> _showTranslateButton = true;
 	rpl::variable<bool> _cornerReaction = true;
 	rpl::variable<bool> _spellcheckerEnabled = true;
 	PlaybackSpeed _videoPlaybackSpeed;

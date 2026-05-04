@@ -205,6 +205,14 @@ private:
 
 };
 
+class SendMenuDetailsProvider {
+public:
+	[[nodiscard]] virtual SendMenu::Details sendMenuDetails() const = 0;
+
+	virtual ~SendMenuDetailsProvider() = default;
+
+};
+
 enum class IconType {
 	Rounded,
 	Round,

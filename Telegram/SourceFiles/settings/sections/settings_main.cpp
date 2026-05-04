@@ -22,6 +22,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/star_gift_box.h"
 #include "boxes/username_box.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "core/click_handler_types.h"
 #include "data/components/credits.h"
 #include "data/components/promo_suggestions.h"
@@ -46,6 +47,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/cloud_password/settings_cloud_password_input.h"
 #include "settings/sections/settings_advanced.h"
 #include "settings/sections/settings_business.h"
+#include "settings/sections/settings_alex.h"
 #include "settings/sections/settings_calls.h"
 #include "settings/sections/settings_chat.h"
 #include "settings/settings_codes.h"
@@ -276,6 +278,11 @@ void Cover::initViewers() {
 		updatePhoneText();
 	}, lifetime());
 
+	Core::App().settings().hidePhoneNumberChanges(
+	) | rpl::on_next([=] {
+		updatePhoneText();
+	}, lifetime());
+
 	Info::Profile::UsernameValue(
 		_user
 	) | rpl::on_next([=](const TextWithEntities &value) {
@@ -322,7 +329,8 @@ void Cover::refreshNameGeometry(int newWidth) {
 }
 
 void Cover::updatePhoneText() {
-	if (_user->session().settings().phoneNumberHidden()) {
+	if (_user->session().settings().phoneNumberHidden()
+		|| Core::App().settings().hidePhoneNumber()) {
 		_phone->setMarkedText(
 			Ui::Text::Wrapped({ _phoneText }, EntityType::Spoiler));
 	} else {
@@ -437,6 +445,13 @@ void BuildSectionButtons(SectionBuilder &builder) {
 	});
 
 	builder.addSectionButton({
+		.title = tr::lng_settings_alexgram(),
+		.targetSection = AlexgramSectionId(),
+		.icon = { &st::menuIconSettings },
+		.keywords = { u"alexgram"_q, u"custom"_q },
+	});
+
+	builder.addSectionButton({
 		.title = tr::lng_settings_section_devices(),
 		.targetSection = CallsId(),
 		.icon = { &st::menuIconUnmute },
@@ -499,7 +514,7 @@ void BuildPremiumSection(SectionBuilder &builder) {
 	const auto controller = builder.controller();
 	const auto showOther = builder.showOther();
 
-	if (!session->premiumPossible()) {
+	if (!session->premiumPossible() || Core::App().settings().hidePremium()) {
 		return;
 	}
 
@@ -574,37 +589,41 @@ void BuildPremiumSection(SectionBuilder &builder) {
 }
 
 void BuildHelpSection(SectionBuilder &builder) {
-	builder.addDivider();
-	builder.addSkip();
-
 	const auto controller = builder.controller();
-	builder.addButton({
-		.id = u"main/faq"_q,
-		.title = tr::lng_settings_faq(),
-		.icon = { &st::menuIconFaq },
-		.onClick = [=] { OpenFaq(controller); },
-		.keywords = { u"help"_q, u"support"_q, u"questions"_q },
-	});
+	builder.scope([=, &builder] {
+		builder.addDivider();
+		builder.addSkip();
 
-	builder.addButton({
-		.id = u"main/features"_q,
-		.title = tr::lng_settings_features(),
-		.icon = { &st::menuIconEmojiObjects },
-		.onClick = [] {
-			UrlClickHandler::Open(tr::lng_telegram_features_url(tr::now));
-		},
-		.keywords = { u"tips"_q, u"tutorial"_q },
-	});
+		builder.addButton({
+			.id = u"main/faq"_q,
+			.title = tr::lng_settings_faq(),
+			.icon = { &st::menuIconFaq },
+			.onClick = [=] { OpenFaq(controller); },
+			.keywords = { u"help"_q, u"support"_q, u"questions"_q },
+		});
 
-	builder.addButton({
-		.id = u"main/ask-question"_q,
-		.title = tr::lng_settings_ask_question(),
-		.icon = { &st::menuIconDiscussion },
-		.onClick = [=] { OpenAskQuestionConfirm(controller); },
-		.keywords = { u"contact"_q, u"feedback"_q },
-	});
+		builder.addButton({
+			.id = u"main/features"_q,
+			.title = tr::lng_settings_features(),
+			.icon = { &st::menuIconEmojiObjects },
+			.onClick = [] {
+				UrlClickHandler::Open(tr::lng_telegram_features_url(tr::now));
+			},
+			.keywords = { u"tips"_q, u"tutorial"_q },
+		});
 
-	builder.addSkip();
+		builder.addButton({
+			.id = u"main/ask-question"_q,
+			.title = tr::lng_settings_ask_question(),
+			.icon = { &st::menuIconDiscussion },
+			.onClick = [=] { OpenAskQuestionConfirm(controller); },
+			.keywords = { u"contact"_q, u"feedback"_q },
+		});
+
+		builder.addSkip();
+	}, Core::App().settings().hideHelpChanges() | rpl::map([](bool hide) {
+		return !hide;
+	}));
 }
 
 void BuildValidationSuggestions(SectionBuilder &builder) {

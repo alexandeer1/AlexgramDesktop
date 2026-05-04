@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_translate_tracker.h"
+#include "history/view/history_view_context_menu.h"
 
 #include "apiwrap.h"
 #include "api/api_transcribes.h"
@@ -22,6 +23,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_components.h"
 #include "history/view/history_view_element.h"
 #include "lang/translate_provider.h"
+#include "boxes/translate_box.h"
+
 #include "main/main_session.h"
 #include "spellcheck/platform/platform_language.h"
 
@@ -65,11 +68,7 @@ void TranslateTracker::setup() {
 	}) | rpl::distinct_until_changed();
 
 	using namespace rpl::mappers;
-	_trackingLanguage = rpl::combine(
-		Core::App().settings().translateChatEnabledValue(),
-		Data::AmPremiumValue(&_history->session()),
-		std::move(autoTranslationValue),
-		_1 && (_2 || _3));
+	_trackingLanguage = Core::App().settings().translateChatEnabledValue();
 	_trackingLanguage.value() | rpl::on_next([=](bool tracking) {
 		_trackingLifetime.destroy();
 		if (tracking) {
@@ -167,7 +166,37 @@ void TranslateTracker::switchTranslation(
 	}
 }
 
+void TranslateTracker::toggleTranslation(not_null<HistoryItem*> item) {
+	if (const auto translation = item->Get<HistoryMessageTranslation>()) {
+		if (translation->used) {
+			item->translationToggle(translation, false);
+			return;
+		}
+	}
+	const auto to = _history->translatedTo()
+		? _history->translatedTo()
+		: Ui::ChooseTranslateTo(_history);
+	if (!item->translationShowRequiresRequest(to)) {
+		return;
+	}
+
+	auto transcription = TransribedText(item);
+	auto text = !transcription.empty()
+		? std::move(transcription.append(u"\n"_q).append(item->originalText()))
+		: item->originalText();
+
+	const auto request = Ui::PrepareTranslateProviderRequest(
+		_provider.get(),
+		_history->peer,
+		item->id,
+		std::move(text));
+	_provider->request(request, to, [=](Ui::TranslateProviderResult &&result) {
+		item->translationDone(to, std::move(result.text).value_or(TextWithEntities()));
+	});
+}
+
 void TranslateTracker::finishBunch() {
+
 	if (_addedInBunch > 0) {
 		accumulate_max(_limit, _addedInBunch + kEnoughForRecognition);
 		_addedInBunch = -1;
@@ -302,11 +331,16 @@ void TranslateTracker::requestSome() {
 	ids.reserve(_requested.size());
 	for (const auto &id : _requested) {
 		if (const auto item = owner->message(id)) {
+			auto transcription = TransribedText(item);
+			auto text = !transcription.empty()
+				? std::move(transcription.append(u"\n"_q).append(item->originalText()))
+				: item->originalText();
+
 			requests.push_back(Ui::PrepareTranslateProviderRequest(
 				_provider.get(),
-				session->data().peer(id.peer),
-				id.msg,
-				item->originalText()));
+				_history->peer,
+				item->id,
+				std::move(text)));
 			ids.push_back(id);
 		}
 	}

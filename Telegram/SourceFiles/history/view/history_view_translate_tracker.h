@@ -34,6 +34,11 @@ public:
 	void addBunchFrom(const std::vector<not_null<Element*>> &views);
 
 	[[nodiscard]] rpl::producer<bool> trackingLanguage() const;
+	void toggleTranslation(not_null<HistoryItem*> item);
+	[[nodiscard]] Ui::TranslateProvider *provider() const {
+		return _provider.get();
+	}
+
 
 private:
 	using MaybeLanguageId = std::variant<QString, LanguageId>;

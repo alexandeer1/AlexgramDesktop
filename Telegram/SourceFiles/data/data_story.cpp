@@ -408,7 +408,7 @@ StoryPrivacy Story::privacy() const {
 }
 
 bool Story::forbidsForward() const {
-	return _noForwards;
+	return false;
 }
 
 bool Story::edited() const {
@@ -420,12 +420,11 @@ bool Story::out() const {
 }
 
 bool Story::canDownloadIfPremium() const {
-	return !forbidsForward() || _peer->isSelf();
+	return true;
 }
 
 bool Story::canDownloadChecked() const {
-	return _peer->isSelf()
-		|| (canDownloadIfPremium() && _peer->session().premium());
+	return true;
 }
 
 bool Story::canShare() const {

@@ -49,6 +49,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/dynamic_thumbnails.h"
 #include "ui/boxes/edit_factcheck_box.h"
 #include "ui/boxes/report_box_graphics.h"
+#include "ui/layers/generic_box.h"
 #include "ui/painter.h"
 #include "ui/rect.h"
 #include "ui/ui_utility.h"
@@ -1524,20 +1525,35 @@ void FillContextMenuItems(
 					.append('\n')
 					.append(item->originalText()))
 				: item->originalText();
-			if ((!item->translation() || !item->history()->translatedTo())
-				&& !translate.text.isEmpty()
-				&& !Ui::SkipTranslate(translate)) {
-				result->addAction(tr::lng_context_translate(tr::now), [=] {
+			const auto translation = item->translation();
+			const auto translated = translation && translation->used;
+			if (translated) {
+				result->addAction(tr::lng_context_hide_translation(tr::now), [=] {
 					if (const auto item = owner->message(itemId)) {
-						list->controller()->show(Box(
-							Ui::TranslateBox,
-							item->history()->peer,
-							mediaHasTextForCopy
-								? MsgId()
-								: item->fullId().msg,
-							translate,
-							list->hasCopyRestriction(view->data())));
+						list->toggleTranslation(item);
 					}
+				}, &st::menuIconTranslate);
+			} else if (!translate.text.isEmpty() && !Ui::SkipTranslate(translate)) {
+				result->addAction(tr::lng_context_translate(tr::now), [=] {
+					const auto item = owner->message(itemId);
+					if (!item) {
+						return;
+					}
+					const auto text = mediaHasTextForCopy
+						? (HistoryView::TransribedText(item)
+							.append('\n')
+							.append(item->originalText()))
+						: item->originalText();
+					
+					// ALWAYS show the box from the context menu as requested.
+					list->controller()->show(Box([=](not_null<Ui::GenericBox*> box) {
+						Ui::TranslateBox(
+							box,
+							item->history()->peer,
+							MsgId(),
+							text,
+							list->hasCopyRestriction(item));
+					}));
 				}, &st::menuIconTranslate);
 			}
 		}

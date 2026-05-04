@@ -9,9 +9,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "apiwrap.h"
 #include "api/api_peer_photo.h"
+#include "data/data_peer_values.h"
+#include "styles/style_dialogs.h"
 #include "ui/effects/upload_progress_overlay.h"
 #include "api/api_user_privacy.h"
 #include "base/call_delayed.h"
+#include "base/unixtime.h"
 #include "boxes/edit_privacy_box.h"
 #include "boxes/peers/edit_peer_info_box.h" // EditPeerInfoBox::Available.
 #include "ui/effects/ripple_animation.h"
@@ -252,6 +255,13 @@ void UserpicButton::showCustomOnChosen() {
 	) | rpl::on_next([=](ChosenImage &&chosen) {
 		showCustom(std::move(chosen.image));
 	}, lifetime());
+}
+
+void UserpicButton::setShowOnline(bool show) {
+	if (_showOnline != show) {
+		_showOnline = show;
+		update();
+	}
 }
 
 void UserpicButton::requestSuggestAvailability() {
@@ -544,6 +554,16 @@ void UserpicButton::setupPeerViewers() {
 			update();
 		}, _sourceLifetime);
 	}
+	if (user) {
+		user->session().changes().peerUpdates(
+			user,
+			Data::PeerUpdate::Flag::OnlineStatus
+		) | rpl::on_next([=](const Data::PeerUpdate &) {
+			if (_showOnline && Core::App().settings().showOnlineStatus()) {
+				update();
+			}
+		}, _sourceLifetime);
+	}
 	if (!user
 		|| _source == Source::PeerPhoto
 		|| _source == Source::NonPersonalIfHasPersonal) {
@@ -690,6 +710,35 @@ void UserpicButton::paintEvent(QPaintEvent *e) {
 				? (_st.photoSize * ForumUserpicRadiusMultiplier())
 				: 0.,
 		});
+	}
+
+	if (_showOnline && _peer && Core::App().settings().showOnlineStatus()) {
+		if (const auto user = _peer->asUser()) {
+			user->owner().watchForOffline(user, base::unixtime::now());
+			if (!user->isBot() && Data::IsUserOnline(user, base::unixtime::now())) {
+				auto hq = PainterHighQualityEnabler(p);
+				const auto dotSize = 12;
+				const auto stroke = 2;
+				const auto outerSize = dotSize + 2 * stroke;
+				const auto dotRect = QRectF(
+					photoLeft + _st.photoSize - dotSize - stroke,
+					photoTop + _st.photoSize - dotSize - stroke,
+					dotSize,
+					dotSize);
+				const auto outerRect = QRectF(
+					photoLeft + _st.photoSize - outerSize,
+					photoTop + _st.photoSize - outerSize,
+					outerSize,
+					outerSize);
+
+				p.setPen(Qt::NoPen);
+				p.setBrush(st::windowBg);
+				p.drawEllipse(outerRect);
+
+				p.setBrush(st::dialogsOnlineBadgeFg);
+				p.drawEllipse(dotRect);
+			}
+		}
 	}
 }
 

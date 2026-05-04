@@ -375,6 +375,10 @@ int Folder::fixedOnTopIndex() const {
 }
 
 bool Folder::shouldBeInChatList() const {
+	if (id() == Data::Folder::kId
+		&& Core::App().settings().removeArchivedFromList()) {
+		return false;
+	}
 	return !_chatsList.empty() || (_storiesCount > 0);
 }
 

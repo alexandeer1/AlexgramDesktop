@@ -8192,3 +8192,37 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_sr_languages_column_name" = "Language name";
 
 // Keys finished
+
+"lng_settings_alexgram" = "A-Settings";
+"lng_settings_alexgram_general" = "General";
+"lng_settings_alexgram_translator" = "Translator";
+"lng_settings_alexgram_chats" = "Chats";
+"lng_settings_alexgram_disable_link_preview" = "Disable Link Preview by Default";
+"lng_settings_alexgram_disable_link_preview_about" = "If enabled, link previews will be disabled by default for your sent messages.";
+"lng_settings_alexgram_show_message_id" = "Show Message ID";
+"lng_settings_alexgram_show_message_id_about" = "Show the message ID next to the message time.";
+"lng_settings_alexgram_show_timestamp_seconds" = "Show Timestamp in Seconds";
+"lng_settings_alexgram_show_timestamp_seconds_about" = "Show the message time with seconds (e.g. 09:36:12).";
+"lng_settings_alexgram_show_forwarded_date" = "Show Date on Forwarded Messages";
+"lng_settings_alexgram_show_forwarded_date_about" = "Display the original date and time in the forwarded message header.";
+"lng_settings_alexgram_show_online_status" = "Show Online Status";
+"lng_settings_alexgram_show_online_status_about" = "Show a colored dot indicating the online status next to user profile photos in chats.";
+"lng_settings_alexgram_show_edited_icon" = "Show Icon instead of \"edited\"";
+"lng_settings_alexgram_show_edited_icon_about" = "Replace the \"edited\" text label with a pencil icon.";
+
+"lng_settings_show_translate_button" = "Show Translate Button";
+"lng_settings_show_translate_button_about" = "Show a translate button in the message context menu.";
+"lng_settings_disable_number_rounding" = "Disable Number Rounding";
+"lng_settings_disable_number_rounding_about" = "Disable rounding of large numbers (e.g., 1.2M -> 1,234,567).";
+"lng_settings_hide_all_chats_tab" = "Hide All Chats Tab";
+"lng_settings_hide_all_chats_tab_about" = "Hide the 'All Chats' tab from the chat list.";
+"lng_settings_remove_archived_from_list" = "Remove Archived from List";
+"lng_settings_remove_archived_from_list_about" = "If enabled, the Archived Chats folder will not be shown in the chat list.";
+"lng_settings_hide_premium" = "Hide Premium";
+"lng_settings_hide_premium_about" = "Hide the Premium settings row from the main settings menu.";
+"lng_settings_hide_help" = "Hide Help";
+"lng_settings_hide_help_about" = "Hide the help section (FAQ, Features, Ask Question) from the main settings menu.";
+"lng_settings_hide_phone_number" = "Hide My Phone Number";
+"lng_settings_hide_phone_number_about" = "Hide your phone number in profile settings. Click on 'Hidden Number' to reveal it.";
+"lng_context_hide_translation" = "Hide Translation";
+

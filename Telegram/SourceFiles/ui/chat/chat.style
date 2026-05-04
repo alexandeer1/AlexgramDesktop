@@ -21,6 +21,8 @@ msgServicePhotoWidth: 100px;
 msgDateFont: font(13px);
 msgMinWidth: 160px;
 msgPhotoSize: 33px;
+alexOnlineDotSize: 9px;
+alexOnlineDotStroke: 2px;
 msgPhotoSkip: 40px;
 msgPadding: margins(11px, 8px, 11px, 8px);
 msgTagBadgePadding: margins(5px, -1px, 5px, 0px);
@@ -768,6 +770,12 @@ largeEmojiSize: 36px;
 largeEmojiOutline: 1px;
 largeEmojiPadding: margins(0px, 0px, 0px, 0px);
 largeEmojiSkip: 4px;
+
+historyEditedIcon: icon {{ "menu/edit", historyOutIconFg }};
+historyEditedIconEmoji: IconEmoji {
+	icon: historyEditedIcon;
+	padding: margins(0px, 0px, 2px, 0px);
+}
 
 youtubeIcon: icon {
 	{ "media_youtube_play_bg", youtubePlayIconBg },

@@ -12,9 +12,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/info_profile_phone_menu.h"
 #include "info/profile/info_profile_badge.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "core/click_handler_types.h"
 #include "countries/countries_instance.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/text/format_values.h" // Ui::FormatPhone
 #include "ui/text/text_utilities.h"
@@ -124,13 +126,19 @@ rpl::producer<int32> ColorIdValue(not_null<Data::ForumTopic*> topic) {
 }
 
 rpl::producer<TextWithEntities> PhoneValue(not_null<UserData*> user) {
-	return rpl::merge(
-		Countries::Instance().updated(),
-		user->session().changes().peerFlagsValue(
-			user,
-			UpdateFlag::PhoneNumber) | rpl::to_empty
-	) | rpl::map([=] {
-		return tr::marked(Ui::FormatPhone(user->phone()));
+	return rpl::combine(
+		rpl::merge(
+			Countries::Instance().updated(),
+			user->session().changes().peerFlagsValue(
+				user,
+				UpdateFlag::PhoneNumber) | rpl::to_empty),
+		Core::App().settings().hidePhoneNumberChanges()
+	) | rpl::map([=](auto, bool hideGlobal) -> TextWithEntities {
+		const auto phone = Ui::FormatPhone(user->phone());
+		if (user->isSelf() && (hideGlobal || user->session().settings().phoneNumberHidden())) {
+			return Ui::Text::Wrapped({ phone }, EntityType::Spoiler);
+		}
+		return tr::marked(phone);
 	});
 }
 

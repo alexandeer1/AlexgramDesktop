@@ -956,7 +956,6 @@ void Filler::addExportChat() {
 
 void Filler::addTranslate() {
 	if (_peer->translationFlag() != PeerData::TranslationFlag::Disabled
-		|| !_peer->session().premium()
 		|| !Core::App().settings().translateChatEnabled()) {
 		return;
 	}
@@ -4109,6 +4108,7 @@ void AddSenderUserpicModerateAction(
 				}
 				controller->show(Box(
 					CreateModerateMessagesBox,
+<<<<<<< HEAD
 					ModerateMessagesBoxEntry{
 						.items = HistoryItemsList{
 							not_null<HistoryItem*>(item),
