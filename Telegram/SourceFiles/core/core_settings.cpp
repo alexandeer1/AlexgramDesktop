@@ -163,6 +163,10 @@ rpl::event_stream<bool> &TreatGifsAsVideosChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &AutoPauseVideoChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
 
 [[nodiscard]] WindowPosition AdjustToScale(WindowPosition position,
@@ -1978,6 +1982,19 @@ rpl::producer<bool> Settings::treatGifsAsVideosChanges() {
 void Settings::setTreatGifsAsVideos(bool value) {
 	writePref<bool>("treat-gifs-as-videos", value);
 	TreatGifsAsVideosChanges().fire_copy(value);
+}
+
+bool Settings::autoPauseVideo() {
+	return readPref<bool>("auto-pause-video", false);
+}
+
+rpl::producer<bool> Settings::autoPauseVideoChanges() {
+	return AutoPauseVideoChanges().events_starting_with(autoPauseVideo());
+}
+
+void Settings::setAutoPauseVideo(bool value) {
+	writePref<bool>("auto-pause-video", value);
+	AutoPauseVideoChanges().fire_copy(value);
 }
 
 } // namespace Core

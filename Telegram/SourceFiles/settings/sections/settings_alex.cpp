@@ -447,6 +447,19 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_treat_gifs_as_videos_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs autoPauseVideoArgs;
+	autoPauseVideoArgs.title = tr::lng_settings_alexgram_auto_pause_video();
+	autoPauseVideoArgs.checked = Core::App().settings().autoPauseVideo();
+	const auto autoPauseVideoCb = builder.addCheckbox(std::move(autoPauseVideoArgs));
+	autoPauseVideoCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setAutoPauseVideo(checked);
+		Core::App().saveSettingsDelayed();
+	}, autoPauseVideoCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_auto_pause_video_about());
+	builder.addSkip();
+
 	Ui::ResizeFitChild(this, content);
 }
 

@@ -8213,6 +8213,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_show_small_gifs_about" = "Display GIFs at a smaller, sticker-like scale within conversations.";
 "lng_settings_alexgram_treat_gifs_as_videos" = "Take GIF as Video";
 "lng_settings_alexgram_treat_gifs_as_videos_about" = "If enabled, GIFs will be treated as regular videos, showing duration and requiring manual playback.";
+"lng_settings_alexgram_auto_pause_video" = "Auto Pause Video";
+"lng_settings_alexgram_auto_pause_video_about" = "Automatically pause video playback when the application is minimized or loses focus.";
 
 "lng_settings_show_translate_button" = "Show Translate Button";
 "lng_settings_show_translate_button_about" = "Show a translate button in the message context menu.";

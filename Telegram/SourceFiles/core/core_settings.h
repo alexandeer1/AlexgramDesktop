@@ -1068,6 +1068,10 @@ public:
 	[[nodiscard]] rpl::producer<bool> treatGifsAsVideosChanges();
 	void setTreatGifsAsVideos(bool value);
 
+	[[nodiscard]] bool autoPauseVideo();
+	[[nodiscard]] rpl::producer<bool> autoPauseVideoChanges();
+	void setAutoPauseVideo(bool value);
+
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();
 

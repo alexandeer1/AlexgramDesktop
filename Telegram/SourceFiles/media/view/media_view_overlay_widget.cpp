@@ -5082,6 +5082,23 @@ void OverlayWidget::playbackControlsRotate() {
 	}
 }
 
+void OverlayWidget::playbackPause() {
+	if (_streamed
+		&& !_streamed->instance.player().failed()
+		&& !_streamed->instance.player().finished()
+		&& _streamed->instance.player().active()
+		&& !_streamed->instance.player().paused()) {
+		_streamed->instance.pause();
+		updatePlaybackState();
+	}
+}
+
+void OverlayWidget::storiesPause() {
+	if (_stories) {
+		storiesTogglePaused(true);
+	}
+}
+
 void OverlayWidget::playbackPauseResume() {
 	Expects(_streamed != nullptr);
 

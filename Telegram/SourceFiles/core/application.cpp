@@ -1001,6 +1001,14 @@ void Application::handleAppDeactivated() {
 	enumerateWindows([&](not_null<Window::Controller*> w) {
 		w->updateIsActiveBlur();
 	});
+	if (settings().autoPauseVideo()) {
+		Media::Player::instance()->pause(AudioMsgId::Type::Song);
+		Media::Player::instance()->pause(AudioMsgId::Type::Voice);
+		if (_mediaView) {
+			_mediaView->playbackPause();
+			_mediaView->storiesPause();
+		}
+	}
 	const auto session = _lastActiveWindow
 		? _lastActiveWindow->maybeSession()
 		: nullptr;
