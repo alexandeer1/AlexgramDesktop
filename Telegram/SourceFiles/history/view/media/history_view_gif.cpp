@@ -293,7 +293,7 @@ QSize Gif::countThumbSize(int &inOutWidthMax) const {
 	const auto maxSize = [&] {
 		if (hostedInstantView) {
 			return std::max(inOutWidthMax, 1);
-		} else if (Core::App().settings().showSmallGifs()) {
+		} else if (Core::App().settings().showSmallGifs() && _data->isAnimation() && !_data->isVideoMessage()) {
 			return st::maxStickerSize;
 		} else if (_data->isVideoFile() || Core::App().settings().treatGifsAsVideos()) {
 			return st::maxMediaSize;

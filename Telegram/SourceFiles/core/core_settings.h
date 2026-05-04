@@ -1072,6 +1072,10 @@ public:
 	[[nodiscard]] rpl::producer<bool> autoPauseVideoChanges();
 	void setAutoPauseVideo(bool value);
 
+	[[nodiscard]] bool noAutoPlayNextVoice();
+	[[nodiscard]] rpl::producer<bool> noAutoPlayNextVoiceChanges();
+	void setNoAutoPlayNextVoice(bool value);
+
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();
 
