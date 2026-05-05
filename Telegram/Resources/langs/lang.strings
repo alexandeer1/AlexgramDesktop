@@ -8050,3 +8050,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_upload_speed_boost_about" = "Aggressively increase upload speed by using more concurrent connections and removing artificial delays.";
 "lng_settings_alexgram_download_speed_boost" = "Download Speed Boost";
 "lng_settings_alexgram_download_speed_boost_about" = "Aggressively increase download speed by using more concurrent connections and allowing more data in flight.";
+"lng_settings_alexgram_hide_stories_from_header" = "Hide Stories From Header";
+"lng_settings_alexgram_hide_stories_from_header_about" = "Remove the stories list from the top of the chat list.";
+"lng_settings_alexgram_disable_stories" = "Disable Stories";
+"lng_settings_alexgram_disable_stories_about" = "Hide stories indicators around profile pictures in the chat list. Enabling this will also hide the stories header.";
