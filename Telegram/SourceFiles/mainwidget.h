@@ -128,6 +128,7 @@ public:
 
 	void activate();
 	void handleStartFiles(QStringList interprets, QStringList paths);
+	void reprocessAlexSettings();
 
 	void windowShown();
 

@@ -1105,6 +1105,12 @@ void Photo::hideSpoilers() {
 	}
 }
 
+void Photo::revealSpoilers() {
+	if (_spoiler) {
+		_spoiler->revealed = true;
+	}
+}
+
 bool Photo::needsBubble() const {
 	if (_storyId) {
 		return true;

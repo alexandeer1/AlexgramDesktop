@@ -334,6 +334,7 @@ public:
 		Fn<void(bool found)> done = nullptr);
 	void refreshViewer();
 	void overrideInitialScroll(Fn<bool()> callback);
+	void refreshSpoilers();
 
 	[[nodiscard]] TextForMimeData getSelectedText() const;
 	[[nodiscard]] MessageIdsList getSelectedIds() const;

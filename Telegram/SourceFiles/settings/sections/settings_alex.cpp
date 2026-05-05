@@ -473,6 +473,33 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_no_autoplay_next_voice_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs showSpoilersArgs;
+	showSpoilersArgs.title = tr::lng_settings_alexgram_show_spoilers_directly();
+	showSpoilersArgs.checked = Core::App().settings().showSpoilersDirectly();
+	const auto showSpoilersCb = builder.addCheckbox(std::move(showSpoilersArgs));
+	showSpoilersCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setShowSpoilersDirectly(checked);
+		Core::App().saveSettingsDelayed();
+		Core::App().reprocessAlexSettings();
+	}, showSpoilersCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_show_spoilers_directly_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs hideGroupStickersArgs;
+	hideGroupStickersArgs.title = tr::lng_settings_alexgram_hide_group_stickers();
+	hideGroupStickersArgs.checked = Core::App().settings().hideGroupStickers();
+	const auto hideGroupStickersCb = builder.addCheckbox(std::move(hideGroupStickersArgs));
+	hideGroupStickersCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setHideGroupStickers(checked);
+		Core::App().saveSettingsDelayed();
+	}, hideGroupStickersCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_hide_group_stickers_about());
+	builder.addSkip();
+
 	Ui::ResizeFitChild(this, content);
 }
 

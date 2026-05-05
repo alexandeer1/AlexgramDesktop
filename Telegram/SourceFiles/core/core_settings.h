@@ -1076,6 +1076,13 @@ public:
 	[[nodiscard]] rpl::producer<bool> noAutoPlayNextVoiceChanges();
 	void setNoAutoPlayNextVoice(bool value);
 
+	[[nodiscard]] bool showSpoilersDirectly();
+	[[nodiscard]] rpl::producer<bool> showSpoilersDirectlyChanges();
+	void setShowSpoilersDirectly(bool value);
+	[[nodiscard]] bool hideGroupStickers();
+	[[nodiscard]] rpl::producer<bool> hideGroupStickersChanges();
+	void setHideGroupStickers(bool value);
+
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();
 

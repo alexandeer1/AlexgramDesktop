@@ -1258,11 +1258,19 @@ void Element::checkSpecialOnlyEmoji() {
 }
 
 void Element::hideSpoilers() {
-	if (_text.hasSpoilers()) {
-		_text.setSpoilerRevealed(false, anim::type::instant);
+	if (Core::App().settings().showSpoilersDirectly()) {
+		return;
 	}
+	_text.setSpoilerRevealed(false, anim::type::instant);
 	if (_media) {
 		_media->hideSpoilers();
+	}
+}
+
+void Element::revealSpoilers() {
+	_text.setSpoilerRevealed(true, anim::type::instant);
+	if (_media) {
+		_media->revealSpoilers();
 	}
 }
 
@@ -1909,6 +1917,9 @@ void Element::setTextWithLinks(
 		}
 	}
 	InitElementTextPart(this, _text);
+	if (Core::App().settings().showSpoilersDirectly()) {
+		_text.setSpoilerRevealed(true, anim::type::instant);
+	}
 	if (const auto next = _text.nextFormattedDateUpdate()) {
 		history()->session().data().registerFormattedDateUpdate(next, this);
 	}

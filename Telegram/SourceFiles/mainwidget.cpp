@@ -2978,6 +2978,12 @@ void MainWidget::handleStartFiles(
 	}
 }
 
+void MainWidget::reprocessAlexSettings() {
+	if (_history) {
+		_history->refreshSpoilers();
+	}
+}
+
 bool MainWidget::animatingShow() const {
 	return _showAnimation != nullptr;
 }
