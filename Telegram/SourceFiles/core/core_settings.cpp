@@ -186,6 +186,22 @@ rpl::event_stream<bool> &HideSendAsButtonChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &HideChannelBottomBarChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &AskBeforeLinkChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &AskBeforeInlineLinkChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &AskBeforeCallingChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
 
 [[nodiscard]] WindowPosition AdjustToScale(WindowPosition position,
@@ -2091,6 +2107,58 @@ rpl::producer<bool> Settings::hideSendAsButtonChanges() {
 void Settings::setHideSendAsButton(bool value) {
 	writePref<bool>("hide-send-as-button", value);
 	HideSendAsButtonChanges().fire_copy(value);
+}
+
+bool Settings::hideChannelBottomBar() {
+	return readPref<bool>("hide-channel-bottom-bar", false);
+}
+
+rpl::producer<bool> Settings::hideChannelBottomBarChanges() {
+	return HideChannelBottomBarChanges().events_starting_with(hideChannelBottomBar());
+}
+
+void Settings::setHideChannelBottomBar(bool value) {
+	writePref<bool>("hide-channel-bottom-bar", value);
+	HideChannelBottomBarChanges().fire_copy(value);
+}
+
+bool Settings::askBeforeLink() {
+	return readPref<bool>("ask-before-link", false);
+}
+
+rpl::producer<bool> Settings::askBeforeLinkChanges() {
+	return AskBeforeLinkChanges().events_starting_with(askBeforeLink());
+}
+
+void Settings::setAskBeforeLink(bool value) {
+	writePref<bool>("ask-before-link", value);
+	AskBeforeLinkChanges().fire_copy(value);
+}
+
+bool Settings::askBeforeInlineLink() {
+	return readPref<bool>("ask-before-inline-link", false);
+}
+
+rpl::producer<bool> Settings::askBeforeInlineLinkChanges() {
+	return AskBeforeInlineLinkChanges().events_starting_with(askBeforeInlineLink());
+}
+
+void Settings::setAskBeforeInlineLink(bool value) {
+	writePref<bool>("ask-before-inline-link", value);
+	AskBeforeInlineLinkChanges().fire_copy(value);
+}
+
+bool Settings::askBeforeCalling() {
+	return readPref<bool>("ask-before-calling", false);
+}
+
+rpl::producer<bool> Settings::askBeforeCallingChanges() {
+	return AskBeforeCallingChanges().events_starting_with(askBeforeCalling());
+}
+
+void Settings::setAskBeforeCalling(bool value) {
+	writePref<bool>("ask-before-calling", value);
+	AskBeforeCallingChanges().fire_copy(value);
 }
 
 } // namespace Core

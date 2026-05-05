@@ -56,6 +56,7 @@ struct ClickHandlerContext {
 	bool skipBotAutoLogin = false;
 	bool botStartAutoSubmit = false;
 	bool ignoreIv = false;
+	bool alexgramLinkConfirmed = false;
 	bool dark = false;
 	// Is filled from peer info.
 	PeerData *peer = nullptr;

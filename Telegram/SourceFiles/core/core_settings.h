@@ -1091,6 +1091,20 @@ public:
 	[[nodiscard]] bool hideSendAsButton();
 	[[nodiscard]] rpl::producer<bool> hideSendAsButtonChanges();
 	void setHideSendAsButton(bool value);
+	[[nodiscard]] bool hideChannelBottomBar();
+	[[nodiscard]] rpl::producer<bool> hideChannelBottomBarChanges();
+	void setHideChannelBottomBar(bool value);
+	[[nodiscard]] bool askBeforeLink();
+	[[nodiscard]] rpl::producer<bool> askBeforeLinkChanges();
+	void setAskBeforeLink(bool value);
+
+	[[nodiscard]] bool askBeforeInlineLink();
+	[[nodiscard]] rpl::producer<bool> askBeforeInlineLinkChanges();
+	void setAskBeforeInlineLink(bool value);
+
+	[[nodiscard]] bool askBeforeCalling();
+	[[nodiscard]] rpl::producer<bool> askBeforeCallingChanges();
+	void setAskBeforeCalling(bool value);
 
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();

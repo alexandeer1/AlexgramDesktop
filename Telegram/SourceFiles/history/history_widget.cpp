@@ -689,6 +689,11 @@ HistoryWidget::HistoryWidget(
 			updateFieldSubmitSettings();
 		});
 	}, lifetime());
+	Core::App().settings().hideChannelBottomBarChanges(
+	) | rpl::on_next([=] {
+		updateControlsVisibility();
+		updateControlsGeometry();
+	}, lifetime());
 
 	session().data().channelDifferenceTooLong(
 	) | rpl::filter([=](not_null<ChannelData*> channel) {
@@ -3475,7 +3480,9 @@ void HistoryWidget::setupSendAsToggle() {
 }
 
 void HistoryWidget::refreshSendAsToggle() {
-	Expects(_peer != nullptr);
+	if (!_peer) {
+		return;
+	}
 
 	const auto key = Main::SendAsKey{ _peer, Main::SendAsType::Message };
 	if (_editMsgId
@@ -3587,9 +3594,17 @@ void HistoryWidget::updateControlsVisibility() {
 		} else if (isBlocked()) {
 			toggle(_unblock);
 		} else if (isJoinChannel()) {
-			toggle(_joinChannel);
+			if (!Core::App().settings().hideChannelBottomBar()) {
+				toggle(_joinChannel);
+			} else {
+				toggle(nullptr);
+			}
 		} else if (isMuteUnmute()) {
-			toggle(_muteUnmute);
+			if (!Core::App().settings().hideChannelBottomBar()) {
+				toggle(_muteUnmute);
+			} else {
+				toggle(nullptr);
+			}
 		} else if (isBotStart()) {
 			toggle(_botStart);
 		}
@@ -7385,8 +7400,8 @@ void HistoryWidget::updateHistoryGeometry(
 		&& (isSearching()
 			|| isBlocked()
 			|| isBotStart()
-			|| isJoinChannel()
-			|| isMuteUnmute()
+			|| (isJoinChannel() && !Core::App().settings().hideChannelBottomBar())
+			|| (isMuteUnmute() && !Core::App().settings().hideChannelBottomBar())
 			|| isReportMessages())) {
 		newScrollHeight -= _unblock->height();
 	} else {

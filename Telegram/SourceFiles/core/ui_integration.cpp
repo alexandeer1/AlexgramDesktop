@@ -21,6 +21,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_utilities.h"
 #include "ui/basic_click_handlers.h"
 #include "ui/emoji_config.h"
+#include "ui/boxes/confirm_box.h"
+#include "ui/widgets/labels.h"
+#include "styles/style_layers.h"
 #include "lang/lang_keys.h"
 #include "platform/platform_specific.h"
 #include "boxes/url_auth_box.h"
@@ -32,6 +35,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
 #include "mainwindow.h"
+#include "base/qt/qt_key_modifiers.h"
 #include "base/unixtime.h"
 
 #include <QtCore/QDateTime>
@@ -52,6 +56,31 @@ const auto kBadPrefix = u"http://"_q;
 
 [[nodiscard]] QString DomainForAutoLogin(const QUrl &url) {
 	return url.isValid() ? url.host().toLower() : QString();
+}
+
+[[nodiscard]] TextWithEntities BoldDomainInUrl(const QString &url) {
+	auto result = TextWithEntities{ .text = url };
+
+	if (const auto parsedUrl = QUrl(url); parsedUrl.isValid()) {
+		if (const auto host = parsedUrl.host(); !host.isEmpty()) {
+			if (const auto hostPos = url.indexOf(host); hostPos != -1) {
+				auto boldEntity = EntityInText(
+					EntityType::Bold,
+					hostPos,
+					host.length());
+
+				if (host.startsWith("www.")) {
+					boldEntity = EntityInText(
+						EntityType::Bold,
+						hostPos + 4,
+						host.length() - 4);
+				}
+
+				result.entities.push_back(boldEntity);
+			}
+		}
+	}
+	return result;
 }
 
 [[nodiscard]] QString UrlWithAutoLoginToken(
@@ -411,8 +440,63 @@ bool UiIntegration::handleUrlClick(
 
 	if (UrlClickHandler::IsEmail(url)) {
 		File::OpenEmailLink(url);
-		return true;
-	} else if (local.startsWith(u"tg://"_q, Qt::CaseInsensitive)) {
+	}
+	const auto alexgramConfirmed = context.value<ClickHandlerContext>().alexgramLinkConfirmed;
+	const auto isInternal = local.startsWith(u"tg://"_q, Qt::CaseInsensitive)
+		|| local.startsWith(u"internal:"_q, Qt::CaseInsensitive)
+		|| local.startsWith(u"tonsite://"_q, Qt::CaseInsensitive);
+
+	if (!alexgramConfirmed && !base::IsCtrlPressed()) {
+		const auto ask = isInternal
+			? Core::App().settings().askBeforeInlineLink()
+			: (Core::App().settings().askBeforeLink()
+				&& !Iv::PreferForUri(url));
+
+		if (ask) {
+			const auto my = context.value<ClickHandlerContext>();
+			const auto window = my.sessionWindow.get();
+			const auto show = window ? window->uiShow() : my.show;
+			if (show) {
+				const auto parsedUrl = url.startsWith(u"tonsite://"_q)
+					? QUrl(url)
+					: QUrl::fromUserInput(url);
+				const auto displayed = parsedUrl.isValid()
+					? parsedUrl.toDisplayString()
+					: url;
+				const auto displayUrl = !UrlClickHandler::IsSuspicious(displayed)
+					? displayed
+					: parsedUrl.isValid()
+					? QString::fromUtf8(parsedUrl.toEncoded())
+					: UrlClickHandler::ShowEncoded(displayed);
+
+				const auto confirmed = [=] {
+					auto nextContext = context;
+					auto myNext = nextContext.value<ClickHandlerContext>();
+					myNext.alexgramLinkConfirmed = true;
+					nextContext.setValue(myNext);
+					(void)Ui::Integration::Instance().handleUrlClick(url, nextContext);
+				};
+				show->showBox(Box([=](not_null<Ui::GenericBox*> box) {
+					Ui::ConfirmBox(box, {
+						.text = (isInternal
+							? tr::lng_alexgram_ask_inline_link_sure(tr::now)
+							: tr::lng_open_this_link(tr::now)),
+						.confirmed = [=](Fn<void()> hide) { hide(); confirmed(); },
+						.confirmText = tr::lng_open_link(),
+					});
+					box->addSkip(st::boxLabel.style.lineHeight - st::boxPadding.bottom());
+					box->addRow(
+						object_ptr<Ui::FlatLabel>(
+							box,
+							rpl::single(BoldDomainInUrl(displayUrl)),
+							st::boxLabel));
+				}));
+				return true;
+			}
+		}
+	}
+
+	if (local.startsWith(u"tg://"_q, Qt::CaseInsensitive)) {
 		Core::App().openLocalUrl(local, context);
 		return true;
 	} else if (local.startsWith(u"tonsite://"_q, Qt::CaseInsensitive)) {
