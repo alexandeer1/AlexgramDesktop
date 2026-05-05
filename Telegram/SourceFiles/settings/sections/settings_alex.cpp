@@ -500,6 +500,46 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_hide_group_stickers_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs unlimitedRecentStickersArgs;
+	unlimitedRecentStickersArgs.title = tr::lng_settings_alexgram_unlimited_recent_stickers();
+	unlimitedRecentStickersArgs.checked = Core::App().settings().unlimitedRecentStickers();
+	const auto unlimitedRecentStickersCb = builder.addCheckbox(std::move(unlimitedRecentStickersArgs));
+	unlimitedRecentStickersCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setUnlimitedRecentStickers(checked);
+		Core::App().saveSettingsDelayed();
+	}, unlimitedRecentStickersCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_unlimited_recent_stickers_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs hideSideShareButtonArgs;
+	hideSideShareButtonArgs.title = tr::lng_settings_alexgram_hide_side_share_button();
+	hideSideShareButtonArgs.checked = Core::App().settings().hideSideShareButton();
+	const auto hideSideShareButtonCb = builder.addCheckbox(std::move(hideSideShareButtonArgs));
+	hideSideShareButtonCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setHideSideShareButton(checked);
+		Core::App().saveSettingsDelayed();
+		Core::App().reprocessAlexSettings();
+	}, hideSideShareButtonCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_hide_side_share_button_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs hideSendAsButtonArgs;
+	hideSendAsButtonArgs.title = tr::lng_settings_alexgram_hide_send_as_button();
+	hideSendAsButtonArgs.checked = Core::App().settings().hideSendAsButton();
+	const auto hideSendAsButtonCb = builder.addCheckbox(std::move(hideSendAsButtonArgs));
+	hideSendAsButtonCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setHideSendAsButton(checked);
+		Core::App().saveSettingsDelayed();
+	}, hideSendAsButtonCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_hide_send_as_button_about());
+	builder.addSkip();
+
 	Ui::ResizeFitChild(this, content);
 }
 

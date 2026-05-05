@@ -8237,4 +8237,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_show_spoilers_directly_about" = "If enabled, spoilers in chat messages will be revealed automatically without needing to click on them.";
 "lng_settings_alexgram_hide_group_stickers" = "Hide Group Stickers";
 "lng_settings_alexgram_hide_group_stickers_about" = "If enabled, the group stickers section will be hidden from the stickers panel.";
+"lng_settings_alexgram_unlimited_recent_stickers" = "Max Recent Stickers";
+"lng_settings_alexgram_unlimited_recent_stickers_about" = "If enabled, all recent stickers will be displayed in the stickers panel, bypassing the default limit.";
+"lng_settings_alexgram_hide_side_share_button" = "Hide Side Share Button";
+"lng_settings_alexgram_hide_side_share_button_about" = "Hide the quick share button that appears next to messages from public channels or bots.";
+"lng_settings_alexgram_hide_send_as_button" = "Hide Send as Button";
+"lng_settings_alexgram_hide_send_as_button_about" = "Hide the profile icon in the message input bar that allows sending messages as one of your channels.";
 

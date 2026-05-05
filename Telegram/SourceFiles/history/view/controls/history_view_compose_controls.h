@@ -327,7 +327,8 @@ private:
 	void updateSubmitSettings();
 	void updateSendButtonType();
 	void updateMessagesTTLShown();
-	bool updateSendAsButton(std::shared_ptr<Data::GroupCall> videoStream);
+	bool updateSendAsButton(
+		std::shared_ptr<Data::GroupCall> videoStream = nullptr);
 	void updateAttachBotsMenu();
 	void updateHeight();
 	void updateWrappingVisibility();

@@ -316,6 +316,11 @@ StickersListWidget::StickersListWidget(
 	) | rpl::on_next([=] {
 		refreshStickers();
 	}, lifetime());
+
+	Core::App().settings().unlimitedRecentStickersChanges(
+	) | rpl::on_next([=] {
+		refreshStickers();
+	}, lifetime());
 }
 
 rpl::producer<FileChosen> StickersListWidget::chosen() const {
@@ -3265,7 +3270,8 @@ auto StickersListWidget::collectRecentStickers() -> std::vector<Sticker> {
 
 	auto add = [&](not_null<DocumentData*> document, bool custom) {
 		if (result.size() >= kRecentDisplayLimit
-			&& !OptionUnlimitedRecentStickers.value()) {
+			&& !OptionUnlimitedRecentStickers.value()
+			&& !Core::App().settings().unlimitedRecentStickers()) {
 			return;
 		}
 		const auto i = ranges::find(result, document, &Sticker::document);

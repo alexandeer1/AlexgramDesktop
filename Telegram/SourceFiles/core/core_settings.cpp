@@ -179,6 +179,18 @@ rpl::event_stream<bool> &HideGroupStickersChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &UnlimitedRecentStickersChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &HideSideShareButtonChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &HideSendAsButtonChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
 
 [[nodiscard]] WindowPosition AdjustToScale(WindowPosition position,
@@ -2046,6 +2058,45 @@ rpl::producer<bool> Settings::hideGroupStickersChanges() {
 void Settings::setHideGroupStickers(bool value) {
 	writePref<bool>("hide-group-stickers", value);
 	HideGroupStickersChanges().fire_copy(value);
+}
+
+bool Settings::unlimitedRecentStickers() {
+	return readPref<bool>("unlimited-recent-stickers", false);
+}
+
+rpl::producer<bool> Settings::unlimitedRecentStickersChanges() {
+	return UnlimitedRecentStickersChanges().events_starting_with(unlimitedRecentStickers());
+}
+
+void Settings::setUnlimitedRecentStickers(bool value) {
+	writePref<bool>("unlimited-recent-stickers", value);
+	UnlimitedRecentStickersChanges().fire_copy(value);
+}
+
+bool Settings::hideSideShareButton() {
+	return readPref<bool>("hide-side-share-button", false);
+}
+
+rpl::producer<bool> Settings::hideSideShareButtonChanges() {
+	return HideSideShareButtonChanges().events_starting_with(hideSideShareButton());
+}
+
+void Settings::setHideSideShareButton(bool value) {
+	writePref<bool>("hide-side-share-button", value);
+	HideSideShareButtonChanges().fire_copy(value);
+}
+
+bool Settings::hideSendAsButton() {
+	return readPref<bool>("hide-send-as-button", false);
+}
+
+rpl::producer<bool> Settings::hideSendAsButtonChanges() {
+	return HideSendAsButtonChanges().events_starting_with(hideSendAsButton());
+}
+
+void Settings::setHideSendAsButton(bool value) {
+	writePref<bool>("hide-send-as-button", value);
+	HideSendAsButtonChanges().fire_copy(value);
 }
 
 } // namespace Core

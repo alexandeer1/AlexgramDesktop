@@ -1087,6 +1087,15 @@ ComposeControls::ComposeControls(
 	if (_st.radius > 0) {
 		_backgroundRect.emplace(_st.radius, _st.bg);
 	}
+
+	Core::App().settings().hideSendAsButtonChanges(
+	) | rpl::on_next([=] {
+		if (updateSendAsButton()) {
+			updateControlsVisibility();
+			updateControlsGeometry(_wrap->size());
+			orderControls();
+		}
+	}, _wrap->lifetime());
 	if (descriptor.stickerOrEmojiChosen) {
 		std::move(
 			descriptor.stickerOrEmojiChosen
@@ -3871,6 +3880,7 @@ bool ComposeControls::updateSendAsButton(
 	if (!_features.sendAs
 		|| !peer
 		|| isEditingMessage()
+		|| Core::App().settings().hideSendAsButton()
 		|| !session().sendAsPeers().shouldChoose({ peer, type })) {
 		if (!_sendAs) {
 			return false;
