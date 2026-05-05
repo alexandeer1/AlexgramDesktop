@@ -14,6 +14,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_menu_about" = "About";
 "lng_menu_update" = "Update";
 "lng_menu_night_mode" = "Night Mode";
+"lng_settings_alexgram_send_typing_instead_sticker" = "Send Typing Instead of Choosing Sticker";
+"lng_settings_alexgram_send_typing_instead_sticker_about" = "When you are choosing a sticker, show that you are typing instead.";
 
 "lng_settings_alexgram_ask_before_calling" = "Ask before calling";
 "lng_settings_alexgram_ask_before_calling_about" = "Show a confirmation dialog before starting a call.";
@@ -7986,6 +7988,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_general" = "General";
 "lng_settings_alexgram_translator" = "Translator";
 "lng_settings_alexgram_chats" = "Chats";
+"lng_settings_alexgram_experimental" = "Experimental";
 "lng_settings_alexgram_disable_link_preview" = "Disable Link Preview by Default";
 "lng_settings_alexgram_disable_link_preview_about" = "If enabled, link previews will be disabled by default for your sent messages.";
 "lng_settings_alexgram_show_message_id" = "Show Message ID";
@@ -8025,9 +8028,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_show_spoilers_directly" = "Show Spoiler Messages Directly in Chats";
 "lng_settings_alexgram_show_spoilers_directly_about" = "If enabled, spoilers in chat messages will be revealed automatically without needing to click on them.";
 "lng_settings_alexgram_hide_group_stickers" = "Hide Group Stickers";
-"lng_settings_alexgram_hide_group_stickers_about" = "If enabled, the group stickers section will be hidden from the stickers panel.";
+"lng_settings_alexgram_hide_group_stickers_about" = "The group stickers section will be hidden from the stickers panel.";
 "lng_settings_alexgram_unlimited_recent_stickers" = "Max Recent Stickers";
-"lng_settings_alexgram_unlimited_recent_stickers_about" = "If enabled, all recent stickers will be displayed in the stickers panel, bypassing the default limit.";
+"lng_settings_alexgram_unlimited_recent_stickers_about" = "Choose a custom limit for recent stickers displayed in the stickers panel.";
 "lng_settings_alexgram_hide_side_share_button" = "Hide Side Share Button";
 "lng_settings_alexgram_hide_side_share_button_about" = "Hide the quick share button that appears next to messages from public channels or bots.";
 "lng_settings_alexgram_hide_send_as_button" = "Hide Send as Button";
@@ -8039,4 +8042,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_ask_before_inline_link" = "Ask Before Opening Inline Links";
 "lng_settings_alexgram_ask_before_inline_link_about" = "Show a confirmation dialog before opening bot inline buttons or internal t.me links.";
 "lng_alexgram_ask_inline_link_sure" = "Are you sure you want to open this internal link?";
-
+"lng_settings_alexgram_unlimited_pinned" = "Unlimited Pinned Dialogs";
+"lng_settings_alexgram_unlimited_pinned_about" = "Bypass the pinned chats limit locally. Note: Server-side pinning is still limited by Telegram.";
+"lng_settings_alexgram_unlimited_favorite_stickers" = "Unlimited Favorite Stickers";
+"lng_settings_alexgram_unlimited_favorite_stickers_about" = "Bypass the favorite stickers limit locally. Note: Server-side synchronization is still limited by Telegram.";
+"lng_settings_alexgram_upload_speed_boost" = "Upload Speed Boost";
+"lng_settings_alexgram_upload_speed_boost_about" = "Aggressively increase upload speed by using more concurrent connections and removing artificial delays.";
+"lng_settings_alexgram_download_speed_boost" = "Download Speed Boost";
+"lng_settings_alexgram_download_speed_boost_about" = "Aggressively increase download speed by using more concurrent connections and allowing more data in flight.";

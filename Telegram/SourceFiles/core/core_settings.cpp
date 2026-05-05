@@ -178,6 +178,10 @@ rpl::event_stream<bool> &UnlimitedRecentStickersChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<int> &MaxRecentStickersChanges() {
+  static rpl::event_stream<int> stream;
+  return stream;
+}
 rpl::event_stream<bool> &HideSideShareButtonChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
@@ -199,6 +203,26 @@ rpl::event_stream<bool> &AskBeforeInlineLinkChanges() {
   return stream;
 }
 rpl::event_stream<bool> &AskBeforeCallingChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &UnlimitedPinnedChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &UnlimitedFavoriteStickersChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &UploadSpeedBoostChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &DownloadSpeedBoostChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &SendTypingInsteadOfStickerChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
@@ -1251,6 +1275,23 @@ void Settings::writePrefImpl<bool>(std::string_view key, bool value) {
   writePrefGeneric(key, value ? "\x1"_q : QByteArray());
 }
 
+template <>
+std::optional<int> Settings::readPrefImpl<int>(std::string_view key) {
+  if (const auto data = readPrefGeneric(key)) {
+    auto ok = false;
+    const auto result = data->toInt(&ok);
+    if (ok) {
+      return result;
+    }
+  }
+  return {};
+}
+
+template <>
+void Settings::writePrefImpl<int>(std::string_view key, int value) {
+  writePrefGeneric(key, QByteArray::number(value));
+}
+
 QString Settings::getSoundPath(const QString &key) const {
   auto it = _soundOverrides.find(key);
   if (it != _soundOverrides.end()) {
@@ -1839,326 +1880,409 @@ void Settings::setQuickDialogAction(Dialogs::Ui::QuickDialogAction action) {
   _quickDialogAction = action;
 }
 
-
-
-bool Settings::hidePremium() {
-	return readPref<bool>("hide-premium", false);
-}
+bool Settings::hidePremium() { return readPref<bool>("hide-premium", false); }
 
 rpl::producer<bool> Settings::hidePremiumChanges() {
-	return HidePremiumChanges().events_starting_with(hidePremium());
+  return HidePremiumChanges().events_starting_with(hidePremium());
 }
 
 void Settings::setHidePremium(bool value) {
-	writePref<bool>("hide-premium", value);
-	HidePremiumChanges().fire_copy(value);
+  writePref<bool>("hide-premium", value);
+  HidePremiumChanges().fire_copy(value);
 }
 
 bool Settings::disableNumberRounding() {
-	return readPref<bool>("disable-number-rounding", false);
+  return readPref<bool>("disable-number-rounding", false);
 }
 
 void Settings::setDisableNumberRounding(bool value) {
-	writePref<bool>("disable-number-rounding", value);
+  writePref<bool>("disable-number-rounding", value);
 }
 
 bool Settings::hideAllChatsTab() {
-	return readPref<bool>("hide-all-chats-tab", false);
+  return readPref<bool>("hide-all-chats-tab", false);
 }
 
 rpl::producer<bool> Settings::hideAllChatsTabChanges() {
-	return HideAllChatsTabChanges().events_starting_with(hideAllChatsTab());
+  return HideAllChatsTabChanges().events_starting_with(hideAllChatsTab());
 }
 
 void Settings::setHideAllChatsTab(bool value) {
-	writePref<bool>("hide-all-chats-tab", value);
-	HideAllChatsTabChanges().fire_copy(value);
+  writePref<bool>("hide-all-chats-tab", value);
+  HideAllChatsTabChanges().fire_copy(value);
 }
 
 bool Settings::removeArchivedFromList() {
-	return readPref<bool>("remove-archived-from-list", false);
+  return readPref<bool>("remove-archived-from-list", false);
 }
 
 rpl::producer<bool> Settings::removeArchivedFromListChanges() {
-	return RemoveArchivedFromListChanges().events_starting_with(removeArchivedFromList());
+  return RemoveArchivedFromListChanges().events_starting_with(
+      removeArchivedFromList());
 }
 
 void Settings::setRemoveArchivedFromList(bool value) {
-	writePref<bool>("remove-archived-from-list", value);
-	RemoveArchivedFromListChanges().fire_copy(value);
+  writePref<bool>("remove-archived-from-list", value);
+  RemoveArchivedFromListChanges().fire_copy(value);
 }
 
-bool Settings::hideHelp() {
-	return readPref<bool>("hide-help", false);
-}
+bool Settings::hideHelp() { return readPref<bool>("hide-help", false); }
 
 rpl::producer<bool> Settings::hideHelpChanges() {
-	return HideHelpChanges().events_starting_with(hideHelp());
+  return HideHelpChanges().events_starting_with(hideHelp());
 }
 
 void Settings::setHideHelp(bool value) {
-	writePref<bool>("hide-help", value);
-	HideHelpChanges().fire_copy(value);
+  writePref<bool>("hide-help", value);
+  HideHelpChanges().fire_copy(value);
 }
 
 bool Settings::hidePhoneNumber() {
-	return readPref<bool>("hide-phone-number", false);
+  return readPref<bool>("hide-phone-number", false);
 }
 
 rpl::producer<bool> Settings::hidePhoneNumberChanges() {
-	return HidePhoneNumberChanges().events_starting_with(hidePhoneNumber());
+  return HidePhoneNumberChanges().events_starting_with(hidePhoneNumber());
 }
 
 void Settings::setHidePhoneNumber(bool value) {
-	writePref<bool>("hide-phone-number", value);
-	HidePhoneNumberChanges().fire_copy(value);
+  writePref<bool>("hide-phone-number", value);
+  HidePhoneNumberChanges().fire_copy(value);
 }
 
 bool Settings::disableLinkPreviewByDefault() {
-	return readPref<bool>("disable-link-preview-by-default", false);
+  return readPref<bool>("disable-link-preview-by-default", false);
 }
 
 rpl::producer<bool> Settings::disableLinkPreviewByDefaultChanges() {
-	return DisableLinkPreviewByDefaultChanges().events_starting_with(disableLinkPreviewByDefault());
+  return DisableLinkPreviewByDefaultChanges().events_starting_with(
+      disableLinkPreviewByDefault());
 }
 
 void Settings::setDisableLinkPreviewByDefault(bool value) {
-	writePref<bool>("disable-link-preview-by-default", value);
-	DisableLinkPreviewByDefaultChanges().fire_copy(value);
+  writePref<bool>("disable-link-preview-by-default", value);
+  DisableLinkPreviewByDefaultChanges().fire_copy(value);
 }
 
 bool Settings::showMessageId() {
-	return readPref<bool>("show-message-id", false);
+  return readPref<bool>("show-message-id", false);
 }
 
 rpl::producer<bool> Settings::showMessageIdChanges() {
-	return ShowMessageIdChanges().events_starting_with(showMessageId());
+  return ShowMessageIdChanges().events_starting_with(showMessageId());
 }
 
 void Settings::setShowMessageId(bool value) {
-	writePref<bool>("show-message-id", value);
-	ShowMessageIdChanges().fire_copy(value);
+  writePref<bool>("show-message-id", value);
+  ShowMessageIdChanges().fire_copy(value);
 }
 
 bool Settings::showTimestampSeconds() {
-	return readPref<bool>("show-timestamp-seconds", false);
+  return readPref<bool>("show-timestamp-seconds", false);
 }
 
 rpl::producer<bool> Settings::showTimestampSecondsChanges() {
-	return ShowTimestampSecondsChanges().events_starting_with(showTimestampSeconds());
+  return ShowTimestampSecondsChanges().events_starting_with(
+      showTimestampSeconds());
 }
 
 void Settings::setShowTimestampSeconds(bool value) {
-	writePref<bool>("show-timestamp-seconds", value);
-	ShowTimestampSecondsChanges().fire_copy(value);
+  writePref<bool>("show-timestamp-seconds", value);
+  ShowTimestampSecondsChanges().fire_copy(value);
 }
 
 bool Settings::showEditedIcon() {
-	return readPref<bool>("show-edited-icon", false);
+  return readPref<bool>("show-edited-icon", false);
 }
 
 rpl::producer<bool> Settings::showEditedIconChanges() {
-	return ShowEditedIconChanges().events_starting_with(showEditedIcon());
+  return ShowEditedIconChanges().events_starting_with(showEditedIcon());
 }
 
 void Settings::setShowEditedIcon(bool value) {
-	writePref<bool>("show-edited-icon", value);
-	ShowEditedIconChanges().fire_copy(value);
+  writePref<bool>("show-edited-icon", value);
+  ShowEditedIconChanges().fire_copy(value);
 }
 
 bool Settings::showForwardedDate() {
-	return readPref<bool>("show-forwarded-date", true);
+  return readPref<bool>("show-forwarded-date", true);
 }
 
 rpl::producer<bool> Settings::showForwardedDateChanges() {
-	return ShowForwardedDateChanges().events_starting_with(showForwardedDate());
+  return ShowForwardedDateChanges().events_starting_with(showForwardedDate());
 }
 
 void Settings::setShowForwardedDate(bool value) {
-	writePref<bool>("show-forwarded-date", value);
-	ShowForwardedDateChanges().fire_copy(value);
+  writePref<bool>("show-forwarded-date", value);
+  ShowForwardedDateChanges().fire_copy(value);
 }
 
 bool Settings::showOnlineStatus() {
-	return readPref<bool>("show-online-status", false);
+  return readPref<bool>("show-online-status", false);
 }
 
 rpl::producer<bool> Settings::showOnlineStatusChanges() {
-	return ShowOnlineStatusChanges().events_starting_with(showOnlineStatus());
+  return ShowOnlineStatusChanges().events_starting_with(showOnlineStatus());
 }
 
 void Settings::setShowOnlineStatus(bool value) {
-	writePref<bool>("show-online-status", value);
-	ShowOnlineStatusChanges().fire_copy(value);
+  writePref<bool>("show-online-status", value);
+  ShowOnlineStatusChanges().fire_copy(value);
 }
 
 bool Settings::showSmallGifs() {
-	return readPref<bool>("show-small-gifs", false);
+  return readPref<bool>("show-small-gifs", false);
 }
 
 rpl::producer<bool> Settings::showSmallGifsChanges() {
-	return ShowSmallGifsChanges().events_starting_with(showSmallGifs());
+  return ShowSmallGifsChanges().events_starting_with(showSmallGifs());
 }
 
 void Settings::setShowSmallGifs(bool value) {
-	writePref<bool>("show-small-gifs", value);
-	ShowSmallGifsChanges().fire_copy(value);
+  writePref<bool>("show-small-gifs", value);
+  ShowSmallGifsChanges().fire_copy(value);
 }
 
 bool Settings::treatGifsAsVideos() {
-	return readPref<bool>("treat-gifs-as-videos", false);
+  return readPref<bool>("treat-gifs-as-videos", false);
 }
 
 rpl::producer<bool> Settings::treatGifsAsVideosChanges() {
-	return TreatGifsAsVideosChanges().events_starting_with(treatGifsAsVideos());
+  return TreatGifsAsVideosChanges().events_starting_with(treatGifsAsVideos());
 }
 
 void Settings::setTreatGifsAsVideos(bool value) {
-	writePref<bool>("treat-gifs-as-videos", value);
-	TreatGifsAsVideosChanges().fire_copy(value);
+  writePref<bool>("treat-gifs-as-videos", value);
+  TreatGifsAsVideosChanges().fire_copy(value);
 }
 
 bool Settings::autoPauseVideo() {
-	return readPref<bool>("auto-pause-video", false);
+  return readPref<bool>("auto-pause-video", false);
 }
 
 rpl::producer<bool> Settings::autoPauseVideoChanges() {
-	return AutoPauseVideoChanges().events_starting_with(autoPauseVideo());
+  return AutoPauseVideoChanges().events_starting_with(autoPauseVideo());
 }
 
 void Settings::setAutoPauseVideo(bool value) {
-	writePref<bool>("auto-pause-video", value);
-	AutoPauseVideoChanges().fire_copy(value);
+  writePref<bool>("auto-pause-video", value);
+  AutoPauseVideoChanges().fire_copy(value);
 }
 
 bool Settings::noAutoPlayNextVoice() {
-	return readPref<bool>("no-autoplay-next-voice", false);
+  return readPref<bool>("no-autoplay-next-voice", false);
 }
 
 rpl::producer<bool> Settings::noAutoPlayNextVoiceChanges() {
-	return NoAutoPlayNextVoiceChanges().events_starting_with(noAutoPlayNextVoice());
+  return NoAutoPlayNextVoiceChanges().events_starting_with(
+      noAutoPlayNextVoice());
 }
 
 void Settings::setNoAutoPlayNextVoice(bool value) {
-	writePref<bool>("no-autoplay-next-voice", value);
-	NoAutoPlayNextVoiceChanges().fire_copy(value);
+  writePref<bool>("no-autoplay-next-voice", value);
+  NoAutoPlayNextVoiceChanges().fire_copy(value);
 }
 
 bool Settings::showSpoilersDirectly() {
-	return readPref<bool>("show-spoilers-directly", false);
+  return readPref<bool>("show-spoilers-directly", false);
 }
 
 rpl::producer<bool> Settings::showSpoilersDirectlyChanges() {
-	return ShowSpoilersDirectlyChanges().events_starting_with(showSpoilersDirectly());
+  return ShowSpoilersDirectlyChanges().events_starting_with(
+      showSpoilersDirectly());
 }
 
 void Settings::setShowSpoilersDirectly(bool value) {
-	writePref<bool>("show-spoilers-directly", value);
-	ShowSpoilersDirectlyChanges().fire_copy(value);
+  writePref<bool>("show-spoilers-directly", value);
+  ShowSpoilersDirectlyChanges().fire_copy(value);
 }
 
 bool Settings::hideGroupStickers() {
-	return readPref<bool>("hide-group-stickers", false);
+  return readPref<bool>("hide-group-stickers", false);
 }
 
 rpl::producer<bool> Settings::hideGroupStickersChanges() {
-	return HideGroupStickersChanges().events_starting_with(hideGroupStickers());
+  return HideGroupStickersChanges().events_starting_with(hideGroupStickers());
 }
 
 void Settings::setHideGroupStickers(bool value) {
-	writePref<bool>("hide-group-stickers", value);
-	HideGroupStickersChanges().fire_copy(value);
+  writePref<bool>("hide-group-stickers", value);
+  HideGroupStickersChanges().fire_copy(value);
 }
 
 bool Settings::unlimitedRecentStickers() {
-	return readPref<bool>("unlimited-recent-stickers", false);
+  return readPref<bool>("unlimited-recent-stickers", false);
 }
 
 rpl::producer<bool> Settings::unlimitedRecentStickersChanges() {
-	return UnlimitedRecentStickersChanges().events_starting_with(unlimitedRecentStickers());
+  return UnlimitedRecentStickersChanges().events_starting_with(
+      unlimitedRecentStickers());
 }
 
 void Settings::setUnlimitedRecentStickers(bool value) {
-	writePref<bool>("unlimited-recent-stickers", value);
-	UnlimitedRecentStickersChanges().fire_copy(value);
+  writePref<bool>("unlimited-recent-stickers", value);
+  UnlimitedRecentStickersChanges().fire_copy(value);
+}
+
+int Settings::maxRecentStickers() {
+  return readPref<int>("max-recent-stickers", 40);
+}
+
+rpl::producer<int> Settings::maxRecentStickersChanges() {
+  return MaxRecentStickersChanges().events_starting_with(maxRecentStickers());
+}
+
+void Settings::setMaxRecentStickers(int value) {
+  writePref<int>("max-recent-stickers", value);
+  MaxRecentStickersChanges().fire_copy(value);
 }
 
 bool Settings::hideSideShareButton() {
-	return readPref<bool>("hide-side-share-button", false);
+  return readPref<bool>("hide-side-share-button", false);
 }
 
 rpl::producer<bool> Settings::hideSideShareButtonChanges() {
-	return HideSideShareButtonChanges().events_starting_with(hideSideShareButton());
+  return HideSideShareButtonChanges().events_starting_with(
+      hideSideShareButton());
 }
 
 void Settings::setHideSideShareButton(bool value) {
-	writePref<bool>("hide-side-share-button", value);
-	HideSideShareButtonChanges().fire_copy(value);
+  writePref<bool>("hide-side-share-button", value);
+  HideSideShareButtonChanges().fire_copy(value);
 }
 
 bool Settings::hideSendAsButton() {
-	return readPref<bool>("hide-send-as-button", false);
+  return readPref<bool>("hide-send-as-button", false);
 }
 
 rpl::producer<bool> Settings::hideSendAsButtonChanges() {
-	return HideSendAsButtonChanges().events_starting_with(hideSendAsButton());
+  return HideSendAsButtonChanges().events_starting_with(hideSendAsButton());
 }
 
 void Settings::setHideSendAsButton(bool value) {
-	writePref<bool>("hide-send-as-button", value);
-	HideSendAsButtonChanges().fire_copy(value);
+  writePref<bool>("hide-send-as-button", value);
+  HideSendAsButtonChanges().fire_copy(value);
 }
 
 bool Settings::hideChannelBottomBar() {
-	return readPref<bool>("hide-channel-bottom-bar", false);
+  return readPref<bool>("hide-channel-bottom-bar", false);
 }
 
 rpl::producer<bool> Settings::hideChannelBottomBarChanges() {
-	return HideChannelBottomBarChanges().events_starting_with(hideChannelBottomBar());
+  return HideChannelBottomBarChanges().events_starting_with(
+      hideChannelBottomBar());
 }
 
 void Settings::setHideChannelBottomBar(bool value) {
-	writePref<bool>("hide-channel-bottom-bar", value);
-	HideChannelBottomBarChanges().fire_copy(value);
+  writePref<bool>("hide-channel-bottom-bar", value);
+  HideChannelBottomBarChanges().fire_copy(value);
 }
 
 bool Settings::askBeforeLink() {
-	return readPref<bool>("ask-before-link", false);
+  return readPref<bool>("ask-before-link", false);
 }
 
 rpl::producer<bool> Settings::askBeforeLinkChanges() {
-	return AskBeforeLinkChanges().events_starting_with(askBeforeLink());
+  return AskBeforeLinkChanges().events_starting_with(askBeforeLink());
 }
 
 void Settings::setAskBeforeLink(bool value) {
-	writePref<bool>("ask-before-link", value);
-	AskBeforeLinkChanges().fire_copy(value);
+  writePref<bool>("ask-before-link", value);
+  AskBeforeLinkChanges().fire_copy(value);
 }
 
 bool Settings::askBeforeInlineLink() {
-	return readPref<bool>("ask-before-inline-link", false);
+  return readPref<bool>("ask-before-inline-link", false);
 }
 
 rpl::producer<bool> Settings::askBeforeInlineLinkChanges() {
-	return AskBeforeInlineLinkChanges().events_starting_with(askBeforeInlineLink());
+  return AskBeforeInlineLinkChanges().events_starting_with(
+      askBeforeInlineLink());
 }
 
 void Settings::setAskBeforeInlineLink(bool value) {
-	writePref<bool>("ask-before-inline-link", value);
-	AskBeforeInlineLinkChanges().fire_copy(value);
+  writePref<bool>("ask-before-inline-link", value);
+  AskBeforeInlineLinkChanges().fire_copy(value);
 }
 
 bool Settings::askBeforeCalling() {
-	return readPref<bool>("ask-before-calling", false);
+  return readPref<bool>("ask-before-calling", false);
 }
 
 rpl::producer<bool> Settings::askBeforeCallingChanges() {
-	return AskBeforeCallingChanges().events_starting_with(askBeforeCalling());
+  return AskBeforeCallingChanges().events_starting_with(askBeforeCalling());
 }
 
 void Settings::setAskBeforeCalling(bool value) {
-	writePref<bool>("ask-before-calling", value);
-	AskBeforeCallingChanges().fire_copy(value);
+  writePref<bool>("ask-before-calling", value);
+  AskBeforeCallingChanges().fire_copy(value);
+}
+
+bool Settings::unlimitedPinned() {
+  return readPref<bool>("unlimited-pinned", false);
+}
+
+rpl::producer<bool> Settings::unlimitedPinnedChanges() {
+  return UnlimitedPinnedChanges().events_starting_with(unlimitedPinned());
+}
+
+void Settings::setUnlimitedPinned(bool value) {
+  writePref<bool>("unlimited-pinned", value);
+  UnlimitedPinnedChanges().fire_copy(value);
+}
+
+bool Settings::unlimitedFavoriteStickers() {
+  return readPref<bool>("unlimited-favorite-stickers", false);
+}
+
+rpl::producer<bool> Settings::unlimitedFavoriteStickersChanges() {
+  return UnlimitedFavoriteStickersChanges().events_starting_with(
+      unlimitedFavoriteStickers());
+}
+
+void Settings::setUnlimitedFavoriteStickers(bool value) {
+  writePref<bool>("unlimited-favorite-stickers", value);
+  UnlimitedFavoriteStickersChanges().fire_copy(value);
+}
+
+bool Settings::uploadSpeedBoost() {
+  return readPref<bool>("upload-speed-boost", false);
+}
+
+rpl::producer<bool> Settings::uploadSpeedBoostChanges() {
+  return UploadSpeedBoostChanges().events_starting_with(uploadSpeedBoost());
+}
+
+void Settings::setUploadSpeedBoost(bool value) {
+  writePref<bool>("upload-speed-boost", value);
+  UploadSpeedBoostChanges().fire_copy(value);
+}
+
+bool Settings::downloadSpeedBoost() {
+  return readPref<bool>("download-speed-boost", false);
+}
+
+rpl::producer<bool> Settings::downloadSpeedBoostChanges() {
+  return DownloadSpeedBoostChanges().events_starting_with(downloadSpeedBoost());
+}
+
+void Settings::setDownloadSpeedBoost(bool value) {
+  writePref<bool>("download-speed-boost", value);
+  DownloadSpeedBoostChanges().fire_copy(value);
+}
+
+bool Settings::sendTypingInsteadOfSticker() {
+  return readPref<bool>("send-typing-instead-of-sticker", false);
+}
+
+rpl::producer<bool> Settings::sendTypingInsteadOfStickerChanges() {
+  return SendTypingInsteadOfStickerChanges().events_starting_with(
+      sendTypingInsteadOfSticker());
+}
+
+void Settings::setSendTypingInsteadOfSticker(bool value) {
+  writePref<bool>("send-typing-instead-of-sticker", value);
+  SendTypingInsteadOfStickerChanges().fire_copy(value);
 }
 
 } // namespace Core

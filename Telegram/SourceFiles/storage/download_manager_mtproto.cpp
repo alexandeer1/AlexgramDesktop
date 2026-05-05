@@ -14,6 +14,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "data/data_document.h"
 #include "apiwrap.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "base/openssl_help.h"
 
 namespace Storage {
@@ -21,9 +23,11 @@ namespace {
 
 constexpr auto kKillSessionTimeout = 15 * crl::time(1000);
 constexpr auto kStartWaitedInSession = 4 * kDownloadPartSize;
-constexpr auto kMaxWaitedInSession = 16 * kDownloadPartSize;
+constexpr auto kMaxWaitedInSessionDefault = 16 * kDownloadPartSize;
+constexpr auto kMaxWaitedInSessionBoost = 128 * kDownloadPartSize;
 constexpr auto kStartSessionsCount = 1;
-constexpr auto kMaxSessionsCount = 8;
+constexpr auto kMaxSessionsCountDefault = 8;
+constexpr auto kMaxSessionsCountBoost = 32;
 constexpr auto kMaxTrackedSessionRemoves = 64;
 constexpr auto kRetryAddSessionTimeout = 8 * crl::time(1000);
 constexpr auto kRetryAddSessionSuccesses = 3;
@@ -182,9 +186,12 @@ bool DownloadManagerMtproto::trySendNextPart(MTP::DcId dcId, Queue &queue) {
 	const auto &sessions = balanceData.sessions;
 	const auto bestIndex = [&] {
 		const auto proj = [](const DcSessionBalanceData &data) {
+			const auto limit = Core::App().settings().downloadSpeedBoost()
+				? kMaxWaitedInSessionBoost
+				: kMaxWaitedInSessionDefault;
 			return (data.requested < data.maxWaitedAmount)
 				? data.requested
-				: kMaxWaitedInSession;
+				: limit;
 		};
 		const auto j = ranges::min_element(sessions, ranges::less(), proj);
 		return (j->requested + kDownloadPartSize <= j->maxWaitedAmount)
@@ -238,6 +245,9 @@ void DownloadManagerMtproto::requestSucceeded(
 	auto &dc = i->second;
 	Assert(index < dc.sessions.size());
 	auto &data = dc.sessions[index];
+	const auto maxWaitedAmountLimit = Core::App().settings().downloadSpeedBoost()
+		? kMaxWaitedInSessionBoost
+		: kMaxWaitedInSessionDefault;
 	const auto overloaded = (timeAtRequestStart <= dc.lastSessionRemove)
 		|| (amountAtRequestStart > data.maxWaitedAmount);
 	const auto parts = amountAtRequestStart / kDownloadPartSize;
@@ -260,10 +270,11 @@ void DownloadManagerMtproto::requestSucceeded(
 		return;
 	}
 	if (amountAtRequestStart == data.maxWaitedAmount
-		&& data.maxWaitedAmount < kMaxWaitedInSession) {
-		data.maxWaitedAmount = std::min(
-			data.maxWaitedAmount + kDownloadPartSize,
-			kMaxWaitedInSession);
+		&& data.maxWaitedAmount < maxWaitedAmountLimit) {
+		const auto next = Core::App().settings().downloadSpeedBoost()
+			? (data.maxWaitedAmount * 2)
+			: (data.maxWaitedAmount + kDownloadPartSize);
+		data.maxWaitedAmount = std::min(next, maxWaitedAmountLimit);
 		DEBUG_LOG(("Download (%1,%2) increased max waited amount %3."
 			).arg(dcId
 			).arg(index
@@ -283,8 +294,13 @@ void DownloadManagerMtproto::requestSucceeded(
 	if (dc.timeouts > 0) {
 		--dc.timeouts;
 		return;
-	} else if (dc.sessions.size() == kMaxSessionsCount) {
-		return;
+	} else {
+		const auto limit = Core::App().settings().downloadSpeedBoost()
+			? kMaxSessionsCountBoost
+			: kMaxSessionsCountDefault;
+		if (dc.sessions.size() == limit) {
+			return;
+		}
 	}
 	const auto now = crl::now();
 	const auto delay = (dc.sessionRemoveTimes + 1) * kRetryAddSessionTimeout;
@@ -350,9 +366,15 @@ void DownloadManagerMtproto::removeSession(MTP::DcId dcId) {
 	auto &session = dc.sessions.back();
 
 	// Make sure we don't send anything to that session while redirecting.
-	session.requested += kMaxWaitedInSession * kMaxSessionsCount;
+	const auto maxWaitedAmountLimit = Core::App().settings().downloadSpeedBoost()
+		? kMaxWaitedInSessionBoost
+		: kMaxWaitedInSessionDefault;
+	const auto maxSessionsCountLimit = Core::App().settings().downloadSpeedBoost()
+		? kMaxSessionsCountBoost
+		: kMaxSessionsCountDefault;
+	session.requested += maxWaitedAmountLimit * maxSessionsCountLimit;
 	queue.removeSession(index);
-	Assert(session.requested == kMaxWaitedInSession * kMaxSessionsCount);
+	Assert(session.requested == maxWaitedAmountLimit * maxSessionsCountLimit);
 
 	dc.sessions.pop_back();
 	api().instance().killSession(MTP::downloadDcId(dcId, index));

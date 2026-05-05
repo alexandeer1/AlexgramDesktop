@@ -1085,6 +1085,9 @@ public:
 	[[nodiscard]] bool unlimitedRecentStickers();
 	[[nodiscard]] rpl::producer<bool> unlimitedRecentStickersChanges();
 	void setUnlimitedRecentStickers(bool value);
+	[[nodiscard]] int maxRecentStickers();
+	[[nodiscard]] rpl::producer<int> maxRecentStickersChanges();
+	void setMaxRecentStickers(int value);
 	[[nodiscard]] bool hideSideShareButton();
 	[[nodiscard]] rpl::producer<bool> hideSideShareButtonChanges();
 	void setHideSideShareButton(bool value);
@@ -1105,6 +1108,26 @@ public:
 	[[nodiscard]] bool askBeforeCalling();
 	[[nodiscard]] rpl::producer<bool> askBeforeCallingChanges();
 	void setAskBeforeCalling(bool value);
+
+	[[nodiscard]] bool unlimitedPinned();
+	[[nodiscard]] rpl::producer<bool> unlimitedPinnedChanges();
+	void setUnlimitedPinned(bool value);
+
+	[[nodiscard]] bool unlimitedFavoriteStickers();
+	[[nodiscard]] rpl::producer<bool> unlimitedFavoriteStickersChanges();
+	void setUnlimitedFavoriteStickers(bool value);
+
+	[[nodiscard]] bool uploadSpeedBoost();
+	[[nodiscard]] rpl::producer<bool> uploadSpeedBoostChanges();
+	void setUploadSpeedBoost(bool value);
+
+	[[nodiscard]] bool downloadSpeedBoost();
+	[[nodiscard]] rpl::producer<bool> downloadSpeedBoostChanges();
+	void setDownloadSpeedBoost(bool value);
+
+	[[nodiscard]] bool sendTypingInsteadOfSticker();
+	[[nodiscard]] rpl::producer<bool> sendTypingInsteadOfStickerChanges();
+	void setSendTypingInsteadOfSticker(bool value);
 
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();

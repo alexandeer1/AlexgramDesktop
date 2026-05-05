@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "core/file_location.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "core/mime_type.h"
 #include "main/main_session.h"
 #include "storage/storage_account.h"
@@ -49,7 +50,7 @@ constexpr auto kDocumentUploadPartSize3 = 256 * 1024;
 constexpr auto kDocumentUploadPartSize4 = 512 * 1024;
 
 // One part each half second, if not uploaded faster.
-constexpr auto kUploadRequestInterval = crl::time(250);
+constexpr auto kUploadRequestIntervalDefault = crl::time(250);
 
 // How much time without upload causes additional session kill.
 constexpr auto kKillSessionTimeout = 15 * crl::time(1000);
@@ -57,7 +58,8 @@ constexpr auto kKillSessionTimeout = 15 * crl::time(1000);
 // How much wait after session kill before killing another one.
 constexpr auto kWaitForNormalizeTimeout = 8 * crl::time(1000);
 
-constexpr auto kMaxSessionsCount = 8;
+constexpr auto kMaxSessionsCountDefault = 8;
+constexpr auto kMaxSessionsCountBoost = 32;
 constexpr auto kFastRequestThreshold = 1 * crl::time(1000);
 constexpr auto kSlowRequestThreshold = 8 * crl::time(1000);
 
@@ -459,7 +461,10 @@ QByteArray Uploader::readDocPart(not_null<Entry*> entry) {
 
 bool Uploader::canAddDcIndex() const {
 	const auto count = int(_sentPerDcIndex.size());
-	return (count < kMaxSessionsCount)
+	const auto limit = Core::App().settings().uploadSpeedBoost()
+		? kMaxSessionsCountBoost
+		: kMaxSessionsCountDefault;
+	return (count < limit)
 		&& (count == int(_dcIndicesWithFastRequests.size()));
 }
 
@@ -569,7 +574,10 @@ auto Uploader::sendDocPart(not_null<Entry*> entry, uchar dcIndex)
 	const auto itemId = entry->itemId;
 	const auto alreadySent = _sentPerDcIndex[dcIndex];
 	const auto willProbablyBeSent = entry->docPartSize;
-	if (alreadySent + willProbablyBeSent > kMaxUploadPerSession) {
+	const auto limit = Core::App().settings().uploadSpeedBoost()
+		? (16 * kMaxUploadPerSession)
+		: kMaxUploadPerSession;
+	if (alreadySent + willProbablyBeSent > limit) {
 		return SendResult::DcIndexFull;
 	}
 
@@ -615,7 +623,10 @@ auto Uploader::sendSlicedPart(not_null<Entry*> entry, uchar dcIndex)
 	const auto itemId = entry->itemId;
 	const auto alreadySent = _sentPerDcIndex[dcIndex];
 	const auto willBeSent = entry->parts->at(entry->partsSent).size();
-	if (alreadySent + willBeSent >= kMaxUploadPerSession) {
+	const auto limit = Core::App().settings().uploadSpeedBoost()
+		? (16 * kMaxUploadPerSession)
+		: kMaxUploadPerSession;
+	if (alreadySent + willBeSent >= limit) {
 		return SendResult::DcIndexFull;
 	}
 
@@ -675,7 +686,9 @@ void Uploader::maybeSend() {
 	if (usedDcIndices.empty()) {
 		_nextTimer.cancel();
 	} else {
-		_nextTimer.callOnce(kUploadRequestInterval);
+		_nextTimer.callOnce(Core::App().settings().uploadSpeedBoost()
+			? 0
+			: kUploadRequestIntervalDefault);
 	}
 }
 

@@ -9,6 +9,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "main/main_app_config.h"
 #include "main/main_session.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 
 namespace Data {
 
@@ -59,6 +61,9 @@ int PremiumLimits::stickersFavedPremium() const {
 	return appConfigLimit("stickers_faved_limit_premium", 10);
 }
 int PremiumLimits::stickersFavedCurrent() const {
+	if (Core::App().settings().unlimitedFavoriteStickers()) {
+		return 1000;
+	}
 	return isPremium()
 		? stickersFavedPremium()
 		: stickersFavedDefault();
@@ -95,6 +100,9 @@ int PremiumLimits::dialogFiltersChatsPremium() const {
 	return appConfigLimit("dialog_filters_chats_limit_premium", 200);
 }
 int PremiumLimits::dialogFiltersChatsCurrent() const {
+	if (Core::App().settings().unlimitedPinned()) {
+		return 1000;
+	}
 	return isPremium()
 		? dialogFiltersChatsPremium()
 		: dialogFiltersChatsDefault();
@@ -119,6 +127,9 @@ int PremiumLimits::dialogsPinnedPremium() const {
 	return appConfigLimit("dialogs_pinned_limit_premium", 10);
 }
 int PremiumLimits::dialogsPinnedCurrent() const {
+	if (Core::App().settings().unlimitedPinned()) {
+		return 1000;
+	}
 	return isPremium()
 		? dialogsPinnedPremium()
 		: dialogsPinnedDefault();
@@ -131,12 +142,18 @@ int PremiumLimits::dialogsFolderPinnedPremium() const {
 	return appConfigLimit("dialogs_folder_pinned_limit_premium", 200);
 }
 int PremiumLimits::dialogsFolderPinnedCurrent() const {
+	if (Core::App().settings().unlimitedPinned()) {
+		return 1000;
+	}
 	return isPremium()
 		? dialogsFolderPinnedPremium()
 		: dialogsFolderPinnedDefault();
 }
 
 int PremiumLimits::topicsPinnedCurrent() const {
+	if (Core::App().settings().unlimitedPinned()) {
+		return 1000;
+	}
 	return appConfigLimit("topics_pinned_limit", 5);
 }
 
@@ -147,6 +164,9 @@ int PremiumLimits::savedSublistsPinnedPremium() const {
 	return appConfigLimit("saved_dialogs_pinned_limit_premium", 100);
 }
 int PremiumLimits::savedSublistsPinnedCurrent() const {
+	if (Core::App().settings().unlimitedPinned()) {
+		return 1000;
+	}
 	return isPremium()
 		? savedSublistsPinnedPremium()
 		: savedSublistsPinnedDefault();
