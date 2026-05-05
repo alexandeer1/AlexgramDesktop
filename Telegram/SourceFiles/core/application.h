@@ -337,6 +337,7 @@ public:
 	[[nodiscard]] rpl::producer<> materializeLocalDraftsRequests() const;
 
 	void switchDebugMode();
+	void reprocessAlexSettings();
 
 	void preventOrInvoke(Fn<void()> &&callback);
 

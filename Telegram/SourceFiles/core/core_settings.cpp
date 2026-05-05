@@ -166,6 +166,14 @@ rpl::event_stream<bool> &NoAutoPlayNextVoiceChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &ShowSpoilersDirectlyChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &HideGroupStickersChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
 
 [[nodiscard]] WindowPosition AdjustToScale(WindowPosition position,
@@ -2006,6 +2014,32 @@ rpl::producer<bool> Settings::noAutoPlayNextVoiceChanges() {
 void Settings::setNoAutoPlayNextVoice(bool value) {
 	writePref<bool>("no-autoplay-next-voice", value);
 	NoAutoPlayNextVoiceChanges().fire_copy(value);
+}
+
+bool Settings::showSpoilersDirectly() {
+	return readPref<bool>("show-spoilers-directly", false);
+}
+
+rpl::producer<bool> Settings::showSpoilersDirectlyChanges() {
+	return ShowSpoilersDirectlyChanges().events_starting_with(showSpoilersDirectly());
+}
+
+void Settings::setShowSpoilersDirectly(bool value) {
+	writePref<bool>("show-spoilers-directly", value);
+	ShowSpoilersDirectlyChanges().fire_copy(value);
+}
+
+bool Settings::hideGroupStickers() {
+	return readPref<bool>("hide-group-stickers", false);
+}
+
+rpl::producer<bool> Settings::hideGroupStickersChanges() {
+	return HideGroupStickersChanges().events_starting_with(hideGroupStickers());
+}
+
+void Settings::setHideGroupStickers(bool value) {
+	writePref<bool>("hide-group-stickers", value);
+	HideGroupStickersChanges().fire_copy(value);
 }
 
 } // namespace Core

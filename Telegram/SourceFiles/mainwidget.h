@@ -127,6 +127,7 @@ public:
 	void showAnimated(QPixmap oldContentCache, bool back = false);
 
 	void activate();
+	void reprocessAlexSettings();
 
 	void windowShown();
 

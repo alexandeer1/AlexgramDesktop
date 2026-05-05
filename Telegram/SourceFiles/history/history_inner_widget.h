@@ -134,6 +134,7 @@ public:
 	void recountHistoryGeometry(bool initial = false);
 	void updateSize();
 	void setShownPinned(HistoryItem *item);
+	void refreshSpoilers();
 
 	void repaintItem(const HistoryItem *item);
 	void repaintItem(const Element *view);

@@ -8018,4 +8018,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_hide_phone_number" = "Hide My Phone Number";
 "lng_settings_hide_phone_number_about" = "Hide your phone number in profile settings. Click on 'Hidden Number' to reveal it.";
 "lng_context_hide_translation" = "Hide Translation";
+"lng_settings_alexgram_show_spoilers_directly" = "Show Spoiler Messages Directly in Chats";
+"lng_settings_alexgram_show_spoilers_directly_about" = "If enabled, spoilers in chat messages will be revealed automatically without needing to click on them.";
+"lng_settings_alexgram_hide_group_stickers" = "Hide Group Stickers";
+"lng_settings_alexgram_hide_group_stickers_about" = "If enabled, the group stickers section will be hidden from the stickers panel.";
 

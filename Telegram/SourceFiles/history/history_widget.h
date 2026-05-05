@@ -211,6 +211,7 @@ public:
 
 	MessageIdsList getSelectedItems() const;
 	void itemEdited(not_null<HistoryItem*> item);
+	void refreshSpoilers();
 
 	void replyToMessage(FullReplyTo id);
 	void replyToMessage(

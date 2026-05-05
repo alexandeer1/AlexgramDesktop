@@ -616,7 +616,6 @@ void ListWidget::toggleTranslation(not_null<HistoryItem*> item) {
 }
 
 void ListWidget::refreshViewer() {
-
 	_viewerLifetime.destroy();
 	_refreshingViewer = true;
 	_delegate->listSource(
@@ -628,6 +627,18 @@ void ListWidget::refreshViewer() {
 		std::swap(_slice, slice);
 		refreshRows(slice);
 	}, _viewerLifetime);
+}
+
+void ListWidget::refreshSpoilers() {
+	const auto show = Core::App().settings().showSpoilersDirectly();
+	for (const auto view : _items) {
+		if (show) {
+			view->revealSpoilers();
+		} else {
+			view->hideSpoilers();
+		}
+	}
+	update();
 }
 
 void ListWidget::setGeometryCrashAnnotations(not_null<Element*> view) {

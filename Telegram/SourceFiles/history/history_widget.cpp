@@ -7162,6 +7162,12 @@ void HistoryWidget::itemEdited(not_null<HistoryItem*> item) {
 	}
 }
 
+void HistoryWidget::refreshSpoilers() {
+	if (_list) {
+		_list->refreshSpoilers();
+	}
+}
+
 FullReplyTo HistoryWidget::replyTo() const {
 	return _replyTo
 		? _replyTo

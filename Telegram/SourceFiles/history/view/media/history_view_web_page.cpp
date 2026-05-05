@@ -1749,6 +1749,18 @@ int WebPage::bottomInfoPadding() const {
 	return result;
 }
 
+void WebPage::hideSpoilers() {
+	if (_attach) {
+		_attach->hideSpoilers();
+	}
+}
+
+void WebPage::revealSpoilers() {
+	if (_attach) {
+		_attach->revealSpoilers();
+	}
+}
+
 WebPage::~WebPage() {
 	history()->owner().unregisterWebPageView(_data, _parent);
 	if (_photoMedia) {

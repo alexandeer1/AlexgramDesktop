@@ -1055,6 +1055,14 @@ void Application::switchDebugMode() {
 	}
 }
 
+void Application::reprocessAlexSettings() {
+	enumerateWindows([](not_null<Window::Controller*> window) {
+		if (const auto controller = window->sessionController()) {
+			controller->content()->reprocessAlexSettings();
+		}
+	});
+}
+
 Main::Account &Application::activeAccount() const {
 	return _domain->active();
 }

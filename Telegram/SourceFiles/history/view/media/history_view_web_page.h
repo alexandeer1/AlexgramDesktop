@@ -79,6 +79,8 @@ public:
 	void checkAnimation() override {
 		if (_attach) _attach->checkAnimation();
 	}
+	void hideSpoilers() override;
+	void revealSpoilers() override;
 
 	not_null<WebPageData*> webpage() {
 		return _data;

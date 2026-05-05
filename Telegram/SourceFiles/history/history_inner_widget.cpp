@@ -4109,6 +4109,19 @@ void HistoryInner::setShownPinned(HistoryItem *item) {
 	_pinnedItem = item;
 }
 
+void HistoryInner::refreshSpoilers() {
+	const auto show = Core::App().settings().showSpoilersDirectly();
+	enumerateItems<EnumItemsDirection::TopToBottom>([&](not_null<Element*> view, int top, int bottom) {
+		if (show) {
+			view->revealSpoilers();
+		} else {
+			view->hideSpoilers();
+		}
+		return true;
+	});
+	update();
+}
+
 void HistoryInner::enterEventHook(QEnterEvent *e) {
 	_mouseActive = true;
 	mouseActionUpdate(QCursor::pos());
