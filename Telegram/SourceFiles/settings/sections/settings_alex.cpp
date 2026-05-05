@@ -540,6 +540,58 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_hide_send_as_button_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs hideChannelBottomBarArgs;
+	hideChannelBottomBarArgs.title = tr::lng_settings_alexgram_hide_channel_bottom_bar();
+	hideChannelBottomBarArgs.checked = Core::App().settings().hideChannelBottomBar();
+	const auto hideChannelBottomBarCb = builder.addCheckbox(std::move(hideChannelBottomBarArgs));
+	hideChannelBottomBarCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setHideChannelBottomBar(checked);
+		Core::App().saveSettingsDelayed();
+	}, hideChannelBottomBarCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_hide_channel_bottom_bar_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs askBeforeLinkArgs;
+	askBeforeLinkArgs.title = tr::lng_settings_alexgram_ask_before_link();
+	askBeforeLinkArgs.checked = Core::App().settings().askBeforeLink();
+	const auto askBeforeLinkCb = builder.addCheckbox(std::move(askBeforeLinkArgs));
+	askBeforeLinkCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setAskBeforeLink(checked);
+		Core::App().saveSettingsDelayed();
+	}, askBeforeLinkCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ask_before_link_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs askBeforeInlineLinkArgs;
+	askBeforeInlineLinkArgs.title = tr::lng_settings_alexgram_ask_before_inline_link();
+	askBeforeInlineLinkArgs.checked = Core::App().settings().askBeforeInlineLink();
+	const auto askBeforeInlineLinkCb = builder.addCheckbox(std::move(askBeforeInlineLinkArgs));
+	askBeforeInlineLinkCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setAskBeforeInlineLink(checked);
+		Core::App().saveSettingsDelayed();
+	}, askBeforeInlineLinkCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ask_before_inline_link_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs askBeforeCallingArgs;
+	askBeforeCallingArgs.title = tr::lng_settings_alexgram_ask_before_calling();
+	askBeforeCallingArgs.checked = Core::App().settings().askBeforeCalling();
+	const auto askBeforeCallingCb = builder.addCheckbox(std::move(askBeforeCallingArgs));
+	askBeforeCallingCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setAskBeforeCalling(checked);
+		Core::App().saveSettingsDelayed();
+	}, askBeforeCallingCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ask_before_calling_about());
+	builder.addSkip();
+
 	Ui::ResizeFitChild(this, content);
 }
 

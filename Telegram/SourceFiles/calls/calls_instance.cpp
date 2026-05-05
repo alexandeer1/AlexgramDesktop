@@ -202,6 +202,20 @@ void Instance::startOutgoingCall(
 	if (activateCurrentCall()) {
 		return;
 	}
+	if (Core::App().settings().askBeforeCalling() && !args.isConfirmed) {
+		auto confirmed = [=](Fn<void()> close) {
+			close();
+			auto confirmedArgs = args;
+			confirmedArgs.isConfirmed = true;
+			startOutgoingCall(user, confirmedArgs);
+		};
+		Ui::show(Ui::MakeConfirmBox({
+			.text = tr::lng_alexgram_ask_call_sure(tr::now, lt_user, user->name()),
+			.confirmed = std::move(confirmed),
+			.confirmText = tr::lng_profile_action_short_call(tr::now),
+		}));
+		return;
+	}
 	if (user->callsStatus() == UserData::CallsStatus::Private) {
 		// Request full user once more to refresh the setting in case it was changed.
 		user->session().api().requestFullPeer(user);

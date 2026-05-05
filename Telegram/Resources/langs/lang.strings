@@ -14,6 +14,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_menu_about" = "About";
 "lng_menu_update" = "Update";
 "lng_menu_night_mode" = "Night Mode";
+
+"lng_settings_alexgram_ask_before_calling" = "Ask before calling";
+"lng_settings_alexgram_ask_before_calling_about" = "Show a confirmation dialog before starting a call.";
+"lng_alexgram_ask_call_sure" = "Are you sure you want to call {user}?";
 "lng_menu_add_account" = "Add Account";
 "lng_menu_activate" = "Use this account";
 "lng_menu_set_status" = "Set Emoji Status";
@@ -8243,4 +8247,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_hide_side_share_button_about" = "Hide the quick share button that appears next to messages from public channels or bots.";
 "lng_settings_alexgram_hide_send_as_button" = "Hide Send as Button";
 "lng_settings_alexgram_hide_send_as_button_about" = "Hide the profile icon in the message input bar that allows sending messages as one of your channels.";
+"lng_settings_alexgram_hide_channel_bottom_bar" = "Hide Bottom Bar in Channels";
+"lng_settings_alexgram_hide_channel_bottom_bar_about" = "Hide the bottom bar (Mute/Unmute/Join) in channels.";
+"lng_settings_alexgram_ask_before_link" = "Ask Before Opening External Links";
+"lng_settings_alexgram_ask_before_link_about" = "Show a confirmation dialog before opening any external links from chats.";
+"lng_settings_alexgram_ask_before_inline_link" = "Ask Before Opening Inline Links";
+"lng_settings_alexgram_ask_before_inline_link_about" = "Show a confirmation dialog before opening bot inline buttons or internal t.me links.";
+"lng_alexgram_ask_inline_link_sure" = "Are you sure you want to open this internal link?";
 
