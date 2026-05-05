@@ -12,6 +12,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/qt/qt_key_modifiers.h"
 #include "base/unixtime.h"
 #include "core/click_handler_types.h" // ClickHandlerContext
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "core/ui_integration.h"
 #include "history/view/history_view_cursor_state.h"
 #include "history/history_item_components.h"
@@ -4547,6 +4549,9 @@ std::optional<QSize> Message::rightActionSize() const {
 }
 
 bool Message::displayFastShare() const {
+	if (Core::App().settings().hideSideShareButton()) {
+		return false;
+	}
 	const auto item = data();
 	const auto peer = item->history()->peer;
 	if (!item->allowsForward()) {

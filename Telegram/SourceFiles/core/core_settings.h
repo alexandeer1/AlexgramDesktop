@@ -1082,6 +1082,15 @@ public:
 	[[nodiscard]] bool hideGroupStickers();
 	[[nodiscard]] rpl::producer<bool> hideGroupStickersChanges();
 	void setHideGroupStickers(bool value);
+	[[nodiscard]] bool unlimitedRecentStickers();
+	[[nodiscard]] rpl::producer<bool> unlimitedRecentStickersChanges();
+	void setUnlimitedRecentStickers(bool value);
+	[[nodiscard]] bool hideSideShareButton();
+	[[nodiscard]] rpl::producer<bool> hideSideShareButtonChanges();
+	void setHideSideShareButton(bool value);
+	[[nodiscard]] bool hideSendAsButton();
+	[[nodiscard]] rpl::producer<bool> hideSendAsButtonChanges();
+	void setHideSendAsButton(bool value);
 
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();

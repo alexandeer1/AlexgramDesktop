@@ -3460,11 +3460,13 @@ void HistoryWidget::refreshSuggestPostToggle() {
 }
 
 void HistoryWidget::setupSendAsToggle() {
-	session().sendAsPeers().updated(
-	) | rpl::filter([=](Main::SendAsKey key) {
-		return (key.peer == _peer)
-			&& (key.type == Main::SendAsType::Message);
-	}) | rpl::on_next([=] {
+	rpl::merge(
+		session().sendAsPeers().updated() | rpl::filter([=](Main::SendAsKey key) {
+			return (key.peer == _peer)
+				&& (key.type == Main::SendAsType::Message);
+		}) | rpl::to_empty,
+		Core::App().settings().hideSendAsButtonChanges() | rpl::to_empty
+	) | rpl::on_next([=] {
 		refreshSendAsToggle();
 		updateControlsVisibility();
 		updateControlsGeometry();
@@ -3476,7 +3478,9 @@ void HistoryWidget::refreshSendAsToggle() {
 	Expects(_peer != nullptr);
 
 	const auto key = Main::SendAsKey{ _peer, Main::SendAsType::Message };
-	if (_editMsgId || !session().sendAsPeers().shouldChoose(key)) {
+	if (_editMsgId
+		|| Core::App().settings().hideSendAsButton()
+		|| !session().sendAsPeers().shouldChoose(key)) {
 		_sendAs.destroy();
 		return;
 	} else if (_sendAs) {
