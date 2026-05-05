@@ -1129,6 +1129,14 @@ public:
 	[[nodiscard]] rpl::producer<bool> sendTypingInsteadOfStickerChanges();
 	void setSendTypingInsteadOfSticker(bool value);
 
+	[[nodiscard]] bool hideStoriesFromHeader();
+	[[nodiscard]] rpl::producer<bool> hideStoriesFromHeaderChanges();
+	void setHideStoriesFromHeader(bool value);
+
+	[[nodiscard]] bool disableStories();
+	[[nodiscard]] rpl::producer<bool> disableStoriesChanges();
+	void setDisableStories(bool value);
+
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();
 

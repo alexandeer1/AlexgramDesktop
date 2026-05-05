@@ -496,9 +496,10 @@ void Row::paintUserpic(Painter &p, not_null<Entry *> entry, PeerData *peer,
   const auto storiesPeer =
       peer ? ((peer->isUser() || peer->isChannel()) ? peer : nullptr) : nullptr;
   const auto storiesFolder = peer ? nullptr : _id.folder();
-  const auto storiesHas = storiesPeer     ? storiesPeer->hasActiveStories()
-                          : storiesFolder ? (storiesFolder->storiesCount() > 0)
-                                          : false;
+  const auto storiesHas = !Core::App().settings().disableStories()
+      && (storiesPeer ? storiesPeer->hasActiveStories()
+                      : storiesFolder ? (storiesFolder->storiesCount() > 0)
+                                      : false);
   if (!cornerBadgeShown && !storiesHas) {
     BasicRow::paintUserpic(p, entry, peer, videoUserpic, context, false);
     if (!peer || !_cornerBadgeShown) {

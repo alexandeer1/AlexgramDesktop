@@ -727,6 +727,16 @@ Widget::Widget(
 #ifdef _DEBUG
 	setupTopBarSuggestionTestHotkeys();
 #endif // _DEBUG
+
+	Core::App().settings().hideStoriesFromHeaderChanges(
+	) | rpl::on_next([=] {
+		updateStoriesVisibility();
+	}, lifetime());
+
+	Core::App().settings().disableStoriesChanges(
+	) | rpl::on_next([=] {
+		updateStoriesVisibility();
+	}, lifetime());
 }
 
 void Widget::setupSwipeBack() {
@@ -2396,7 +2406,9 @@ void Widget::updateStoriesVisibility() {
 		|| (widthAnimation && !suggestionsAnimation)
 		|| _childList
 		|| _stories->empty()
-		|| (_scroll->position().overscroll < -st::dialogsFilterSkip);
+		|| (_scroll->position().overscroll < -st::dialogsFilterSkip)
+		|| Core::App().settings().hideStoriesFromHeader()
+		|| Core::App().settings().disableStories();
 	const auto hiddenAnimated = _searchHasFocus
 		|| _searchSuggestionsLocked
 		|| !_searchState.query.isEmpty()

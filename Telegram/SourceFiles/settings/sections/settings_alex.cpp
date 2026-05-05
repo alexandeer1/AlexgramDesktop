@@ -712,6 +712,35 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_send_typing_instead_sticker_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs hideStoriesArgs;
+	hideStoriesArgs.title = tr::lng_settings_alexgram_hide_stories_from_header();
+	hideStoriesArgs.checked = Core::App().settings().hideStoriesFromHeader();
+	const auto hideStoriesCb = builder.addCheckbox(std::move(hideStoriesArgs));
+	hideStoriesCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setHideStoriesFromHeader(checked);
+		Core::App().saveSettingsDelayed();
+	}, hideStoriesCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_hide_stories_from_header_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs disableStoriesArgs;
+	disableStoriesArgs.title = tr::lng_settings_alexgram_disable_stories();
+	disableStoriesArgs.checked = Core::App().settings().disableStories();
+	const auto disableStoriesCb = builder.addCheckbox(std::move(disableStoriesArgs));
+	disableStoriesCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setDisableStories(checked);
+		if (checked) {
+			hideStoriesCb->setChecked(true);
+		}
+		Core::App().saveSettingsDelayed();
+	}, disableStoriesCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_disable_stories_about());
+	builder.addSkip();
+
 	Ui::ResizeFitChild(this, content);
 }
 

@@ -231,6 +231,14 @@ rpl::event_stream<bool> &SendTypingInsteadOfStickerChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &HideStoriesFromHeaderChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &DisableStoriesChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
 
 [[nodiscard]] WindowPosition AdjustToScale(WindowPosition position,
@@ -1292,8 +1300,7 @@ std::optional<int> Settings::readPrefImpl<int>(std::string_view key) {
   return {};
 }
 
-template <>
-void Settings::writePrefImpl<int>(std::string_view key, int value) {
+template <> void Settings::writePrefImpl<int>(std::string_view key, int value) {
   writePrefGeneric(key, QByteArray::number(value));
 }
 
@@ -2289,6 +2296,34 @@ rpl::producer<bool> Settings::sendTypingInsteadOfStickerChanges() {
 void Settings::setSendTypingInsteadOfSticker(bool value) {
   writePref<bool>("send-typing-instead-of-sticker", value);
   SendTypingInsteadOfStickerChanges().fire_copy(value);
+}
+
+bool Settings::hideStoriesFromHeader() {
+  return readPref<bool>("hide-stories-from-header", false);
+}
+
+rpl::producer<bool> Settings::hideStoriesFromHeaderChanges() {
+  return HideStoriesFromHeaderChanges().events_starting_with(
+      hideStoriesFromHeader());
+}
+
+void Settings::setHideStoriesFromHeader(bool value) {
+  writePref<bool>("hide-stories-from-header", value);
+  HideStoriesFromHeaderChanges().fire_copy(value);
+}
+
+bool Settings::disableStories() {
+  return readPref<bool>("disable-stories", false);
+}
+
+rpl::producer<bool> Settings::disableStoriesChanges() {
+  return DisableStoriesChanges().events_starting_with(
+      disableStories());
+}
+
+void Settings::setDisableStories(bool value) {
+  writePref<bool>("disable-stories", value);
+  DisableStoriesChanges().fire_copy(value);
 }
 
 } // namespace Core
