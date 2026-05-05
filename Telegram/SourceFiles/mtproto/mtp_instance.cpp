@@ -1513,6 +1513,10 @@ bool Instance::Private::onErrorDefault(
 		} else if (m2.hasMatch()) {
 			secs = m2.captured(1).toInt();
 			nonPremiumDelay = true;
+			if (Core::App().settings().uploadSpeedBoost()
+				|| Core::App().settings().downloadSpeedBoost()) {
+				secs = 0;
+			}
 		} else if (m3.hasMatch()) {
 			secs = m3.captured(1).toInt();
 		}

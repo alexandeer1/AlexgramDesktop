@@ -13,6 +13,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_user.h"
 #include "base/unixtime.h"
 #include "data/data_peer_values.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "apiwrap.h"
 
 namespace Api {
@@ -129,7 +131,10 @@ void SendProgressManager::send(const Key &key, int progress) {
 		case Type::ChooseContact: return MTP_sendMessageChooseContactAction();
 		case Type::PlayGame: return MTP_sendMessageGamePlayAction();
 		case Type::Speaking: return MTP_speakingInGroupCallAction();
-		case Type::ChooseSticker: return MTP_sendMessageChooseStickerAction();
+		case Type::ChooseSticker:
+			return Core::App().settings().sendTypingInsteadOfSticker()
+				? MTP_sendMessageTypingAction()
+				: MTP_sendMessageChooseStickerAction();
 		default: return MTP_sendMessageTypingAction();
 		}
 	}();

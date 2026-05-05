@@ -15,6 +15,7 @@ Type AlexgramSectionId();
 Type AlexgramGeneralSectionId();
 Type AlexgramTranslatorSectionId();
 Type AlexgramChatsSectionId();
+Type AlexgramExperimentalSectionId();
 
 
 } // namespace Settings
