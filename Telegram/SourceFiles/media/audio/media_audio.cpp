@@ -26,6 +26,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <alc.h>
 
 #include <numeric>
+#include <cmath>
+
 
 Q_DECLARE_METATYPE(AudioMsgId);
 Q_DECLARE_METATYPE(VoiceWaveform);
@@ -107,7 +109,11 @@ bool CreatePlaybackDevice() {
 		return false;
 	}
 
-	AudioContext = alcCreateContext(AudioDevice, nullptr);
+	ALCint attrs[] = { 0x1992 /* ALC_HRTF_SOFT */, 1 /* ALC_TRUE */, 0 };
+	AudioContext = alcCreateContext(AudioDevice, attrs);
+	if (!AudioContext) {
+		AudioContext = alcCreateContext(AudioDevice, nullptr);
+	}
 	alcMakeContextCurrent(AudioContext);
 	if (ContextErrorHappened()) {
 		DestroyPlaybackDevice();
@@ -118,8 +124,8 @@ bool CreatePlaybackDevice() {
 	alListener3f(AL_POSITION, 0.f, 0.f, 0.f);
 	alListener3f(AL_VELOCITY, 0.f, 0.f, 0.f);
 	alListenerfv(AL_ORIENTATION, v);
+	alDistanceModel(AL_INVERSE_DISTANCE_CLAMPED);
 
-	alDistanceModel(AL_NONE);
 
 	return true;
 }
@@ -1178,6 +1184,56 @@ void Fader::onTimer() {
 }
 
 int32 Fader::updateOnePlayback(Mixer::Track *track, bool &hasPlaying, bool &hasFading, float64 volumeMultiplier, bool volumeChanged) {
+	float64 beatMultiplier = 1.0;
+	if (Core::App().settings().dolby8D()) {
+		const auto now = crl::now();
+		constexpr auto kPeriod = 12000.; // 12 seconds for a full rotation.
+		const auto angle = (now % int64(kPeriod)) * 2. * 3.14159265358979323846 / kPeriod;
+		
+		// Beat Pulse
+		const auto beatAngle = (now % 468) * 2. * 3.14159265358979323846 / 468.;
+		const auto pulse = float32(0.4f * (0.5f + 0.5f * std::sin(beatAngle))); 
+		beatMultiplier = (1.0 + pulse);
+
+		// Force Spatialization for Stereo (Disabling Direct Channels is CRITICAL)
+		if (alIsExtensionPresent("AL_SOFT_direct_channels_remix")) {
+			alSourcei(track->stream.source, alGetEnumValue("AL_DIRECT_CHANNELS_SOFT"), AL_FALSE);
+		}
+		alSourcei(track->stream.source, 0x1214 /* AL_SOURCE_SPATIALIZE_SOFT */, 1 /* AL_TRUE */);
+
+		// Wide 3D Circular Path
+		const auto radius = 8.0f + pulse * 4.0f;
+		const auto x = float32(std::sin(angle) * radius);
+		const auto y = float32(std::cos(angle * 0.5f) * 4.0f);
+		const auto z = float32(std::cos(angle) * radius);
+
+		alSourcei(track->stream.source, AL_SOURCE_RELATIVE, AL_TRUE);
+		alSource3f(track->stream.source, AL_POSITION, x, y, z);
+		alSourcef(track->stream.source, AL_ROLLOFF_FACTOR, 0.5f);
+		
+		// Rear Muffling
+		if (z > 0) beatMultiplier *= 0.75;
+	} else {
+		if (alIsExtensionPresent("AL_SOFT_direct_channels_remix")) {
+			alSourcei(track->stream.source, alGetEnumValue("AL_DIRECT_CHANNELS_SOFT"), alGetEnumValue("AL_REMIX_UNMATCHED_SOFT"));
+		}
+		alSourcei(track->stream.source, AL_SOURCE_RELATIVE, AL_TRUE);
+		alSource3f(track->stream.source, AL_POSITION, 0.f, 0.f, 0.f);
+		alSourcef(track->stream.source, AL_ROLLOFF_FACTOR, 0.f);
+		
+		// Clear any potential errors from previous 8D state changes
+		alGetError();
+	}
+
+
+
+
+
+
+
+
+
+
 	const auto errorHappened = [&] {
 		if (Audio::PlaybackErrorHappened()) {
 			setStoppedState(track, State::StoppedAtError);
@@ -1233,7 +1289,8 @@ int32 Fader::updateOnePlayback(Mixer::Track *track, bool &hasPlaying, bool &hasF
 			- track->withSpeed.fadeStartPosition;
 		if (crl::time(1000) * fadingForSamplesCount >= kFadeDuration * track->state.frequency) {
 			fading = false;
-			alSourcef(track->stream.source, AL_GAIN, 1. * volumeMultiplier);
+			alSourcef(track->stream.source, AL_GAIN, 1. * volumeMultiplier * beatMultiplier);
+
 			if (errorHappened()) return EmitError;
 
 			switch (track->state.state) {
@@ -1258,12 +1315,14 @@ int32 Fader::updateOnePlayback(Mixer::Track *track, bool &hasPlaying, bool &hasF
 			if (track->state.state == State::Pausing || track->state.state == State::Stopping) {
 				newGain = 1. - newGain;
 			}
-			alSourcef(track->stream.source, AL_GAIN, newGain * volumeMultiplier);
+			alSourcef(track->stream.source, AL_GAIN, newGain * volumeMultiplier * beatMultiplier);
+
 			if (errorHappened()) return EmitError;
 		}
 	} else if (playing && alState == AL_PLAYING) {
-		if (volumeChanged) {
-			alSourcef(track->stream.source, AL_GAIN, 1. * volumeMultiplier);
+		if (volumeChanged || Core::App().settings().dolby8D()) {
+			alSourcef(track->stream.source, AL_GAIN, 1. * volumeMultiplier * beatMultiplier);
+
 			if (errorHappened()) return EmitError;
 		}
 	}

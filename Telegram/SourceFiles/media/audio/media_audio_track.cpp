@@ -7,366 +7,421 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "media/audio/media_audio_track.h"
 
-#include "media/audio/media_audio_ffmpeg_loader.h"
-#include "media/audio/media_audio.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "core/file_location.h"
+#include "media/audio/media_audio.h"
+#include "media/audio/media_audio_ffmpeg_loader.h"
+
 
 #include <al.h>
 #include <alc.h>
+#include <cmath>
 
 namespace Media {
 namespace Audio {
 namespace {
 
 constexpr auto kMaxFileSize = 10 * 1024 * 1024;
-constexpr auto kDetachDeviceTimeout = crl::time(500); // destroy the audio device after 500ms of silence
+constexpr auto kDetachDeviceTimeout =
+    crl::time(500); // destroy the audio device after 500ms of silence
 constexpr auto kTrackUpdateTimeout = crl::time(100);
 
 ALuint CreateSource() {
-	auto source = ALuint(0);
-	alGenSources(1, &source);
-	alSourcef(source, AL_PITCH, 1.f);
-	alSourcef(source, AL_GAIN, 1.f);
-	alSource3f(source, AL_POSITION, 0, 0, 0);
-	alSource3f(source, AL_VELOCITY, 0, 0, 0);
-	return source;
+  auto source = ALuint(0);
+  alGenSources(1, &source);
+  alSourcef(source, AL_PITCH, 1.f);
+  alSourcef(source, AL_GAIN, 1.f);
+  alSource3f(source, AL_POSITION, 0, 0, 0);
+  alSource3f(source, AL_VELOCITY, 0, 0, 0);
+  alSourcei(source, AL_SOURCE_RELATIVE, 1);
+  return source;
 }
 
 ALuint CreateBuffer() {
-	auto buffer = ALuint(0);
-	alGenBuffers(1, &buffer);
-	return buffer;
+  auto buffer = ALuint(0);
+  alGenBuffers(1, &buffer);
+  return buffer;
 }
 
 } // namespace
 
-Track::Track(not_null<Instance*> instance) : _instance(instance) {
-	_instance->registerTrack(this);
+Track::Track(not_null<Instance *> instance) : _instance(instance) {
+  _instance->registerTrack(this);
 }
 
 void Track::samplePeakEach(crl::time peakDuration) {
-	_peakDurationMs = peakDuration;
+  _peakDurationMs = peakDuration;
 }
 
 void Track::fillFromData(bytes::vector &&data) {
-	FFMpegLoader loader(Core::FileLocation(), QByteArray(), std::move(data));
+  FFMpegLoader loader(Core::FileLocation(), QByteArray(), std::move(data));
 
-	auto position = qint64(0);
-	if (!loader.open(position)) {
-		_failed = true;
-		return;
-	}
-	auto format = loader.format();
-	_peakEachPosition = _peakDurationMs ? ((loader.samplesFrequency() * _peakDurationMs) / 1000) : 0;
-	const auto samplesCount = (loader.duration() * loader.samplesFrequency()) / 1000;
-	const auto peaksCount = _peakEachPosition ? (samplesCount / _peakEachPosition) : 0;
-	_peaks.reserve(peaksCount);
-	auto peakValue = uint16(0);
-	auto peakSamples = 0;
-	auto peakEachSample = (format == AL_FORMAT_STEREO8 || format == AL_FORMAT_STEREO16) ? (_peakEachPosition * 2) : _peakEachPosition;
-	_peakValueMin = 0x7FFF;
-	_peakValueMax = 0;
-	auto peakCallback = [this, &peakValue, &peakSamples, peakEachSample](uint16 sample) {
-		accumulate_max(peakValue, sample);
-		if (++peakSamples >= peakEachSample) {
-			peakSamples -= peakEachSample;
-			_peaks.push_back(peakValue);
-			accumulate_max(_peakValueMax, peakValue);
-			accumulate_min(_peakValueMin, peakValue);
-			peakValue = 0;
-		}
-	};
-	do {
-		using Error = AudioPlayerLoader::ReadError;
-		const auto result = loader.readMore();
-		Assert(result != Error::Wait && result != Error::RetryNotQueued);
+  auto position = qint64(0);
+  if (!loader.open(position)) {
+    _failed = true;
+    return;
+  }
+  auto format = loader.format();
+  _peakEachPosition =
+      _peakDurationMs ? ((loader.samplesFrequency() * _peakDurationMs) / 1000)
+                      : 0;
+  const auto samplesCount =
+      (loader.duration() * loader.samplesFrequency()) / 1000;
+  const auto peaksCount =
+      _peakEachPosition ? (samplesCount / _peakEachPosition) : 0;
+  _peaks.reserve(peaksCount);
+  auto peakValue = uint16(0);
+  auto peakSamples = 0;
+  auto peakEachSample =
+      (format == AL_FORMAT_STEREO8 || format == AL_FORMAT_STEREO16)
+          ? (_peakEachPosition * 2)
+          : _peakEachPosition;
+  _peakValueMin = 0x7FFF;
+  _peakValueMax = 0;
+  auto peakCallback = [this, &peakValue, &peakSamples,
+                       peakEachSample](uint16 sample) {
+    accumulate_max(peakValue, sample);
+    if (++peakSamples >= peakEachSample) {
+      peakSamples -= peakEachSample;
+      _peaks.push_back(peakValue);
+      accumulate_max(_peakValueMax, peakValue);
+      accumulate_min(_peakValueMin, peakValue);
+      peakValue = 0;
+    }
+  };
+  do {
+    using Error = AudioPlayerLoader::ReadError;
+    const auto result = loader.readMore();
+    Assert(result != Error::Wait && result != Error::RetryNotQueued);
 
-		if (result == Error::Retry) {
-			continue;
-		} else if (result == Error::EndOfFile) {
-			break;
-		} else if (result == Error::Other || result == Error::Wait) {
-			_failed = true;
-			break;
-		}
-		Assert(v::is<bytes::const_span>(result));
-		const auto sampleBytes = v::get<bytes::const_span>(result);
-		Assert(!sampleBytes.empty());
-		_samplesCount += sampleBytes.size() / loader.sampleSize();
-		_samples.insert(_samples.end(), sampleBytes.data(), sampleBytes.data() + sampleBytes.size());
-		if (peaksCount) {
-			if (format == AL_FORMAT_MONO8 || format == AL_FORMAT_STEREO8) {
-				Media::Audio::IterateSamples<uchar>(sampleBytes, peakCallback);
-			} else if (format == AL_FORMAT_MONO16 || format == AL_FORMAT_STEREO16) {
-				Media::Audio::IterateSamples<int16>(sampleBytes, peakCallback);
-			}
-		}
-	} while (true);
+    if (result == Error::Retry) {
+      continue;
+    } else if (result == Error::EndOfFile) {
+      break;
+    } else if (result == Error::Other || result == Error::Wait) {
+      _failed = true;
+      break;
+    }
+    Assert(v::is<bytes::const_span>(result));
+    const auto sampleBytes = v::get<bytes::const_span>(result);
+    Assert(!sampleBytes.empty());
+    _samplesCount += sampleBytes.size() / loader.sampleSize();
+    _samples.insert(_samples.end(), sampleBytes.data(),
+                    sampleBytes.data() + sampleBytes.size());
+    if (peaksCount) {
+      if (format == AL_FORMAT_MONO8 || format == AL_FORMAT_STEREO8) {
+        Media::Audio::IterateSamples<uchar>(sampleBytes, peakCallback);
+      } else if (format == AL_FORMAT_MONO16 || format == AL_FORMAT_STEREO16) {
+        Media::Audio::IterateSamples<int16>(sampleBytes, peakCallback);
+      }
+    }
+  } while (true);
 
-	_alFormat = loader.format();
-	_sampleRate = loader.samplesFrequency();
-	_lengthMs = loader.duration();
+  _alFormat = loader.format();
+  _sampleRate = loader.samplesFrequency();
+  _lengthMs = loader.duration();
 }
 
 void Track::fillFromFile(const Core::FileLocation &location) {
-	if (location.accessEnable()) {
-		fillFromFile(location.name());
-		location.accessDisable();
-	} else {
-		LOG(("Track Error: Could not enable access to file '%1'.").arg(location.name()));
-		_failed = true;
-	}
+  if (location.accessEnable()) {
+    fillFromFile(location.name());
+    location.accessDisable();
+  } else {
+    LOG(("Track Error: Could not enable access to file '%1'.")
+            .arg(location.name()));
+    _failed = true;
+  }
 }
 
 void Track::fillFromFile(const QString &filePath) {
-	QFile f(filePath);
-	if (f.open(QIODevice::ReadOnly)) {
-		auto size = f.size();
-		if (size > 0 && size <= kMaxFileSize) {
-			auto bytes = bytes::vector(size);
-			if (f.read(reinterpret_cast<char*>(bytes.data()), bytes.size()) == bytes.size()) {
-				fillFromData(std::move(bytes));
-			} else {
-				LOG(("Track Error: Could not read %1 bytes from file '%2'.").arg(bytes.size()).arg(filePath));
-				_failed = true;
-			}
-		} else {
-			LOG(("Track Error: Bad file '%1' size: %2.").arg(filePath).arg(size));
-			_failed = true;
-		}
-	} else {
-		LOG(("Track Error: Could not open file '%1'.").arg(filePath));
-		_failed = true;
-	}
+  QFile f(filePath);
+  if (f.open(QIODevice::ReadOnly)) {
+    auto size = f.size();
+    if (size > 0 && size <= kMaxFileSize) {
+      auto bytes = bytes::vector(size);
+      if (f.read(reinterpret_cast<char *>(bytes.data()), bytes.size()) ==
+          bytes.size()) {
+        fillFromData(std::move(bytes));
+      } else {
+        LOG(("Track Error: Could not read %1 bytes from file '%2'.")
+                .arg(bytes.size())
+                .arg(filePath));
+        _failed = true;
+      }
+    } else {
+      LOG(("Track Error: Bad file '%1' size: %2.").arg(filePath).arg(size));
+      _failed = true;
+    }
+  } else {
+    LOG(("Track Error: Could not open file '%1'.").arg(filePath));
+    _failed = true;
+  }
 }
 
 void Track::playWithLooping(bool looping, float64 volumeOverride) {
-	_active = true;
-	if (failed() || _samples.empty()) {
-		finish();
-		return;
-	}
-	ensureSourceCreated();
-	alSourceStop(_alSource);
-	_looping = looping;
-	alSourcei(_alSource, AL_LOOPING, _looping ? 1 : 0);
-	alSourcef(
-		_alSource,
-		AL_GAIN,
-		(volumeOverride > 0)
-			? volumeOverride
-			: float64(Core::App().settings().notificationsVolume()) / 100.);
-	alSourcePlay(_alSource);
-	_instance->trackStarted(this);
+  _active = true;
+  if (failed() || _samples.empty()) {
+    finish();
+    return;
+  }
+  ensureSourceCreated();
+  alSourceStop(_alSource);
+  _looping = looping;
+  alSourcei(_alSource, AL_LOOPING, _looping ? 1 : 0);
+  alSourcef(_alSource, AL_GAIN,
+            (volumeOverride > 0)
+                ? volumeOverride
+                : float64(Core::App().settings().notificationsVolume()) / 100.);
+  alSourcePlay(_alSource);
+  _instance->trackStarted(this);
 }
 
 void Track::finish() {
-	if (_active) {
-		_active = false;
-		_instance->trackFinished(this);
-	}
-	_alPosition = 0;
+  if (_active) {
+    _active = false;
+    _instance->trackFinished(this);
+  }
+  _alPosition = 0;
 }
 
 void Track::ensureSourceCreated() {
-	if (alIsSource(_alSource)) {
-		return;
-	}
+  if (alIsSource(_alSource)) {
+    return;
+  }
 
-	{
-		QMutexLocker lock(Player::internal::audioPlayerMutex());
-		if (!AttachToDevice()) {
-			_failed = true;
-			return;
-		}
-	}
+  {
+    QMutexLocker lock(Player::internal::audioPlayerMutex());
+    if (!AttachToDevice()) {
+      _failed = true;
+      return;
+    }
+  }
 
-	_alSource = CreateSource();
-	_alBuffer = CreateBuffer();
+  _alSource = CreateSource();
+  _alBuffer = CreateBuffer();
 
-	alBufferData(_alBuffer, _alFormat, _samples.data(), _samples.size(), _sampleRate);
-	alSourcei(_alSource, AL_BUFFER, _alBuffer);
+  alBufferData(_alBuffer, _alFormat, _samples.data(), _samples.size(),
+               _sampleRate);
+  alSourcei(_alSource, AL_BUFFER, _alBuffer);
 }
 
 void Track::updateState() {
-	if (!isActive() || !alIsSource(_alSource)) {
-		return;
-	}
+  if (!isActive() || !alIsSource(_alSource)) {
+    return;
+  }
 
-	_stateUpdatedAt = crl::now();
-	auto state = ALint(0);
-	alGetSourcei(_alSource, AL_SOURCE_STATE, &state);
-	if (state != AL_PLAYING) {
-		finish();
-	} else {
-		auto currentPosition = ALint(0);
-		alGetSourcei(_alSource, AL_SAMPLE_OFFSET, &currentPosition);
-		_alPosition = currentPosition;
-	}
+  if (Core::App().settings().dolby8D()) {
+    const auto now = crl::now();
+    constexpr auto kPeriod = 12000.;
+    const auto angle =
+        (now % int64(kPeriod)) * 2. * 3.14159265358979323846 / kPeriod;
+
+    // Beat Pulse
+    const auto beatAngle = (now % 468) * 2. * 3.14159265358979323846 / 468.;
+    const auto pulse = float32(0.4f * (0.5f + 0.5f * std::sin(beatAngle)));
+
+    // Force Spatialization
+    if (alIsExtensionPresent("AL_SOFT_direct_channels_remix")) {
+      alSourcei(_alSource, alGetEnumValue("AL_DIRECT_CHANNELS_SOFT"), AL_FALSE);
+    }
+    alSourcei(_alSource, 0x1214 /* AL_SOURCE_SPATIALIZE_SOFT */, 1);
+
+    // Wide 3D Path
+    const auto radius = 8.0f + pulse * 4.0f;
+    const auto x = float32(std::sin(angle) * radius);
+    const auto y = float32(std::cos(angle * 0.5f) * 4.0f);
+    const auto z = float32(std::cos(angle) * radius);
+
+    alSourcei(_alSource, AL_SOURCE_RELATIVE, AL_TRUE);
+    alSource3f(_alSource, AL_POSITION, x, y, z);
+    alSourcef(_alSource, AL_ROLLOFF_FACTOR, 0.5f);
+
+    const auto rearMuffle = (z > 0) ? 0.75f : 1.0f;
+    alSourcef(
+        _alSource, AL_GAIN,
+        (1.0f + pulse) * rearMuffle *
+            (float64(Core::App().settings().notificationsVolume()) / 100.));
+  } else {
+    if (alIsExtensionPresent("AL_SOFT_direct_channels_remix")) {
+      alSourcei(_alSource, alGetEnumValue("AL_DIRECT_CHANNELS_SOFT"),
+                alGetEnumValue("AL_REMIX_UNMATCHED_SOFT"));
+    }
+    alSourcei(_alSource, AL_SOURCE_RELATIVE, AL_TRUE);
+    alSource3f(_alSource, AL_POSITION, 0.f, 0.f, 0.f);
+    alSourcef(_alSource, AL_GAIN,
+              float64(Core::App().settings().notificationsVolume()) / 100.);
+    alSourcef(_alSource, AL_ROLLOFF_FACTOR, 0.f);
+
+    alGetError();
+  }
+
+  _stateUpdatedAt = crl::now();
+  auto state = ALint(0);
+  alGetSourcei(_alSource, AL_SOURCE_STATE, &state);
+  if (state != AL_PLAYING) {
+    finish();
+  } else {
+    auto currentPosition = ALint(0);
+    alGetSourcei(_alSource, AL_SAMPLE_OFFSET, &currentPosition);
+    _alPosition = currentPosition;
+  }
 }
 
 float64 Track::getPeakValue(crl::time when) const {
-	if (!isActive() || !_samplesCount || _peaks.empty() || _peakValueMin == _peakValueMax) {
-		return 0.;
-	}
-	auto sampleIndex = (_alPosition + ((when - _stateUpdatedAt) * _sampleRate / 1000));
-	while (sampleIndex < 0) {
-		sampleIndex += _samplesCount;
-	}
-	sampleIndex = sampleIndex % _samplesCount;
-	auto peakIndex = (sampleIndex / _peakEachPosition) % _peaks.size();
-	return (_peaks[peakIndex] - _peakValueMin) / float64(_peakValueMax - _peakValueMin);
+  if (!isActive() || !_samplesCount || _peaks.empty() ||
+      _peakValueMin == _peakValueMax) {
+    return 0.;
+  }
+  auto sampleIndex =
+      (_alPosition + ((when - _stateUpdatedAt) * _sampleRate / 1000));
+  while (sampleIndex < 0) {
+    sampleIndex += _samplesCount;
+  }
+  sampleIndex = sampleIndex % _samplesCount;
+  auto peakIndex = (sampleIndex / _peakEachPosition) % _peaks.size();
+  return (_peaks[peakIndex] - _peakValueMin) /
+         float64(_peakValueMax - _peakValueMin);
 }
 
 void Track::detachFromDevice() {
-	if (alIsSource(_alSource)) {
-		updateState();
-		alSourceStop(_alSource);
-		alSourcei(_alSource, AL_BUFFER, AL_NONE);
-		alDeleteBuffers(1, &_alBuffer);
-		alDeleteSources(1, &_alSource);
-	}
-	_alBuffer = 0;
-	_alSource = 0;
+  if (alIsSource(_alSource)) {
+    updateState();
+    alSourceStop(_alSource);
+    alSourcei(_alSource, AL_BUFFER, AL_NONE);
+    alDeleteBuffers(1, &_alBuffer);
+    alDeleteSources(1, &_alSource);
+  }
+  _alBuffer = 0;
+  _alSource = 0;
 }
 
 void Track::reattachToDevice() {
-	if (!isActive() || alIsSource(_alSource)) {
-		return;
-	}
-	ensureSourceCreated();
+  if (!isActive() || alIsSource(_alSource)) {
+    return;
+  }
+  ensureSourceCreated();
 
-	alSourcei(_alSource, AL_LOOPING, _looping ? 1 : 0);
-	alSourcei(_alSource, AL_SAMPLE_OFFSET, static_cast<ALint>(_alPosition));
-	alSourcePlay(_alSource);
+  alSourcei(_alSource, AL_LOOPING, _looping ? 1 : 0);
+  alSourcei(_alSource, AL_SAMPLE_OFFSET, static_cast<ALint>(_alPosition));
+  alSourcePlay(_alSource);
 }
 
 Track::~Track() {
-	detachFromDevice();
-	_instance->unregisterTrack(this);
+  detachFromDevice();
+  _instance->unregisterTrack(this);
 }
 
 Instance::Instance()
-: _playbackDeviceId(
-	&Core::App().mediaDevices(),
-	Webrtc::DeviceType::Playback,
-	Webrtc::DeviceIdOrDefault(
-		Core::App().settings().playbackDeviceIdValue()))
-, _captureDeviceId(
-	&Core::App().mediaDevices(),
-	Webrtc::DeviceType::Capture,
-	Webrtc::DeviceIdOrDefault(
-		Core::App().settings().captureDeviceIdValue())) {
-	_updateTimer.setCallback([this] {
-		auto hasActive = false;
-		for (auto track : _tracks) {
-			track->updateState();
-			if (track->isActive()) {
-				hasActive = true;
-			}
-		}
-		if (hasActive) {
-			Audio::StopDetachIfNotUsedSafe();
-		}
-	});
+    : _playbackDeviceId(&Core::App().mediaDevices(),
+                        Webrtc::DeviceType::Playback,
+                        Webrtc::DeviceIdOrDefault(
+                            Core::App().settings().playbackDeviceIdValue())),
+      _captureDeviceId(&Core::App().mediaDevices(), Webrtc::DeviceType::Capture,
+                       Webrtc::DeviceIdOrDefault(
+                           Core::App().settings().captureDeviceIdValue())) {
+  _updateTimer.setCallback([this] {
+    auto hasActive = false;
+    for (auto track : _tracks) {
+      track->updateState();
+      if (track->isActive()) {
+        hasActive = true;
+      }
+    }
+    if (hasActive) {
+      Audio::StopDetachIfNotUsedSafe();
+    }
+  });
 
-	_detachFromDeviceTimer.setCallback([=] {
-		_detachFromDeviceForce = false;
-		Player::internal::DetachFromDevice(this);
-	});
+  _detachFromDeviceTimer.setCallback([=] {
+    _detachFromDeviceForce = false;
+    Player::internal::DetachFromDevice(this);
+  });
 
-	_playbackDeviceId.changes(
-	) | rpl::on_next([=](Webrtc::DeviceResolvedId id) {
-		if (Player::internal::DetachIfDeviceChanged(this, id)) {
-			_detachFromDeviceForce = false;
-		}
-	}, _lifetime);
+  _playbackDeviceId.changes() |
+      rpl::on_next(
+          [=](Webrtc::DeviceResolvedId id) {
+            if (Player::internal::DetachIfDeviceChanged(this, id)) {
+              _detachFromDeviceForce = false;
+            }
+          },
+          _lifetime);
 }
 
 Webrtc::DeviceResolvedId Instance::playbackDeviceId() const {
-	return _playbackDeviceId.threadSafeCurrent();
+  return _playbackDeviceId.threadSafeCurrent();
 }
 
 Webrtc::DeviceResolvedId Instance::captureDeviceId() const {
-	return _captureDeviceId.current();
+  return _captureDeviceId.current();
 }
 
 std::unique_ptr<Track> Instance::createTrack() {
-	return std::make_unique<Track>(this);
+  return std::make_unique<Track>(this);
 }
 
-Instance::~Instance() {
-	Expects(_tracks.empty());
-}
+Instance::~Instance() { Expects(_tracks.empty()); }
 
-void Instance::registerTrack(Track *track) {
-	_tracks.insert(track);
-}
+void Instance::registerTrack(Track *track) { _tracks.insert(track); }
 
-void Instance::unregisterTrack(Track *track) {
-	_tracks.erase(track);
-}
+void Instance::unregisterTrack(Track *track) { _tracks.erase(track); }
 
 void Instance::trackStarted(Track *track) {
-	stopDetachIfNotUsed();
-	if (!_updateTimer.isActive()) {
-		_updateTimer.callEach(kTrackUpdateTimeout);
-	}
+  stopDetachIfNotUsed();
+  if (!_updateTimer.isActive()) {
+    _updateTimer.callEach(kTrackUpdateTimeout);
+  }
 }
 
 void Instance::trackFinished(Track *track) {
-	if (!hasActiveTracks()) {
-		_updateTimer.cancel();
-		scheduleDetachIfNotUsed();
-	}
+  if (!hasActiveTracks()) {
+    _updateTimer.cancel();
+    scheduleDetachIfNotUsed();
+  }
 }
 
 void Instance::detachTracks() {
-	for (auto track : _tracks) {
-		track->detachFromDevice();
-	}
+  for (auto track : _tracks) {
+    track->detachFromDevice();
+  }
 }
 
 void Instance::reattachTracks() {
-	if (!IsAttachedToDevice()) {
-		return;
-	}
-	for (auto track : _tracks) {
-		track->reattachToDevice();
-	}
+  if (!IsAttachedToDevice()) {
+    return;
+  }
+  for (auto track : _tracks) {
+    track->reattachToDevice();
+  }
 }
 
 bool Instance::hasActiveTracks() const {
-	for (auto track : _tracks) {
-		if (track->isActive()) {
-			return true;
-		}
-	}
-	return false;
+  for (auto track : _tracks) {
+    if (track->isActive()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void Instance::scheduleDetachFromDevice() {
-	_detachFromDeviceForce = true;
-	scheduleDetachIfNotUsed();
+  _detachFromDeviceForce = true;
+  scheduleDetachIfNotUsed();
 }
 
 void Instance::scheduleDetachIfNotUsed() {
-	if (!_detachFromDeviceTimer.isActive()) {
-		_detachFromDeviceTimer.callOnce(kDetachDeviceTimeout);
-	}
+  if (!_detachFromDeviceTimer.isActive()) {
+    _detachFromDeviceTimer.callOnce(kDetachDeviceTimeout);
+  }
 }
 
 void Instance::stopDetachIfNotUsed() {
-	if (!_detachFromDeviceForce) {
-		_detachFromDeviceTimer.cancel();
-	}
+  if (!_detachFromDeviceForce) {
+    _detachFromDeviceTimer.cancel();
+  }
 }
 
-Instance &Current() {
-	return Core::App().audio();
-}
+Instance &Current() { return Core::App().audio(); }
 
 } // namespace Audio
 } // namespace Media

@@ -741,8 +741,36 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_disable_stories_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs sendMp4AsVideoArgs;
+	sendMp4AsVideoArgs.title = tr::lng_settings_alexgram_send_mp4_as_video();
+	sendMp4AsVideoArgs.checked = Core::App().settings().sendMp4AsVideo();
+	const auto sendMp4AsVideoCb = builder.addCheckbox(std::move(sendMp4AsVideoArgs));
+	sendMp4AsVideoCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setSendMp4AsVideo(checked);
+		Core::App().saveSettingsDelayed();
+	}, sendMp4AsVideoCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_send_mp4_as_video_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs dolby8DArgs;
+	dolby8DArgs.title = tr::lng_settings_alexgram_dolby_8d();
+	dolby8DArgs.checked = Core::App().settings().dolby8D();
+	const auto dolby8DCb = builder.addCheckbox(std::move(dolby8DArgs));
+	dolby8DCb->checkedChanges(
+	) | rpl::on_next([=](bool checked) {
+		Core::App().settings().setDolby8D(checked);
+		Core::App().saveSettingsDelayed();
+	}, dolby8DCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_dolby_8d_about());
+	builder.addSkip();
+
 	Ui::ResizeFitChild(this, content);
 }
+
+
 
 
 void BuildAlexSection(Builder::SectionBuilder &builder) {

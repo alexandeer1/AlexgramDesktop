@@ -1137,6 +1137,16 @@ public:
 	[[nodiscard]] rpl::producer<bool> disableStoriesChanges();
 	void setDisableStories(bool value);
 
+	[[nodiscard]] bool sendMp4AsVideo();
+	[[nodiscard]] rpl::producer<bool> sendMp4AsVideoChanges();
+	void setSendMp4AsVideo(bool value);
+
+	[[nodiscard]] bool dolby8D();
+	[[nodiscard]] rpl::producer<bool> dolby8DChanges();
+	void setDolby8D(bool value);
+
+
+
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();
 
