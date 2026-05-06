@@ -273,6 +273,11 @@ Updates::Updates(not_null<Main::Session*> session)
 			}
 		}
 	}, _lifetime);
+
+	Core::App().settings().ghostDontSendOnlineChanges(
+	) | rpl::on_next([=](bool) {
+		updateOnline();
+	}, _lifetime);
 }
 
 Main::Session &Updates::session() const {
@@ -991,25 +996,34 @@ void Updates::updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline) {
 
 	const auto &config = _session->serverConfig();
 	bool isOnline = Core::App().hasActiveWindow(&session());
+	if (Core::App().settings().ghostDontSendOnline()) {
+		isOnline = false;
+	} else if (Core::App().settings().ghostGoOffline()) {
+		const auto idle = crl::now() - lastNonIdleTime;
+		if (idle >= 1000 || gotOtherOffline) {
+			isOnline = false;
+		}
+	}
 	int updateIn = config.onlineUpdatePeriod;
 	Assert(updateIn >= 0);
 	if (isOnline) {
 		const auto idle = crl::now() - lastNonIdleTime;
-		if (idle >= config.offlineIdleTimeout) {
+		const auto offlineTimeout = config.offlineIdleTimeout;
+		if (idle >= offlineTimeout) {
 			isOnline = false;
 			if (!isIdle()) {
 				_isIdle = true;
 				_idleFinishTimer.callOnce(900);
 			}
 		} else {
-			updateIn = qMin(updateIn, int(config.offlineIdleTimeout - idle));
+			updateIn = qMin(updateIn, int(offlineTimeout - idle));
 			Assert(updateIn >= 0);
 		}
 	}
 	auto ms = crl::now();
 	if (isOnline != _lastWasOnline
 		|| (isOnline && _lastSetOnline + config.onlineUpdatePeriod <= ms)
-		|| (isOnline && gotOtherOffline)) {
+		|| gotOtherOffline) {
 		api().request(base::take(_onlineRequest)).cancel();
 
 		_lastWasOnline = isOnline;

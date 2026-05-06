@@ -38,6 +38,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_premium.h"
 #include "api/api_user_names.h"
 #include "api/api_websites.h"
+#include "main/main_session.h"
 #include "data/business/data_shortcut_messages.h"
 #include "data/components/credits.h"
 #include "data/components/scheduled_messages.h"
@@ -4487,6 +4488,9 @@ void ApiWrap::sendMessage(
 					MTP_long(starsPaid),
 					Api::SuggestToMTP(action.options.suggest)
 				), done, fail);
+		}
+		if (Core::App().settings().ghostGoOffline()) {
+			_session->updates().updateOnline(0, true);
 		}
 		isFirst = false;
 	}

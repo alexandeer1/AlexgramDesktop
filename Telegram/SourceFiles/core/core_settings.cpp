@@ -247,6 +247,26 @@ rpl::event_stream<bool> &Dolby8DChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &GhostModeNoReadChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &GhostDontReadStoriesChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &GhostDontSendOnlineChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &GhostDontSendTypingChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &GhostGoOfflineChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
 
 
@@ -2360,6 +2380,75 @@ rpl::producer<bool> Settings::dolby8DChanges() {
 void Settings::setDolby8D(bool value) {
   writePref<bool>("dolby-8d", value);
   Dolby8DChanges().fire_copy(value);
+}
+
+bool Settings::ghostModeNoRead() {
+  return readPref<bool>("ghost-mode-no-read", false);
+}
+
+rpl::producer<bool> Settings::ghostModeNoReadChanges() {
+  return GhostModeNoReadChanges().events_starting_with(ghostModeNoRead());
+}
+
+void Settings::setGhostModeNoRead(bool value) {
+  writePref<bool>("ghost-mode-no-read", value);
+  GhostModeNoReadChanges().fire_copy(value);
+}
+
+bool Settings::ghostDontReadStories() {
+  return readPref<bool>("ghost-dont-read-stories", false);
+}
+
+rpl::producer<bool> Settings::ghostDontReadStoriesChanges() {
+  return GhostDontReadStoriesChanges().events_starting_with(
+      ghostDontReadStories());
+}
+
+void Settings::setGhostDontReadStories(bool value) {
+  writePref<bool>("ghost-dont-read-stories", value);
+  GhostDontReadStoriesChanges().fire_copy(value);
+}
+
+bool Settings::ghostDontSendOnline() {
+  return readPref<bool>("ghost-dont-send-online", false);
+}
+
+rpl::producer<bool> Settings::ghostDontSendOnlineChanges() {
+  return GhostDontSendOnlineChanges().events_starting_with(
+      ghostDontSendOnline());
+}
+
+void Settings::setGhostDontSendOnline(bool value) {
+  writePref<bool>("ghost-dont-send-online", value);
+  GhostDontSendOnlineChanges().fire_copy(value);
+}
+
+bool Settings::ghostDontSendTyping() {
+  return readPref<bool>("ghost-dont-send-typing", false);
+}
+
+rpl::producer<bool> Settings::ghostDontSendTypingChanges() {
+  return GhostDontSendTypingChanges().events_starting_with(
+      ghostDontSendTyping());
+}
+
+void Settings::setGhostDontSendTyping(bool value) {
+  writePref<bool>("ghost-dont-send-typing", value);
+  GhostDontSendTypingChanges().fire_copy(value);
+}
+
+bool Settings::ghostGoOffline() {
+  return readPref<bool>("ghost-go-offline", false);
+}
+
+rpl::producer<bool> Settings::ghostGoOfflineChanges() {
+  return GhostGoOfflineChanges().events_starting_with(
+      ghostGoOffline());
+}
+
+void Settings::setGhostGoOffline(bool value) {
+  writePref<bool>("ghost-go-offline", value);
+  GhostGoOfflineChanges().fire_copy(value);
 }
 
 } // namespace Core

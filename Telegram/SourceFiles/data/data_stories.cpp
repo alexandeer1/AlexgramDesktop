@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "apiwrap.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "data/components/top_peers.h"
 #include "data/data_changes.h"
 #include "data/data_channel.h"
@@ -1235,12 +1236,17 @@ void Stories::markAsRead(FullStoryId id, bool viewed) {
 	}
 	const auto story = *maybeStory;
 	if (story->expired() && story->inProfile()) {
-		_incrementViewsPending[id.peer].emplace(id.story);
-		if (!_incrementViewsTimer.isActive()) {
-			_incrementViewsTimer.callOnce(kIncrementViewsDelay);
+		if (!Core::App().settings().ghostDontReadStories()) {
+			_incrementViewsPending[id.peer].emplace(id.story);
+			if (!_incrementViewsTimer.isActive()) {
+				_incrementViewsTimer.callOnce(kIncrementViewsDelay);
+			}
 		}
 	}
 	if (!bumpReadTill(id.peer, id.story)) {
+		return;
+	}
+	if (Core::App().settings().ghostDontReadStories()) {
 		return;
 	}
 	if (!_markReadPending.contains(id.peer)) {
@@ -1415,7 +1421,14 @@ void Stories::checkQuitPreventFinished() {
 }
 
 void Stories::sendMarkAsReadRequests() {
+	if (_markReadPending.empty()) {
+		return;
+	}
 	_markReadTimer.cancel();
+	if (Core::App().settings().ghostDontReadStories()) {
+		_markReadPending.clear();
+		return;
+	}
 	for (auto i = begin(_markReadPending); i != end(_markReadPending);) {
 		const auto peerId = *i;
 		if (_markReadRequests.contains(peerId)) {
@@ -1432,6 +1445,10 @@ void Stories::sendMarkAsReadRequests() {
 
 void Stories::sendIncrementViewsRequests() {
 	if (_incrementViewsPending.empty()) {
+		return;
+	}
+	if (Core::App().settings().ghostDontReadStories()) {
+		_incrementViewsPending.clear();
 		return;
 	}
 	struct Prepared {

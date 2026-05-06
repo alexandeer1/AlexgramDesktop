@@ -23,12 +23,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "base/random.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "window/notifications_manager.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_helpers.h"
 #include "history/view/history_view_element.h"
 #include "core/application.h"
+#include "core/core_settings.h"
+#include "api/api_updates.h"
 #include "apiwrap.h"
 
 namespace Data {
@@ -242,6 +245,16 @@ void Histories::readInboxTill(not_null<History*> history, MsgId tillId) {
 	readInboxTill(history, tillId, false);
 }
 
+void Histories::readInboxTillForced(not_null<History*> history, MsgId tillId) {
+	auto &state = _states[history];
+	state.forceRead = true;
+	if (state.sentReadTill && state.sentReadTill <= tillId) {
+		state.sentReadTill = 0;
+	}
+	state.willReadTill = 0;
+	readInboxTill(history, tillId, true);
+}
+
 void Histories::readInboxTill(
 		not_null<History*> history,
 		MsgId tillId,
@@ -264,6 +277,15 @@ void Histories::readInboxTill(
 					DEBUG_LOG(("Reading: locally marked as read."));
 					history->setUnreadCount(0);
 					history->updateChatListEntry();
+					if (force) {
+						history->session().settings().setGhostReadTill(
+							history->peer->id,
+							MsgId(0));
+					} else if (Core::App().settings().ghostModeNoRead()) {
+						history->session().settings().setGhostReadTill(
+							history->peer->id,
+							tillId);
+					}
 				}
 			}
 		}
@@ -280,7 +302,7 @@ void Histories::readInboxTill(
 		return;
 	}
 	const auto maybeState = lookup(history);
-	if (maybeState && maybeState->sentReadTill >= tillId) {
+	if (!force && maybeState && maybeState->sentReadTill >= tillId) {
 		DEBUG_LOG(("Reading: readInboxTill finish 3 with %1."
 			).arg(maybeState->sentReadTill.bare));
 		return;
@@ -292,7 +314,8 @@ void Histories::readInboxTill(
 			sendPendingReadInbox(history);
 		}
 		return;
-	} else if (!needsRequest
+	} else if (!force
+		&& !needsRequest
 		&& (!maybeState || !maybeState->willReadTill)) {
 		return;
 	}
@@ -303,7 +326,16 @@ void Histories::readInboxTill(
 		&& *stillUnread == history->unreadCount()) {
 		DEBUG_LOG(("Reading: count didn't change so just update till %1"
 			).arg(tillId.bare));
-		history->setInboxReadTill(tillId);
+			history->setInboxReadTill(tillId);
+			if (force) {
+				history->session().settings().setGhostReadTill(
+					history->peer->id,
+					MsgId(0));
+			} else if (Core::App().settings().ghostModeNoRead()) {
+				history->session().settings().setGhostReadTill(
+					history->peer->id,
+					tillId);
+			}
 		return;
 	}
 	auto &state = maybeState ? *maybeState : _states[history];
@@ -334,6 +366,15 @@ void Histories::readInboxTill(
 	history->setInboxReadTill(tillId);
 	history->setUnreadCount(*stillUnread);
 	history->updateChatListEntry();
+	if (force) {
+		history->session().settings().setGhostReadTill(
+			history->peer->id,
+			MsgId(0));
+	} else if (Core::App().settings().ghostModeNoRead()) {
+		history->session().settings().setGhostReadTill(
+			history->peer->id,
+			tillId);
+	}
 }
 
 void Histories::readInboxOnNewMessage(not_null<HistoryItem*> item) {
@@ -703,6 +744,20 @@ void Histories::sendReadRequest(not_null<History*> history, State &state) {
 	state.sentReadDone = false;
 	DEBUG_LOG(("Reading: sending request now with till %1."
 		).arg(tillId.bare));
+
+	if (Core::App().settings().ghostModeNoRead() && !state.forceRead) {
+		state.sentReadDone = true;
+		if (history->unreadCountRefreshNeeded(tillId)) {
+			requestDialogEntry(history);
+		} else {
+			state.sentReadTill = 0;
+		}
+		history->validateMonoAndForumUnread(tillId);
+		sendReadRequests();
+		return;
+	}
+	state.forceRead = false;
+
 	sendRequest(history, RequestType::ReadInbox, [=](Fn<void()> finish) {
 		DEBUG_LOG(("Reading: sending request invoked with till %1."
 			).arg(tillId.bare));
@@ -721,6 +776,9 @@ void Histories::sendReadRequest(not_null<History*> history, State &state) {
 				Assert(!state->sentReadTill || state->sentReadTill > tillId);
 			}
 			history->validateMonoAndForumUnread(tillId);
+			if (Core::App().settings().ghostGoOffline()) {
+				session().updates().updateOnline(0, true);
+			}
 			sendReadRequests();
 			finish();
 		};
@@ -1119,17 +1177,20 @@ int Histories::sendPreparedMessage(
 	};
 	realReplyTo.messageId = topicReplyToId(replyTo.messageId);
 	realReplyTo.topicRootId = topicReplyToId(replyTo.topicRootId);
-	return v::match(message(history, realReplyTo), [&](const auto &request) {
+	return v::match(message(history, realReplyTo), [&](const auto &request) -> int {
 		const auto type = RequestType::Send;
 		return sendRequest(history, type, [=](Fn<void()> finish) {
-			const auto session = &_owner->session();
-			const auto api = &session->api();
+			const auto mainSession = &_owner->session();
+			const auto api = &mainSession->api();
 			history->sendRequestId = api->request(
 				base::duplicate(request)
 			).done([=](
 					const MTPUpdates &result,
 					const MTP::Response &response) {
 				api->applyUpdates(result, randomId);
+				if (Core::App().settings().ghostGoOffline()) {
+					mainSession->updates().updateOnline(0, true);
+				}
 				done(result, response);
 				finish();
 			}).fail([=](

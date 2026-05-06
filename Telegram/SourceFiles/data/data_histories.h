@@ -61,6 +61,7 @@ public:
 	void readInbox(not_null<History*> history);
 	void readInboxTill(not_null<HistoryItem*> item);
 	void readInboxTill(not_null<History*> history, MsgId tillId);
+	void readInboxTillForced(not_null<History*> history, MsgId tillId);
 	void readInboxOnNewMessage(not_null<HistoryItem*> item);
 	void readClientSideMessage(not_null<HistoryItem*> item);
 	void sendPendingReadInbox(not_null<History*> history);
@@ -158,6 +159,7 @@ private:
 		crl::time willReadWhen = 0;
 		bool sentReadDone = false;
 		bool postponedRequestEntry = false;
+		bool forceRead = false;
 	};
 	struct ChatListGroupRequest {
 		MsgId aroundId = 0;

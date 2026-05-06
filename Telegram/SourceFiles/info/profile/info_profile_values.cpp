@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
 #include "ui/wrap/slide_wrap.h"
+#include "ui/image/image_location.h"
 #include "ui/text/format_values.h" // Ui::FormatPhone
 #include "ui/text/text_utilities.h"
 #include "lang/lang_keys.h"
@@ -218,6 +219,33 @@ rpl::producer<std::vector<TextWithEntities>> UsernamesValue(
 	} else {
 		return rpl::single(std::vector<TextWithEntities>());
 	}
+}
+
+rpl::producer<TextWithEntities> PeerIdValue(not_null<PeerData*> peer) {
+	const auto id = peer->id;
+	const auto text = peerIsUser(id)
+		? QString::number(peerToUser(id).bare)
+		: peerIsChat(id)
+		? QString::number(-int64(peerToChat(id).bare))
+		: peerIsChannel(id)
+		? u"-100%1"_q.arg(peerToChannel(id).bare)
+		: QString::number(id.value);
+	return rpl::single(tr::link(text, u"internal:copy_id"_q));
+}
+
+rpl::producer<TextWithEntities> DcValue(not_null<PeerData*> peer) {
+	return peer->session().changes().peerFlagsValue(
+		peer,
+		Data::PeerUpdate::Flag::Photo
+	) | rpl::map([=] {
+		const auto location = peer->userpicLocation();
+		if (location.valid()) {
+			if (const auto storage = std::get_if<StorageFileLocation>(&location.file().data)) {
+				return tr::marked(u"DC %1"_q.arg(storage->dcId()));
+			}
+		}
+		return TextWithEntities();
+	});
 }
 
 TextWithEntities AboutWithEntities(

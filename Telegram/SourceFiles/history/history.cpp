@@ -59,6 +59,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mainwidget.h"
 #include "mainwindow.h"
 #include "main/main_session.h"
+#include "main/main_session_settings.h"
 #include "window/notifications_manager.h"
 #include "window/window_session_controller.h"
 #include "calls/calls_instance.h"
@@ -2126,6 +2127,12 @@ void History::applyInboxReadUpdate(
 }
 
 void History::inboxRead(MsgId upTo, std::optional<int> stillUnread) {
+	if (Core::App().settings().ghostModeNoRead()) {
+		const auto ghostRead = session().settings().ghostReadTill(peer->id);
+		if (upTo >= ghostRead) {
+			session().settings().setGhostReadTill(peer->id, MsgId(0));
+		}
+	}
 	if (stillUnread.has_value() && folderKnown()) {
 		setUnreadCount(*stillUnread);
 	} else if (const auto still = countStillUnreadLocal(upTo)) {
@@ -3402,10 +3409,18 @@ void History::applyDialogFields(
 	} else {
 		clearFolder();
 	}
-	if (!skipUnreadUpdate()
-		&& maxInboxRead + 1 >= _inboxReadBefore.value_or(1)) {
-		setUnreadCount(unreadCount);
-		setInboxReadTill(maxInboxRead);
+	if (!skipUnreadUpdate()) {
+		if (Core::App().settings().ghostModeNoRead()) {
+			const auto ghostRead = session().settings().ghostReadTill(peer->id);
+			if (ghostRead > maxInboxRead) {
+				maxInboxRead = ghostRead;
+				unreadCount = 0;
+			}
+		}
+		if (maxInboxRead + 1 >= _inboxReadBefore.value_or(1)) {
+			setUnreadCount(unreadCount);
+			setInboxReadTill(maxInboxRead);
+		}
 	}
 	setOutboxReadTill(maxOutboxRead);
 }

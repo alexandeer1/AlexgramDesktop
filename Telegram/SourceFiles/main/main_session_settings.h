@@ -123,6 +123,8 @@ public:
 		MsgId topicRootId,
 		PeerId monoforumPeerId,
 		MsgId msgId);
+	[[nodiscard]] MsgId ghostReadTill(PeerId peerId) const;
+	void setGhostReadTill(PeerId peerId, MsgId msgId);
 
 	[[nodiscard]] qint32 subsectionTabsMode(PeerId peerId) const;
 	void setSubsectionTabsMode(PeerId peerId, qint32 mode);
@@ -219,6 +221,7 @@ private:
 	rpl::variable<bool> _skipArchiveInSearch = false;
 	base::flat_map<ThreadId, MsgId> _hiddenPinnedMessages;
 	base::flat_map<PeerId, qint32> _subsectionTabsModes;
+	base::flat_map<PeerId, MsgId> _ghostReadTill;
 	base::flat_map<Data::DefaultNotify, ushort> _ringtoneDefaultVolumes;
 	base::flat_map<ThreadId, ushort> _ringtoneVolumes;
 	bool _dialogsFiltersEnabled = false;
