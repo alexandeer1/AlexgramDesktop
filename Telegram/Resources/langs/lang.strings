@@ -8054,3 +8054,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_hide_stories_from_header_about" = "Remove the stories list from the top of the chat list.";
 "lng_settings_alexgram_disable_stories" = "Disable Stories";
 "lng_settings_alexgram_disable_stories_about" = "Hide stories indicators around profile pictures in the chat list. Enabling this will also hide the stories header.";
+"lng_settings_alexgram_send_mp4_as_video" = "Send mp4 Document as Video";
+"lng_settings_alexgram_send_mp4_as_video_about" = "When sending .mp4 files as documents, treat them as videos so they are streamable and have a preview.";
+"lng_settings_alexgram_dolby_8d" = "Dolby 8D Sound Effect";
+"lng_settings_alexgram_dolby_8d_about" = "Enable a surround-sound panning effect that makes audio feel like it's moving around your head. Works best with headphones.";
+

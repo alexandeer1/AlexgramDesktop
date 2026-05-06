@@ -234,7 +234,17 @@ rpl::event_stream<bool> &DisableStoriesChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &SendMp4AsVideoChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &Dolby8DChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 } // namespace
+
+
 
 [[nodiscard]] WindowPosition AdjustToScale(WindowPosition position,
                                            const QString &name) {
@@ -2320,4 +2330,32 @@ void Settings::setDisableStories(bool value) {
   DisableStoriesChanges().fire_copy(value);
 }
 
+bool Settings::sendMp4AsVideo() {
+  return readPref<bool>("send-mp4-as-video", false);
+}
+
+rpl::producer<bool> Settings::sendMp4AsVideoChanges() {
+  return SendMp4AsVideoChanges().events_starting_with(sendMp4AsVideo());
+}
+
+void Settings::setSendMp4AsVideo(bool value) {
+  writePref<bool>("send-mp4-as-video", value);
+  SendMp4AsVideoChanges().fire_copy(value);
+}
+
+bool Settings::dolby8D() {
+  return readPref<bool>("dolby-8d", false);
+}
+
+rpl::producer<bool> Settings::dolby8DChanges() {
+  return Dolby8DChanges().events_starting_with(dolby8D());
+}
+
+void Settings::setDolby8D(bool value) {
+  writePref<bool>("dolby-8d", value);
+  Dolby8DChanges().fire_copy(value);
+}
+
 } // namespace Core
+
+

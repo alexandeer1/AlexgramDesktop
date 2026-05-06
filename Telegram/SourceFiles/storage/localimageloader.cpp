@@ -861,7 +861,7 @@ void FileLoadTask::process(ProcessArgs &&args) {
 			isVideo = true;
 			auto coverWidth = video->thumbnail.width();
 			auto coverHeight = video->thumbnail.height();
-			if (!_forceFile) {
+			if (!_forceFile || (Core::App().settings().sendMp4AsVideo() && _information->filemime == u"video/mp4"_q)) {
 				if (video->isGifv && !_album) {
 					attributes.push_back(MTP_documentAttributeAnimated());
 				}
@@ -879,6 +879,7 @@ void FileLoadTask::process(ProcessArgs &&args) {
 					MTPdouble(),
 					MTPstring()));
 			}
+
 
 			if (args.generateGoodThumbnail) {
 				goodThumbnail = video->thumbnail;
