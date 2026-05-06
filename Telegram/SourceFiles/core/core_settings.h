@@ -1145,6 +1145,26 @@ public:
 	[[nodiscard]] rpl::producer<bool> dolby8DChanges();
 	void setDolby8D(bool value);
 
+	[[nodiscard]] bool ghostModeNoRead();
+	[[nodiscard]] rpl::producer<bool> ghostModeNoReadChanges();
+	void setGhostModeNoRead(bool value);
+
+	[[nodiscard]] bool ghostDontReadStories();
+	[[nodiscard]] rpl::producer<bool> ghostDontReadStoriesChanges();
+	void setGhostDontReadStories(bool value);
+
+	[[nodiscard]] bool ghostDontSendOnline();
+	[[nodiscard]] rpl::producer<bool> ghostDontSendOnlineChanges();
+	void setGhostDontSendOnline(bool value);
+
+	[[nodiscard]] bool ghostDontSendTyping();
+	[[nodiscard]] rpl::producer<bool> ghostDontSendTypingChanges();
+	void setGhostDontSendTyping(bool value);
+
+	[[nodiscard]] bool ghostGoOffline();
+	[[nodiscard]] rpl::producer<bool> ghostGoOfflineChanges();
+	void setGhostGoOffline(bool value);
+
 
 
 	[[nodiscard]] static bool ThirdColumnByDefault();

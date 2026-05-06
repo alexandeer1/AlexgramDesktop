@@ -67,6 +67,8 @@ public:
 	void addActiveChat(rpl::producer<PeerData*> chat);
 	[[nodiscard]] bool inActiveChats(not_null<PeerData*> peer) const;
 
+	void updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline);
+
 private:
 	enum class ChannelDifferenceRequest {
 		Unknown,
@@ -94,7 +96,6 @@ private:
 		MsgRange range,
 		const MTPupdates_ChannelDifference &result);
 
-	void updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline);
 	void sendPing();
 	void getDifferenceByPts();
 	void getDifferenceAfterFail();

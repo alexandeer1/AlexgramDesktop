@@ -22,6 +22,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
 #include "window/window_session_controller.h"
+#include "main/main_session.h"
+#include "api/api_updates.h"
 #include "ui/boxes/confirm_box.h"
 
 namespace Settings {
@@ -86,6 +88,18 @@ private:
 	void setupContent();
 };
 
+class AlexgramGhostMode final : public Section<AlexgramGhostMode> {
+public:
+	AlexgramGhostMode(QWidget *parent, not_null<Window::SessionController*> controller) : Section(parent, controller) {
+		setupContent();
+	}
+	[[nodiscard]] rpl::producer<QString> title() override {
+		return tr::lng_settings_alexgram_ghost_mode();
+	}
+private:
+	void setupContent();
+};
+
 
 void AlexgramMain::setupContent() {
 	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
@@ -116,6 +130,12 @@ void AlexgramMain::setupContent() {
 	experimentalArgs.targetSection = AlexgramExperimentalSectionId();
 	experimentalArgs.icon = { &st::menuIconExperimental };
 	builder.addSectionButton(std::move(experimentalArgs));
+
+	Builder::SectionBuilder::SectionArgs ghostModeArgs;
+	ghostModeArgs.title = tr::lng_settings_alexgram_ghost_mode();
+	ghostModeArgs.targetSection = AlexgramGhostModeSectionId();
+	ghostModeArgs.icon = { &st::menuIconStealth };
+	builder.addSectionButton(std::move(ghostModeArgs));
 
 	builder.addSkip();
 	Ui::ResizeFitChild(this, content);
@@ -770,8 +790,77 @@ void AlexgramExperimental::setupContent() {
 	Ui::ResizeFitChild(this, content);
 }
 
+void AlexgramGhostMode::setupContent() {
+	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+	auto builder = Builder::SectionBuilder(Builder::WidgetContext{ content, controller(), showOtherMethod() });
+	builder.addDivider();
+	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs noReadArgs;
+	noReadArgs.title = tr::lng_settings_alexgram_ghost_mode_no_read();
+	noReadArgs.checked = Core::App().settings().ghostModeNoRead();
+	const auto noReadCb = builder.addCheckbox(std::move(noReadArgs));
+	noReadCb->checkedChanges() | rpl::on_next([=](bool checked) {
+		Core::App().settings().setGhostModeNoRead(checked);
+		Core::App().saveSettingsDelayed();
+	}, noReadCb->lifetime());
 
+	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_read_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs noReadStoriesArgs;
+	noReadStoriesArgs.title = tr::lng_settings_alexgram_ghost_mode_no_read_stories();
+	noReadStoriesArgs.checked = Core::App().settings().ghostDontReadStories();
+	const auto noReadStoriesCb = builder.addCheckbox(std::move(noReadStoriesArgs));
+	noReadStoriesCb->checkedChanges() | rpl::on_next([=](bool checked) {
+		Core::App().settings().setGhostDontReadStories(checked);
+		Core::App().saveSettingsDelayed();
+	}, noReadStoriesCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_read_stories_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs noOnlineArgs;
+	noOnlineArgs.title = tr::lng_settings_alexgram_ghost_mode_no_online();
+	noOnlineArgs.checked = Core::App().settings().ghostDontSendOnline();
+	const auto noOnlineCb = builder.addCheckbox(std::move(noOnlineArgs));
+	noOnlineCb->checkedChanges() | rpl::on_next([=](bool checked) {
+		Core::App().settings().setGhostDontSendOnline(checked);
+		Core::App().saveSettingsDelayed();
+	}, noOnlineCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_online_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs noTypingArgs;
+	noTypingArgs.title = tr::lng_settings_alexgram_ghost_mode_no_typing();
+	noTypingArgs.checked = Core::App().settings().ghostDontSendTyping();
+	const auto noTypingCb = builder.addCheckbox(std::move(noTypingArgs));
+	noTypingCb->checkedChanges() | rpl::on_next([=](bool checked) {
+		Core::App().settings().setGhostDontSendTyping(checked);
+		Core::App().saveSettingsDelayed();
+	}, noTypingCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_typing_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs goOfflineArgs;
+	goOfflineArgs.title = tr::lng_settings_alexgram_ghost_mode_go_offline();
+	goOfflineArgs.checked = Core::App().settings().ghostGoOffline();
+	const auto goOfflineCb = builder.addCheckbox(std::move(goOfflineArgs));
+	goOfflineCb->checkedChanges() | rpl::on_next([=](bool checked) {
+		Core::App().settings().setGhostGoOffline(checked);
+		Core::App().saveSettingsDelayed();
+		if (checked) {
+			controller()->session().updates().updateOnline(0, true);
+		}
+	}, goOfflineCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_go_offline_about());
+	builder.addSkip();
+
+	Ui::ResizeFitChild(this, content);
+}
 
 void BuildAlexSection(Builder::SectionBuilder &builder) {
 }
@@ -796,10 +885,15 @@ Type AlexgramExperimentalSectionId() {
 	return SectionFactory<AlexgramExperimental>::Instance();
 }
 
+Type AlexgramGhostModeSectionId() {
+	return SectionFactory<AlexgramGhostMode>::Instance();
+}
+
 const auto kMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramSectionId(), MainId(), &tr::lng_settings_alexgram, &st::menuIconManage }, BuildAlexSection);
 const auto kGeneralMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramGeneralSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_general, &st::menuIconSettings }, BuildAlexSection);
 const auto kTranslatorMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramTranslatorSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_translator, &st::menuIconTranslate }, BuildAlexSection);
 const auto kChatsMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramChatsSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_chats, &st::menuIconChatBubble }, BuildAlexSection);
 const auto kExperimentalMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramExperimentalSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_experimental, &st::menuIconExperimental }, BuildAlexSection);
+const auto kGhostModeMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramGhostModeSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_ghost_mode, &st::menuIconStealth }, BuildAlexSection);
 
 } // namespace Settings

@@ -1381,7 +1381,9 @@ bool Application::hasActiveWindow(not_null<Main::Session*> session) const {
 	} else if (_iv->hasActiveWindow(session)) {
 		return true;
 	} else if (const auto window = _lastActiveWindow) {
-		return (window->account().maybeSession() == session)
+		const auto id = window->id();
+		return id.account
+			&& (id.account->maybeSession() == session)
 			&& window->widget()->isActive();
 	}
 	return false;

@@ -71,6 +71,8 @@ QByteArray SessionSettings::serialize() const {
 	size += sizeof(qint32)
 		+ _subsectionTabsModes.size() * (sizeof(quint64) + sizeof(qint32));
 	size += sizeof(qint32); // _phoneNumberHidden
+	size += sizeof(qint32)
+		+ _ghostReadTill.size() * (sizeof(quint64) + sizeof(qint64));
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -159,6 +161,10 @@ QByteArray SessionSettings::serialize() const {
 			stream << SerializePeerId(peerId) << qint32(mode);
 		}
 		stream << qint32(_phoneNumberHidden ? 1 : 0);
+		stream << qint32(_ghostReadTill.size());
+		for (const auto &[peerId, tillId] : _ghostReadTill) {
+			stream << SerializePeerId(peerId) << qint64(tillId.bare);
+		}
 	}
 
 	Ensures(result.size() == size);
@@ -234,6 +240,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	std::vector<int32> moderateCommonGroups;
 	qint32 disableSharingBoxShowsCount = 0;
 	qint32 phoneNumberHidden = 0;
+	base::flat_map<PeerId, MsgId> ghostReadTill;
 
 	stream >> versionTag;
 	if (versionTag == kVersionTag) {
@@ -692,6 +699,25 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	if (!stream.atEnd()) {
 		stream >> phoneNumberHidden;
 	}
+	if (!stream.atEnd()) {
+		auto count = qint32(0);
+		stream >> count;
+		if (stream.status() == QDataStream::Ok) {
+			for (auto i = 0; i != count; ++i) {
+				auto peerId = quint64();
+				auto tillId = qint64(0);
+				stream >> peerId >> tillId;
+				if (stream.status() != QDataStream::Ok) {
+					LOG(("App Error: "
+						"Bad data for SessionSettings::addFromSerialized()"));
+					return;
+				}
+				ghostReadTill.emplace(
+					DeserializePeerId(peerId),
+					MsgId(int32(tillId)));
+			}
+		}
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for SessionSettings::addFromSerialized()"));
@@ -758,6 +784,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	_moderateCommonGroups = std::move(moderateCommonGroups);
 	_disableSharingBoxShowsCount = disableSharingBoxShowsCount;
 	_phoneNumberHidden = (phoneNumberHidden == 1);
+	_ghostReadTill = std::move(ghostReadTill);
 
 	if (version < 2) {
 		app.setLastSeenWarningSeen(appLastSeenWarningSeen == 1);
@@ -1007,6 +1034,19 @@ void SessionSettings::setSetupEmailState(Data::SetupEmailState state) {
 
 Data::SetupEmailState SessionSettings::setupEmailState() const {
 	return _setupEmailState;
+}
+
+MsgId SessionSettings::ghostReadTill(PeerId peerId) const {
+	const auto i = _ghostReadTill.find(peerId);
+	return (i != end(_ghostReadTill)) ? i->second : MsgId(0);
+}
+
+void SessionSettings::setGhostReadTill(PeerId peerId, MsgId msgId) {
+	if (msgId) {
+		_ghostReadTill[peerId] = msgId;
+	} else {
+		_ghostReadTill.remove(peerId);
+	}
 }
 
 } // namespace Main

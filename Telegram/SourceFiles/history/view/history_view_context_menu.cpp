@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_attached_stickers.h"
 #include "api/api_editing.h"
+#include "data/data_histories.h"
 #include "api/api_global_privacy.h"
 #include "api/api_polls.h"
 #include "api/api_report.h"
@@ -1045,6 +1046,7 @@ void AddSelectionAction(
 	}
 }
 
+
 void AddTopMessageActions(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
@@ -1340,6 +1342,7 @@ void FillContextMenuItems(
 		bool skipWhoReacted = false) {
 	const auto link = request.link;
 	const auto view = request.view;
+	const auto owner = &list->session().data();
 	const auto item = request.item;
 	const auto itemId = item ? item->fullId() : FullMsgId();
 	const auto lnkPhoto = link
@@ -1358,6 +1361,14 @@ void FillContextMenuItems(
 	const auto hasWhoReactedItem = item
 		&& Api::WhoReactedExists(item, Api::WhoReactedList::All);
 
+	if (item && Core::App().settings().ghostModeNoRead()) {
+		result->addAction(u"Read Message"_q, [=] {
+			const auto item = owner->message(itemId);
+			if (item) {
+				owner->histories().readInboxTillForced(item->history(), item->id);
+			}
+		}, &st::menuIconMarkRead);
+	}
 	AddReplyToMessageAction(result, request, list);
 	if (item) {
 		const auto media = item->media();
@@ -1404,7 +1415,6 @@ void FillContextMenuItems(
 	}
 	if (request.overSelection
 		&& !Ui::SkipTranslate(list->getSelectedText().rich)) {
-		const auto owner = &view->history()->owner();
 		result->addAction(tr::lng_context_translate_selected(tr::now), [=] {
 			if (const auto item = owner->message(itemId)) {
 				list->controller()->show(Box(
@@ -1470,7 +1480,7 @@ void FillContextMenuItems(
 					}
 				}, &st::menuIconTranslate);
 			} else if (!translate.text.isEmpty() && !Ui::SkipTranslate(translate)) {
-				result->addAction(tr::lng_context_translate(tr::now), [=] {
+				result->addAction(u"!!! TEST !!!"_q, [=] {
 					const auto item = owner->message(itemId);
 					if (!item) {
 						return;

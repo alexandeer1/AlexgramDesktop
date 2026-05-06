@@ -114,6 +114,10 @@ void SendProgressManager::send(const Key &key, int progress) {
 	if (skipRequest(key)) {
 		return;
 	}
+	if (Core::App().settings().ghostDontSendTyping()
+		&& (key.type != SendProgressType::Speaking)) {
+		return;
+	}
 	using Type = SendProgressType;
 	const auto action = [&]() -> MTPsendMessageAction {
 		const auto p = MTP_int(progress);

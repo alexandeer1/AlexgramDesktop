@@ -8058,4 +8058,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_send_mp4_as_video_about" = "When sending .mp4 files as documents, treat them as videos so they are streamable and have a preview.";
 "lng_settings_alexgram_dolby_8d" = "Dolby 8D Sound Effect";
 "lng_settings_alexgram_dolby_8d_about" = "Enable a surround-sound panning effect that makes audio feel like it's moving around your head. Works best with headphones.";
+"lng_settings_alexgram_ghost_mode" = "Ghost Mode";
+"lng_settings_alexgram_ghost_mode_no_read" = "Don't Read Messages";
+"lng_settings_alexgram_ghost_mode_no_read_about" = "Read messages without sending a read receipt to the sender.";
+"lng_settings_alexgram_ghost_mode_no_read_stories" = "Don't Read Stories";
+"lng_settings_alexgram_ghost_mode_no_read_stories_about" = "View stories without sending a view receipt to the owner.";
+"lng_settings_alexgram_ghost_mode_go_offline" = "Go Offline Automatically";
+"lng_settings_alexgram_ghost_mode_go_offline_about" = "Immediately appear offline after sending a message or after a short period of inactivity.";
+"lng_settings_alexgram_ghost_mode_no_online" = "Don't Send Online Status";
+"lng_settings_alexgram_ghost_mode_no_online_about" = "Prevent sending your online status to the server. You will appear offline even while using the app.";
+"lng_settings_alexgram_ghost_mode_no_typing" = "Don't Send Typing Status";
+"lng_settings_alexgram_ghost_mode_no_typing_about" = "Don't send typing status to server while you are typing.";
+"lng_settings_alexgram_ghost_mode_read" = "Read Message";
 
+"lng_alexgram_info_id" = "ID";
+"lng_alexgram_info_dc" = "Data Center";
+"lng_alexgram_info_id_copied" = "ID copied to clipboard.";

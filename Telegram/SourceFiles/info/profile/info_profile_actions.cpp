@@ -1810,6 +1810,31 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupInfo() {
 			addTranslateToMenu(about.text, AboutWithAdvancedValue(_peer));
 		}
 	}
+	{
+		const auto peer = _peer;
+		const auto controller = _controller;
+		const auto id = peer->id;
+		const auto formattedId = peerIsUser(id)
+			? QString::number(peerToUser(id).bare)
+			: peerIsChat(id)
+			? QString::number(-int64(peerToChat(id).bare))
+			: peerIsChannel(id)
+			? u"-100%1"_q.arg(peerToChannel(id).bare)
+			: QString::number(id.value);
+
+		const auto idLine = addInfoOneLine(
+			tr::lng_alexgram_info_id(),
+			PeerIdValue(peer),
+			tr::lng_alexgram_info_id_copied(tr::now));
+		idLine.text->overrideLinkClickHandler([=] {
+			TextUtilities::SetClipboardText({ formattedId });
+			controller->parentController()->showToast(tr::lng_alexgram_info_id_copied(tr::now));
+		});
+		addInfoOneLine(
+			tr::lng_alexgram_info_dc(),
+			DcValue(peer),
+			QString());
+	}
 	wrap->toggleOn(tracker.atLeastOneShownValue());
 	wrap->finishAnimating();
 
