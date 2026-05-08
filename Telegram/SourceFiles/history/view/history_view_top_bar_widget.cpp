@@ -763,7 +763,10 @@ void TopBarWidget::paintStatus(
 		int outerWidth) {
 	using Section = Dialogs::EntryState::Section;
 	const auto section = _activeChat.section;
-	if (section == Section::Replies || section == Section::SavedSublist) {
+	if (!_customStatusText.isEmpty()) {
+		p.setPen(st::historyStatusFg);
+		p.drawTextLeft(left, top, outerWidth, _customStatusText);
+	} else if (section == Section::Replies || section == Section::SavedSublist) {
 		p.setPen(st::historyStatusFg);
 		p.drawTextLeft(left, top, outerWidth, _customTitleText);
 	} else {
@@ -970,6 +973,13 @@ void TopBarWidget::handleEmojiInteractionSeen(const QString &emoticon) {
 void TopBarWidget::setCustomTitle(const QString &title) {
 	if (_customTitleText != title) {
 		_customTitleText = title;
+		update();
+	}
+}
+
+void TopBarWidget::setCustomStatus(const QString &status) {
+	if (_customStatusText != status) {
+		_customStatusText = status;
 		update();
 	}
 }

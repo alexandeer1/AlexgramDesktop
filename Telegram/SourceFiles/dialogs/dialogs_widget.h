@@ -137,6 +137,7 @@ public:
 	[[nodiscard]] RowDescriptor resolveChatPrevious(RowDescriptor from = {}) const;
 	void updateHasFocus(not_null<QWidget*> focused);
 	void toggleFiltersMenu(bool value);
+	void reprocessAlexSettings() override;
 
 	// Float player interface.
 	bool floatPlayerHandleWheelEvent(QEvent *e) override;

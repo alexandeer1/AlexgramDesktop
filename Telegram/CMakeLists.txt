@@ -1037,6 +1037,8 @@ PRIVATE
     history/view/history_view_schedule_box.h
     history/view/history_view_scheduled_section.cpp
     history/view/history_view_scheduled_section.h
+    history/view/history_view_ghost_deleted_section.cpp
+    history/view/history_view_ghost_deleted_section.h
     history/view/history_view_self_forwards_tagger.cpp
     history/view/history_view_self_forwards_tagger.h
     history/view/history_view_send_action.cpp

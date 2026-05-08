@@ -78,6 +78,7 @@ public:
 		ActiveChat activeChat,
 		SendActionPainter *sendAction);
 	void setCustomTitle(const QString &title);
+	void setCustomStatus(const QString &status);
 
 	void showChooseMessagesForReport(Data::ReportInput reportInput);
 	void clearChooseMessagesForReport();
@@ -198,6 +199,7 @@ private:
 	const bool _primaryWindow = false;
 	ActiveChat _activeChat;
 	QString _customTitleText;
+	QString _customStatusText;
 	std::unique_ptr<EmojiInteractionSeenAnimation> _emojiInteractionSeen;
 	rpl::lifetime _activeChatLifetime;
 

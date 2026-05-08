@@ -2858,7 +2858,11 @@ void ChatWidget::paintEvent(QPaintEvent *e) {
 	const auto aboveHeight = _topBar->height();
 	const auto bg = e->rect().intersected(
 		QRect(0, aboveHeight, width(), height() - aboveHeight));
-	SectionWidget::PaintBackground(controller(), _theme.get(), this, bg);
+	SectionWidget::PaintBackground(
+		controller(),
+		(_theme ? _theme.get() : controller()->defaultChatTheme().get()),
+		this,
+		bg);
 }
 
 bool ChatWidget::emptyShown() const {
@@ -3304,7 +3308,7 @@ void ChatWidget::listHandleViaClick(not_null<UserData*> bot) {
 }
 
 not_null<Ui::ChatTheme*> ChatWidget::listChatTheme() {
-	return _theme.get();
+	return _theme ? _theme.get() : controller()->defaultChatTheme().get();
 }
 
 CopyRestrictionType ChatWidget::listCopyRestrictionType(

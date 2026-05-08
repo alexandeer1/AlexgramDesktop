@@ -585,6 +585,7 @@ public:
 	void processMessagesDeleted(
 		PeerId peerId,
 		const QVector<MTPint> &data);
+	void loadGhostDeletedMessages();
 
 	void removeReactionsFromParticipant(
 		not_null<PeerData*> peer,

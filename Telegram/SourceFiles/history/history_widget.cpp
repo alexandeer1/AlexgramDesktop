@@ -5102,6 +5102,14 @@ void HistoryWidget::sendTextWithTags(
 	session().api().sendMessage(std::move(message), nextLocalMessageId);
 	_justMarkingAsRead = false;
 
+	if (Core::App().settings().ghostReadOnInteract()) {
+		if (const auto last = _history->lastServerMessage()) {
+			session().data().histories().readInboxTillForced(_history, last->id);
+		} else if (const auto maxId = _history->maxMsgId()) {
+			session().data().histories().readInboxTillForced(_history, maxId);
+		}
+	}
+
 	clearFieldText();
 	if (_preview) {
 		_preview->apply({ .removed = true });
@@ -6074,6 +6082,7 @@ bool HistoryWidget::searchInChatEmbedded(
 		QString query,
 		Dialogs::Key chat,
 		PeerData *searchFrom) {
+	LOG(("HistoryWidget::searchInChatEmbedded query: %1").arg(query));
 	const auto peer = chat.peer(); // windows todo
 	const auto archiveWindow = (controller()->windowId().type
 		== Window::SeparateType::Archive);
@@ -7207,6 +7216,12 @@ void HistoryWidget::itemEdited(not_null<HistoryItem*> item) {
 void HistoryWidget::refreshSpoilers() {
 	if (_list) {
 		_list->refreshSpoilers();
+	}
+}
+
+void HistoryWidget::reprocessAlexSettings() {
+	if (_list) {
+		_list->reprocessAlexSettings();
 	}
 }
 

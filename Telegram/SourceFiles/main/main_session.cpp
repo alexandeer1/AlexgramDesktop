@@ -245,6 +245,7 @@ Session::Session(
 		data().stickers().notifyUpdated(Data::StickersType::Masks);
 		data().stickers().notifyUpdated(Data::StickersType::Emoji);
 		data().stickers().notifySavedGifsUpdated();
+		data().loadGhostDeletedMessages();
 		DEBUG_LOG(("Init: Account stored data load finished."));
 	} }).dispatch();
 

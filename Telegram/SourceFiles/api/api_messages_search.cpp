@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "history/view/history_view_element.h"
 #include "main/main_session.h"
 
 namespace Api {
@@ -101,6 +102,39 @@ void MessagesSearch::searchMore() {
 
 void MessagesSearch::searchRequest() {
 	const auto nextToken = RequestToToken(_request);
+	if (_request.query == u"#deleted"_q) {
+		LOG(("Api::MessagesSearch searching for #deleted in history %1").arg(_history->peer->id.value));
+		if (_offsetId) {
+			_messagesFounds.fire({ 0, {}, nextToken });
+			return;
+		}
+		auto result = MessageIdsList();
+		for (const auto &block : _history->blocks) {
+			if (!block) continue;
+			for (const auto &view : block->messages) {
+				if (!view || !view->data()) continue;
+				if (view->data()->isGhostDeleted()) {
+					result.push_back(view->data()->fullId());
+				}
+			}
+		}
+		for (const auto &item : _history->clientSideMessages()) {
+			if (item->isGhostDeleted()) {
+				const auto id = item->fullId();
+				if (!ranges::contains(result, id)) {
+					result.push_back(id);
+				}
+			}
+		}
+		LOG(("Api::MessagesSearch found %1 #deleted messages").arg(result.size()));
+		std::sort(result.begin(), result.end(), [](const FullMsgId &a, const FullMsgId &b) {
+			return a.msg > b.msg;
+		});
+		_offsetId = result.empty() ? MsgId() : result.back().msg;
+		_messagesFounds.fire({ int(result.size()), std::move(result), nextToken });
+		return;
+	}
+
 	if (!_offsetId) {
 		const auto it = _cacheOfStartByToken.find(nextToken);
 		if (it != end(_cacheOfStartByToken)) {

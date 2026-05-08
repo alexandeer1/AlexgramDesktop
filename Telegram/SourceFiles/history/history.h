@@ -508,6 +508,7 @@ private:
 		ResolveChatListMessage = (1 << 7),
 		MonoAndForumUnreadInvalidatePending = (1 << 8),
 		HasGuestChatBotMessages = (1 << 9),
+		InCheckLocalMessages = (1 << 10),
 	};
 	using Flags = base::flags<Flag>;
 	friend inline constexpr auto is_flag_type(Flag) {
@@ -623,7 +624,7 @@ private:
 		PeerId monoforumPeerId);
 
 	HistoryItem *insertJoinedMessage();
-	void insertMessageToBlocks(not_null<HistoryItem*> item);
+	void insertMessageToBlocks(not_null<HistoryItem*> item, bool notify = true);
 	void checkNewPeerMessages();
 
 	[[nodiscard]] Dialogs::BadgesState computeBadgesState() const;

@@ -73,6 +73,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_updates.h"
 #include "mtproto/mtproto_config.h"
 #include "history/history.h"
+#include "history/history_item.h"
+#include "history/view/history_view_ghost_deleted_section.h"
 #include "history/history_item_helpers.h" // GetErrorForSending.
 #include "history/history_item_components.h"
 #include "history/view/history_view_context_menu.h"
@@ -316,6 +318,7 @@ private:
 	void addDirectMessages();
 	void addToggleTopicClosed();
 	void addExportChat();
+	void addViewDeleted();
 	void addTranslate();
 	void addReport();
 	void addNewContact();
@@ -952,6 +955,19 @@ void Filler::addExportChat() {
 		tr::lng_profile_export_chat(tr::now),
 		[=] { PeerMenuExportChat(navigation, peer); },
 		&st::menuIconExport);
+}
+
+void Filler::addViewDeleted() {
+	if (!Core::App().settings().ghostSaveDeletedMessages()) {
+		return;
+	}
+	const auto peer = _peer;
+	const auto navigation = _controller;
+	_addAction(u"View Deleted"_q, [=] {
+		LOG(("View Deleted clicked for peer %1").arg(peer->id.value));
+		navigation->showSection(std::make_shared<HistoryView::GhostDeletedMemento>(
+			peer->owner().history(peer)));
+	}, &st::menuIconSearch);
 }
 
 void Filler::addTranslate() {
@@ -1770,6 +1786,7 @@ void Filler::fillHistoryActions() {
 	addViewDiscussion();
 	addDirectMessages();
 	addExportChat();
+	addViewDeleted();
 	addTranslate();
 	addReport();
 	addClearHistory();

@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "main/main_session_settings.h"
+#include "scheme.h"
 
 #include "chat_helpers/tabbed_selector.h"
 #include "ui/widgets/fields/input_field.h"
@@ -73,6 +74,11 @@ QByteArray SessionSettings::serialize() const {
 	size += sizeof(qint32); // _phoneNumberHidden
 	size += sizeof(qint32)
 		+ _ghostReadTill.size() * (sizeof(quint64) + sizeof(qint64));
+	size += sizeof(qint32);
+	for (const auto &[itemId, data] : _ghostDeletedMessages) {
+		size += sizeof(quint64) + sizeof(qint64); // itemId
+		size += sizeof(qint32) + data.messageData.size(); // messageData
+	}
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -165,6 +171,11 @@ QByteArray SessionSettings::serialize() const {
 		for (const auto &[peerId, tillId] : _ghostReadTill) {
 			stream << SerializePeerId(peerId) << qint64(tillId.bare);
 		}
+		stream << qint32(_ghostDeletedMessages.size());
+		for (const auto &[itemId, data] : _ghostDeletedMessages) {
+			stream << SerializePeerId(itemId.peer) << qint64(itemId.msg.bare);
+			stream << data.messageData;
+		}
 	}
 
 	Ensures(result.size() == size);
@@ -241,6 +252,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	qint32 disableSharingBoxShowsCount = 0;
 	qint32 phoneNumberHidden = 0;
 	base::flat_map<PeerId, MsgId> ghostReadTill;
+	base::flat_map<FullMsgId, GhostDeletedMessageData> ghostDeletedMessages;
 
 	stream >> versionTag;
 	if (versionTag == kVersionTag) {
@@ -718,6 +730,27 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 			}
 		}
 	}
+	if (!stream.atEnd()) {
+		auto count = qint32(0);
+		stream >> count;
+		if (stream.status() == QDataStream::Ok) {
+			for (auto i = 0; i != count; ++i) {
+				auto peerId = quint64();
+				auto msgId = qint64(0);
+				auto messageData = QByteArray();
+				stream >> peerId >> msgId >> messageData;
+				if (stream.status() != QDataStream::Ok) {
+					LOG(("App Error: Bad data for SessionSettings::addFromSerialized()"));
+					return;
+				}
+				ghostDeletedMessages.emplace(
+					FullMsgId(DeserializePeerId(peerId), MsgId(msgId)),
+					GhostDeletedMessageData{
+						.messageData = std::move(messageData),
+					});
+			}
+		}
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for SessionSettings::addFromSerialized()"));
@@ -785,6 +818,7 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 	_disableSharingBoxShowsCount = disableSharingBoxShowsCount;
 	_phoneNumberHidden = (phoneNumberHidden == 1);
 	_ghostReadTill = std::move(ghostReadTill);
+	_ghostDeletedMessages = std::move(ghostDeletedMessages);
 
 	if (version < 2) {
 		app.setLastSeenWarningSeen(appLastSeenWarningSeen == 1);
@@ -1042,11 +1076,19 @@ MsgId SessionSettings::ghostReadTill(PeerId peerId) const {
 }
 
 void SessionSettings::setGhostReadTill(PeerId peerId, MsgId msgId) {
-	if (msgId) {
-		_ghostReadTill[peerId] = msgId;
-	} else {
-		_ghostReadTill.remove(peerId);
-	}
+	_ghostReadTill[peerId] = msgId;
+}
+
+bool SessionSettings::isGhostDeleted(FullMsgId itemId) const {
+	return _ghostDeletedMessages.contains(itemId);
+}
+
+void SessionSettings::setGhostDeleted(FullMsgId itemId, GhostDeletedMessageData &&data) {
+	_ghostDeletedMessages.emplace(itemId, std::move(data));
+}
+
+void SessionSettings::removeGhostDeleted(FullMsgId itemId) {
+	_ghostDeletedMessages.remove(itemId);
 }
 
 } // namespace Main

@@ -1454,7 +1454,7 @@ uint8 HistoryItem::colorIndex() const {
 	} else if (const auto info = displayHiddenSenderInfo()) {
 		return info->colorIndex;
 	}
-	Unexpected("No displayFrom and no displayHiddenSenderInfo.");
+	return 0;
 }
 
 DocumentId HistoryItem::backgroundEmojiId() const {
@@ -3241,6 +3241,10 @@ void HistoryItem::toggleReaction(
 		_reactions->add(reaction, addToRecent);
 	}
 	_history->owner().notifyItemDataChange(this);
+
+	if (Core::App().settings().ghostReadOnInteract()) {
+		history()->owner().histories().readInboxTillForced(_history, id);
+	}
 }
 
 bool HistoryItem::removeReactionsFromParticipant(
@@ -8035,4 +8039,31 @@ void HistoryItem::overrideMedia(std::unique_ptr<Data::Media> media) {
 	Expects(!media || media->parent() == this);
 
 	_media = std::move(media);
+}
+
+void HistoryItem::setGhostDeleted(bool ghostDeleted) {
+	if (ghostDeleted) {
+		_flags |= MessageFlag::DeletedLocally;
+	} else {
+		_flags &= ~MessageFlag::DeletedLocally;
+	}
+	history()->owner().notifyItemDataChange(this);
+}
+
+void HistoryItem::setGhostDeletedData(QByteArray data) {
+	AddComponents(HistoryMessageGhostData::Bit());
+	Get<HistoryMessageGhostData>()->messageData = std::move(data);
+}
+
+QByteArray HistoryItem::ghostDeletedData() const {
+	if (const auto data = Get<HistoryMessageGhostData>()) {
+		return data->messageData;
+	}
+	return QByteArray();
+}
+
+void HistoryItem::destroyGhost() {
+	_history->session().settings().removeGhostDeleted(fullId());
+	_history->session().saveSettingsDelayed();
+	destroy();
 }

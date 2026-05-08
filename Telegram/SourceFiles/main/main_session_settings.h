@@ -9,8 +9,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "data/data_auto_download.h"
 #include "data/notify/data_peer_notify_settings.h"
+#include "data/data_msg_id.h"
 #include "data/data_authorization.h"
 #include "ui/rect_part.h"
+#include "ui/text/text_entity.h"
+#include "base/flat_map.h"
+
 
 namespace Support {
 enum class SwitchSettings;
@@ -125,6 +129,16 @@ public:
 		MsgId msgId);
 	[[nodiscard]] MsgId ghostReadTill(PeerId peerId) const;
 	void setGhostReadTill(PeerId peerId, MsgId msgId);
+	struct GhostDeletedMessageData {
+		QByteArray messageData;
+	};
+	[[nodiscard]] bool isGhostDeleted(FullMsgId itemId) const;
+	void setGhostDeleted(FullMsgId itemId, GhostDeletedMessageData &&data);
+	void removeGhostDeleted(FullMsgId itemId);
+	[[nodiscard]] const base::flat_map<FullMsgId, GhostDeletedMessageData> &ghostDeletedMessages() const {
+		return _ghostDeletedMessages;
+	}
+
 
 	[[nodiscard]] qint32 subsectionTabsMode(PeerId peerId) const;
 	void setSubsectionTabsMode(PeerId peerId, qint32 mode);
@@ -222,6 +236,7 @@ private:
 	base::flat_map<ThreadId, MsgId> _hiddenPinnedMessages;
 	base::flat_map<PeerId, qint32> _subsectionTabsModes;
 	base::flat_map<PeerId, MsgId> _ghostReadTill;
+	base::flat_map<FullMsgId, GhostDeletedMessageData> _ghostDeletedMessages;
 	base::flat_map<Data::DefaultNotify, ushort> _ringtoneDefaultVolumes;
 	base::flat_map<ThreadId, ushort> _ringtoneVolumes;
 	bool _dialogsFiltersEnabled = false;

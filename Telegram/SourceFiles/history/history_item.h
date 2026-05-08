@@ -257,6 +257,16 @@ public:
 	[[nodiscard]] bool storyInProfile() const {
 		return _flags & MessageFlag::StoryInProfile;
 	}
+	[[nodiscard]] bool isGhostDeleted() const {
+		return _flags & MessageFlag::DeletedLocally;
+	}
+	void setGhostDeleted(bool ghostDeleted);
+	void setGhostDeletedData(QByteArray data);
+	[[nodiscard]] QByteArray ghostDeletedData() const;
+	void destroyGhost();
+	[[nodiscard]] MessageFlags flags() const {
+		return _flags;
+	}
 	[[nodiscard]] bool unread(not_null<Data::Thread*> thread) const;
 	[[nodiscard]] bool showNotification() const;
 	void markClientSideAsRead();

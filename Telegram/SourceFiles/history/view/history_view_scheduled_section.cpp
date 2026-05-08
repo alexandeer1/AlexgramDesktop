@@ -1156,7 +1156,11 @@ void ScheduledWidget::paintEvent(QPaintEvent *e) {
 	//_historyDownShown.step(ms);
 
 	const auto clip = e->rect();
-	SectionWidget::PaintBackground(controller(), _theme.get(), this, clip);
+	SectionWidget::PaintBackground(
+		controller(),
+		(_theme ? _theme.get() : controller()->defaultChatTheme().get()),
+		this,
+		clip);
 }
 
 void ScheduledWidget::onScroll() {
@@ -1565,7 +1569,7 @@ void ScheduledWidget::listHandleViaClick(not_null<UserData*> bot) {
 }
 
 not_null<Ui::ChatTheme*> ScheduledWidget::listChatTheme() {
-	return _theme.get();
+	return _theme ? _theme.get() : controller()->defaultChatTheme().get();
 }
 
 CopyRestrictionType ScheduledWidget::listCopyRestrictionType(

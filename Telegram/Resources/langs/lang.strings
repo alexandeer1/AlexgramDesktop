@@ -8284,7 +8284,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_ghost_mode_no_online_about" = "Prevent sending your online status to the server. You will appear offline even while using the app.";
 "lng_settings_alexgram_ghost_mode_no_typing" = "Don't Send Typing Status";
 "lng_settings_alexgram_ghost_mode_no_typing_about" = "Don't send typing status to server while you are typing.";
+"lng_settings_alexgram_ghost_mode_read_on_interact" = "Read on Interact";
+"lng_settings_alexgram_ghost_mode_read_on_interact_about" = "Automatically mark messages as read when you send a message or tap a reaction in a chat.";
 "lng_settings_alexgram_ghost_mode_read" = "Read Message";
+"lng_settings_alexgram_ghost_mode_save_deleted" = "Save Deleted Messages";
+"lng_settings_alexgram_ghost_mode_save_deleted_about" = "Keep messages that were deleted by other users or on the server. Deleted messages will be marked accordingly.";
+"lng_settings_alexgram_ghost_mode_save_bot_deleted" = "Save Bot Deleted Messages";
+"lng_settings_alexgram_ghost_mode_save_bot_deleted_about" = "If enabled, messages deleted by bots will also be saved locally.";
+"lng_settings_alexgram_ghost_mode_translucent_deleted" = "Translucent Deleted Messages";
+"lng_settings_alexgram_ghost_mode_translucent_deleted_about" = "Make deleted messages translucent for better distinction.";
+"lng_settings_alexgram_ghost_mode_deleted_opacity" = "Deleted Message Opacity";
+"lng_settings_alexgram_ghost_mode_deleted_show_icon" = "Show Icon Instead of \"Deleted\"";
+"lng_settings_alexgram_ghost_mode_deleted_show_icon_about" = "Show a small icon next to the timestamp for deleted messages instead of the \"Deleted\" text tag.";
+"lng_alexgram_deleted_label" = "Deleted";
 
 "lng_alexgram_info_id" = "ID";
 "lng_alexgram_info_dc" = "Data Center";

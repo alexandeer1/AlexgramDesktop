@@ -4501,6 +4501,12 @@ bool Widget::cancelSearch(CancelSearchOptions options) {
 	return clearingQuery || clearingInChat || clearSearchFocus;
 }
 
+void Widget::reprocessAlexSettings() {
+	if (_inner) {
+		_inner->update();
+	}
+}
+
 Widget::~Widget() {
 	cancelSearchRequest();
 
