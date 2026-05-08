@@ -195,6 +195,7 @@ rpl::producer<> ListController::resetScrollRequests() const {
 }
 
 void ListController::addItems(const MessageIdsList &ids, bool clear) {
+	LOG(("ComposeSearch::ListController::addItems count: %1, clear: %2").arg(ids.size()).arg(clear));
 	if (clear) {
 		_resetScrollRequests.fire({});
 		for (auto i = 0; i != delegate()->peerListFullRowsCount();) {

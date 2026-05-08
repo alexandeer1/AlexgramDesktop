@@ -145,7 +145,8 @@ bool BottomInfo::isWide() const {
 		|| !_views.isEmpty()
 		|| !_replies.isEmpty()
 		|| _effect
-		|| _data.tonStake;
+		|| _data.tonStake
+		|| (_data.flags & Data::Flag::GhostDeleted);
 }
 
 TextState BottomInfo::textState(
@@ -475,11 +476,22 @@ void BottomInfo::layoutDateText() {
 	if (Core::App().settings().showMessageId() && _data.msgId) {
 		finalDateStr += u" | "_q + QString::number(_data.msgId.bare);
 	}
+	const auto showDeletedIcon = (_data.flags & Data::Flag::GhostDeleted)
+		&& Core::App().settings().ghostDeletedShowIcon();
+	if ((_data.flags & Data::Flag::GhostDeleted) && !showDeletedIcon) {
+		finalDateStr = tr::lng_alexgram_deleted_label(tr::now)
+			+ u" | "_q
+			+ finalDateStr;
+	}
 	const auto date = finalDateStr;
 	const auto afterAuthor = prefix + date;
 	auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
 	if (showEditedIcon) {
 		afterAuthorWidth += st::historyEditedIconEmoji.icon.width()
+			+ st::msgDateFont->width(u" "_q);
+	}
+	if (showDeletedIcon) {
+		afterAuthorWidth += st::historyDeletedIconEmoji.icon.width()
 			+ st::msgDateFont->width(u" "_q);
 	}
 	const auto authorWidth = st::msgDateFont->width(author);
@@ -512,17 +524,26 @@ void BottomInfo::layoutDateText() {
 	}
 	if (_data.flags & Data::Flag::Sponsored) {
 	} else if (_data.flags & Data::Flag::Imported) {
+		if (showDeletedIcon) {
+			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+		}
 		if (showEditedIcon) {
 			marked.append(st::historyEditedIconEmoji).append(u" "_q);
 		}
 		marked.append(date).append(u" "_q).append(tr::lng_imported(tr::now));
 	} else if (name.isEmpty()) {
+		if (showDeletedIcon) {
+			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+		}
 		if (showEditedIcon) {
 			marked.append(st::historyEditedIconEmoji).append(u" "_q);
 		}
 		marked.append(date);
 	} else {
 		marked.append(name).append(prefix);
+		if (showDeletedIcon) {
+			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+		}
 		if (showEditedIcon) {
 			marked.append(st::historyEditedIconEmoji).append(u" "_q);
 		}
@@ -644,6 +665,9 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	result.date = message->dateTime();
 	result.effectId = item->effectId();
 	result.msgId = item->id;
+	if (item->isGhostDeleted()) {
+		result.flags |= Flag::GhostDeleted;
+	}
 	if (message->hasOutLayout()) {
 		result.flags |= Flag::OutLayout;
 	}

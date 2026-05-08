@@ -567,6 +567,7 @@ public:
 	void processMessagesDeleted(
 		PeerId peerId,
 		const QVector<MTPint> &data);
+	void loadGhostDeletedMessages();
 
 	[[nodiscard]] MsgId nextLocalMessageId();
 	[[nodiscard]] HistoryItem *message(

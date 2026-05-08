@@ -1165,6 +1165,30 @@ public:
 	[[nodiscard]] rpl::producer<bool> ghostGoOfflineChanges();
 	void setGhostGoOffline(bool value);
 
+	[[nodiscard]] bool ghostReadOnInteract();
+	[[nodiscard]] rpl::producer<bool> ghostReadOnInteractChanges();
+	void setGhostReadOnInteract(bool value);
+
+	[[nodiscard]] bool ghostSaveDeletedMessages();
+	[[nodiscard]] rpl::producer<bool> ghostSaveDeletedMessagesChanges();
+	void setGhostSaveDeletedMessages(bool value);
+
+	[[nodiscard]] bool ghostSaveBotDeleted();
+	[[nodiscard]] rpl::producer<bool> ghostSaveBotDeletedChanges();
+	void setGhostSaveBotDeleted(bool value);
+
+	[[nodiscard]] bool ghostTranslucentDeleted();
+	[[nodiscard]] rpl::producer<bool> ghostTranslucentDeletedChanges();
+	void setGhostTranslucentDeleted(bool value);
+
+	[[nodiscard]] int ghostDeletedOpacity();
+	[[nodiscard]] rpl::producer<int> ghostDeletedOpacityChanges();
+	void setGhostDeletedOpacity(int value);
+ 
+	[[nodiscard]] bool ghostDeletedShowIcon();
+	[[nodiscard]] rpl::producer<bool> ghostDeletedShowIconChanges();
+	void setGhostDeletedShowIcon(bool value);
+
 
 
 	[[nodiscard]] static bool ThirdColumnByDefault();

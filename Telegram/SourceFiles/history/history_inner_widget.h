@@ -135,6 +135,7 @@ public:
 	void updateSize();
 	void setShownPinned(HistoryItem *item);
 	void refreshSpoilers();
+	void reprocessAlexSettings();
 
 	void repaintItem(const HistoryItem *item);
 	void repaintItem(const Element *view);

@@ -651,6 +651,11 @@ struct HistoryMessageSuggestion
 	bool rejected = false;
 };
 
+struct HistoryMessageGhostData
+: RuntimeComponent<HistoryMessageGhostData, HistoryItem> {
+	QByteArray messageData;
+};
+
 struct HistoryMessageRestrictions
 : RuntimeComponent<HistoryMessageRestrictions, HistoryItem> {
 	std::vector<Data::UnavailableReason> reasons;

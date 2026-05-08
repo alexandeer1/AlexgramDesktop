@@ -782,6 +782,12 @@ historyEditedIconEmoji: IconEmoji {
 	padding: margins(0px, 0px, 2px, 0px);
 }
 
+historyDeletedIcon: icon {{ "menu/delete_small", historyOutIconFg, point(0px, 3px) }};
+historyDeletedIconEmoji: IconEmoji {
+	icon: historyDeletedIcon;
+	padding: margins(0px, 0px, 1px, 0px);
+}
+
 youtubeIcon: icon {
 	{ "media_youtube_play_bg", youtubePlayIconBg },
 	{ "media_youtube_play", youtubePlayIconFg, point(24px, 12px) },

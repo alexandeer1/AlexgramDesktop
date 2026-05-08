@@ -221,15 +221,22 @@ private:
 };
 
 auto Entry::unreadStateChangeNotifier(bool required) {
-	Expects(!(_flags & Flag::InUnreadChangeBlock));
-
-	_flags |= Flag::InUnreadChangeBlock;
-	const auto notify = required && inChatList();
+	const bool busy = (_flags & Flag::InUnreadChangeBlock);
+	if (!busy) {
+		_flags |= Flag::InUnreadChangeBlock;
+	}
+	const bool notify = required && inChatList() && !busy;
 	const auto wasState = notify ? chatListUnreadState() : UnreadState();
+	if (notify) {
+		LOG(("Unread State Change Notifier: was messages %1, chats %2").arg(wasState.messages).arg(wasState.chats));
+	}
 	return gsl::finally([=, this] {
-		_flags &= ~Flag::InUnreadChangeBlock;
+		if (!busy) {
+			_flags &= ~Flag::InUnreadChangeBlock;
+		}
 		if (notify) {
-			Assert(inChatList());
+			const auto nowState = chatListUnreadState();
+			LOG(("Unread State Change Notifier Done: now messages %1, chats %2").arg(nowState.messages).arg(nowState.chats));
 			notifyUnreadStateChange(wasState);
 		}
 	});

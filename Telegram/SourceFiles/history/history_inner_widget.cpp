@@ -120,12 +120,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_peer_menu.h"
 #include "window/window_session_controller.h"
 
-
 #include <QtCore/QCoreApplication>
 #include <QtCore/QMimeData>
 #include <QtGui/QClipboard>
 #include <QtWidgets/QApplication>
-
 
 namespace {
 
@@ -1292,7 +1290,16 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
         context.selection =
             itemRenderSelection(view, selfromy - mtop, seltoy - mtop);
         context.highlight = _widget->itemHighlight(view->data());
+        const auto ghostTranslucent =
+            view->data()->isGhostDeleted() &&
+            Core::App().settings().ghostTranslucentDeleted();
+        if (ghostTranslucent) {
+          p.setOpacity(Core::App().settings().ghostDeletedOpacity() / 100.0);
+        }
         view->draw(p, context);
+        if (ghostTranslucent) {
+          p.setOpacity(1.0);
+        }
         processPainted(view, top, height);
 
         top += height;
@@ -1334,7 +1341,16 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
         context.selection =
             itemRenderSelection(view, selfromy - htop, seltoy - htop);
         context.highlight = _widget->itemHighlight(item);
+        const auto ghostTranslucent =
+            item->isGhostDeleted() &&
+            Core::App().settings().ghostTranslucentDeleted();
+        if (ghostTranslucent) {
+          p.setOpacity(Core::App().settings().ghostDeletedOpacity() / 100.0);
+        }
         view->draw(p, context);
+        if (ghostTranslucent) {
+          p.setOpacity(1.0);
+        }
         processPainted(view, top, height);
       }
       top += height;
@@ -1394,8 +1410,6 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
             info->customUserpic.load(&session(), item->fullId());
           }
         }
-      } else {
-        Unexpected("Corrupt forwarded information in message.");
       }
       if (hasTranslation) {
         p.translate(-_gestureHorizontal.translation, 0);
@@ -2010,8 +2024,9 @@ std::unique_ptr<QMimeData> HistoryInner::prepareDrag() {
       return getSelectedText();
     } else if (pressedHandler) {
       // if (!sel.isEmpty() && sel.at(0) != '/' && sel.at(0) != '@' && sel.at(0)
-      // != '#') { 	urls.push_back(QUrl::fromEncoded(sel.toUtf8())); // Google
-      //Chrome crashes in Mac OS X O_o
+      // != '#') { 	urls.push_back(QUrl::fromEncoded(sel.toUtf8())); //
+      // Google
+      // Chrome crashes in Mac OS X O_o
       // }
       return TextForMimeData::Simple(pressedHandler->dragText());
     }
@@ -2508,12 +2523,15 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
     }
     const auto itemId = item->fullId();
     if (item && Core::App().settings().ghostModeNoRead()) {
-      _menu->addAction(u"Read Message"_q, [=] {
-        if (const auto msg = session->data().message(itemId)) {
-          session->data().histories().readInboxTillForced(msg->history(),
-                                                          msg->id);
-        }
-      }, &st::menuIconMarkRead);
+      _menu->addAction(
+          u"Read Message"_q,
+          [=] {
+            if (const auto msg = session->data().message(itemId)) {
+              session->data().histories().readInboxTillForced(msg->history(),
+                                                              msg->id);
+            }
+          },
+          &st::menuIconMarkRead);
     }
     const auto repliesCount = item->repliesCount();
     const auto withReplies = (repliesCount > 0);
@@ -2882,6 +2900,57 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
       link ? reinterpret_cast<DocumentData *>(
                  link->property(kDocumentLinkMediaProperty).toULongLong())
            : nullptr;
+
+  if (_dragStateItem && _dragStateItem->isGhostDeleted()) {
+    _menu = base::make_unique_q<Ui::PopupMenu>(this, st::popupMenuWithIcons);
+    const auto item = _dragStateItem;
+    const auto itemId = item->fullId();
+    const auto view = viewByItem(item);
+
+    if (lnkPhoto) {
+      addPhotoActions(lnkPhoto, item);
+    } else if (lnkDocument) {
+      addDocumentActions(lnkDocument, item);
+    } else if (view) {
+      const auto media = view->media();
+      if (const auto photo = media ? media->getPhoto() : nullptr) {
+        addPhotoActions(photo, item);
+      } else if (const auto document = media ? media->getDocument() : nullptr) {
+        addDocumentActions(document, item);
+      }
+      if (view->hasVisibleText() || (media && media->hasTextForCopy())) {
+        if (!hasCopyRestriction(item)) {
+          _menu->addAction(
+              tr::lng_context_copy_text(tr::now),
+              [=] {
+                if (const auto message =
+                        _controller->session().data().message(itemId)) {
+                  TextUtilities::SetClipboardText(HistoryItemText(message));
+                }
+              },
+              &st::menuIconCopy);
+        }
+      }
+    }
+    _menu->addAction(
+        tr::lng_context_delete_msg(tr::now),
+        [=] {
+          if (const auto message =
+                  _controller->session().data().message(itemId)) {
+            message->destroyGhost();
+          }
+        },
+        &st::menuIconDelete);
+
+    addSelectMessageAction(item);
+
+    if (!_menu->empty()) {
+      _menu->popup(e->globalPos());
+      e->accept();
+    }
+    return;
+  }
+
   if (lnkPhoto || lnkDocument) {
     const auto item = _dragStateItem;
     const auto itemId = item ? item->fullId() : FullMsgId();
@@ -3939,6 +4008,15 @@ void HistoryInner::updateSize() {
 }
 
 void HistoryInner::setShownPinned(HistoryItem *item) { _pinnedItem = item; }
+
+void HistoryInner::reprocessAlexSettings() {
+  enumerateItems<EnumItemsDirection::TopToBottom>(
+      [&](not_null<Element *> view, int top, int bottom) {
+        session().data().requestItemViewRefresh(view->data());
+        return true;
+      });
+  update();
+}
 
 void HistoryInner::refreshSpoilers() {
   const auto show = Core::App().settings().showSpoilersDirectly();

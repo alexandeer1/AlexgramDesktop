@@ -79,6 +79,8 @@ public:
 	}
 	[[nodiscard]] virtual SendMenu::Details sendMenuDetails() const;
 	virtual bool processChosenSticker(ChatHelpers::FileChosen &&chosen);
+	virtual void reprocessAlexSettings() {
+	}
 
 private:
 	const not_null<SessionController*> _controller;

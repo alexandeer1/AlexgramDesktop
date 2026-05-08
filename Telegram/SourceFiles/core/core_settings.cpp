@@ -246,6 +246,26 @@ rpl::event_stream<bool> &GhostModeNoReadChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &GhostSaveDeletedMessagesChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &GhostSaveBotDeletedChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &GhostTranslucentDeletedChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<int> &GhostDeletedOpacityChanges() {
+  static rpl::event_stream<int> stream;
+  return stream;
+}
+rpl::event_stream<bool> &GhostDeletedShowIconChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 rpl::event_stream<bool> &GhostDontReadStoriesChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
@@ -259,6 +279,10 @@ rpl::event_stream<bool> &GhostDontSendTypingChanges() {
   return stream;
 }
 rpl::event_stream<bool> &GhostGoOfflineChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<bool> &GhostReadOnInteractChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
@@ -2443,6 +2467,78 @@ rpl::producer<bool> Settings::ghostGoOfflineChanges() {
 void Settings::setGhostGoOffline(bool value) {
   writePref<bool>("ghost-go-offline", value);
   GhostGoOfflineChanges().fire_copy(value);
+}
+
+bool Settings::ghostReadOnInteract() {
+  return readPref<bool>("ghost-read-on-interact", false);
+}
+rpl::producer<bool> Settings::ghostReadOnInteractChanges() {
+  return GhostReadOnInteractChanges().events_starting_with(
+      ghostReadOnInteract());
+}
+void Settings::setGhostReadOnInteract(bool value) {
+  writePref<bool>("ghost-read-on-interact", value);
+  GhostReadOnInteractChanges().fire_copy(value);
+}
+
+bool Settings::ghostSaveDeletedMessages() {
+  return readPref<bool>("ghost-save-deleted-messages", false);
+}
+rpl::producer<bool> Settings::ghostSaveDeletedMessagesChanges() {
+  return GhostSaveDeletedMessagesChanges().events_starting_with(
+      ghostSaveDeletedMessages());
+}
+void Settings::setGhostSaveDeletedMessages(bool value) {
+  writePref<bool>("ghost-save-deleted-messages", value);
+  GhostSaveDeletedMessagesChanges().fire_copy(value);
+}
+ 
+bool Settings::ghostSaveBotDeleted() {
+  return readPref<bool>("ghost-save-bot-deleted", true);
+}
+rpl::producer<bool> Settings::ghostSaveBotDeletedChanges() {
+  return GhostSaveBotDeletedChanges().events_starting_with(
+      ghostSaveBotDeleted());
+}
+void Settings::setGhostSaveBotDeleted(bool value) {
+  writePref<bool>("ghost-save-bot-deleted", value);
+  GhostSaveBotDeletedChanges().fire_copy(value);
+}
+
+bool Settings::ghostTranslucentDeleted() {
+  return readPref<bool>("ghost-translucent-deleted", false);
+}
+rpl::producer<bool> Settings::ghostTranslucentDeletedChanges() {
+  return GhostTranslucentDeletedChanges().events_starting_with(
+      ghostTranslucentDeleted());
+}
+void Settings::setGhostTranslucentDeleted(bool value) {
+  writePref<bool>("ghost-translucent-deleted", value);
+  GhostTranslucentDeletedChanges().fire_copy(value);
+}
+
+int Settings::ghostDeletedOpacity() {
+  return readPref<int>("ghost-deleted-opacity", 50);
+}
+rpl::producer<int> Settings::ghostDeletedOpacityChanges() {
+  return GhostDeletedOpacityChanges().events_starting_with(
+      ghostDeletedOpacity());
+}
+void Settings::setGhostDeletedOpacity(int value) {
+  writePref<int>("ghost-deleted-opacity", value);
+  GhostDeletedOpacityChanges().fire_copy(value);
+}
+ 
+bool Settings::ghostDeletedShowIcon() {
+  return readPref<bool>("ghost-deleted-show-icon", false);
+}
+rpl::producer<bool> Settings::ghostDeletedShowIconChanges() {
+  return GhostDeletedShowIconChanges().events_starting_with(
+      ghostDeletedShowIcon());
+}
+void Settings::setGhostDeletedShowIcon(bool value) {
+  writePref<bool>("ghost-deleted-show-icon", value);
+  GhostDeletedShowIconChanges().fire_copy(value);
 }
 
 } // namespace Core

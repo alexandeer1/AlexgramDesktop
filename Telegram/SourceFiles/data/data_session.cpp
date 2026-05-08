@@ -2918,8 +2918,18 @@ void Session::processMessagesDeleted(
 	for (const auto &messageId : data) {
 		const auto i = list ? list->find(messageId.v) : Messages::iterator();
 		if (list && i != list->end()) {
-			const auto history = i->second->history();
-			i->second->destroy();
+			const auto item = i->second;
+			const auto history = item->history();
+			if (Core::App().settings().ghostSaveDeletedMessages()) {
+				item->setGhostDeleted(true);
+				const auto data = item->ghostDeletedData();
+				if (!data.isEmpty()) {
+					session().settings().setGhostDeleted(item->fullId(), { .messageData = data });
+					session().saveSettingsDelayed();
+				}
+			} else {
+				item->destroy();
+			}
 			if (!history->chatListMessageKnown()) {
 				historiesToCheck.emplace(history);
 			}
@@ -2937,7 +2947,16 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 	for (const auto &messageId : data) {
 		if (const auto item = nonChannelMessage(messageId.v)) {
 			const auto history = item->history();
-			item->destroy();
+			if (Core::App().settings().ghostSaveDeletedMessages()) {
+				item->setGhostDeleted(true);
+				const auto data = item->ghostDeletedData();
+				if (!data.isEmpty()) {
+					session().settings().setGhostDeleted(item->fullId(), { .messageData = data });
+					session().saveSettingsDelayed();
+				}
+			} else {
+				item->destroy();
+			}
 			if (!history->chatListMessageKnown()) {
 				historiesToCheck.emplace(history);
 			}
@@ -2945,6 +2964,44 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 	}
 	for (const auto &history : historiesToCheck) {
 		history->requestChatListMessage();
+	}
+}
+
+void Session::loadGhostDeletedMessages() {
+	const auto ghosts = session().settings().ghostDeletedMessages();
+	if (ghosts.empty()) {
+		return;
+	}
+
+	LOG(("Ghost Info: Loading %1 ghost deleted messages...").arg(ghosts.size()));
+
+	auto histories = base::flat_set<not_null<History*>>();
+	for (const auto &[id, data] : ghosts) {
+		const auto history = this->history(id.peer);
+		if (!history->peer->isChannel() || history->peer->asChannel()->amIn()) {
+			MTPMessage message;
+			auto from = reinterpret_cast<const int32*>(data.messageData.constData());
+			const auto end = from + (data.messageData.size() / sizeof(int32));
+			if (!message.read(from, end)) {
+				continue;
+			}
+
+			const auto item = addNewMessage(
+				id.msg,
+				message,
+				MessageFlag::HistoryEntry | MessageFlag::HasFromId,
+				NewMessageType::Existing);
+
+			if (item) {
+				item->setGhostDeleted(true);
+				item->setGhostDeletedData(data.messageData);
+				history->registerClientSideMessage(item);
+				histories.insert(history);
+			}
+		}
+	}
+	for (const auto history : histories) {
+		history->checkLocalMessages();
 	}
 }
 

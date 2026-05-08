@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_components.h"
 #include "history/history_item_helpers.h"
 #include "history/history_streamed_drafts.h"
+#include "mtproto/core_types.h"
 #include "history/history_translation.h"
 #include "history/history_unread_things.h"
 #include "core/ui_integration.h"
@@ -520,6 +521,14 @@ not_null<HistoryItem*> History::createItem(
 	const auto result = message.match([&](const auto &data) {
 		return makeMessage(id, data, localFlags);
 	});
+	if (Core::App().settings().ghostSaveDeletedMessages()) {
+		auto buffer = mtpBuffer();
+		buffer.reserve(tl::count_length(message) >> 2);
+		message.write(buffer);
+		result->setGhostDeletedData(QByteArray(
+			reinterpret_cast<const char*>(buffer.constData()),
+			buffer.size() * sizeof(mtpPrime)));
+	}
 	if (newMessage && result->out() && result->isRegular()) {
 		session().topPeers().increment(peer, result->date());
 		if (result->starsPaid()) {
@@ -1616,7 +1625,7 @@ void History::newItemAdded(not_null<HistoryItem*> item) {
 
 void History::registerClientSideMessage(not_null<HistoryItem*> item) {
 	Expects(item->isHistoryEntry());
-	Expects(IsClientMsgId(item->id));
+	Expects(IsClientMsgId(item->id) || item->isGhostDeleted());
 
 	_clientSideMessages.emplace(item);
 	session().changes().historyUpdated(this, UpdateFlag::ClientSideMessages);
@@ -3351,6 +3360,7 @@ void History::applyDialogFields(
 	} else {
 		clearFolder();
 	}
+	const auto notifier = unreadStateChangeNotifier(true);
 	if (!skipUnreadUpdate()) {
 		if (Core::App().settings().ghostModeNoRead()) {
 			const auto ghostRead = session().settings().ghostReadTill(peer->id);
@@ -3912,11 +3922,14 @@ void History::checkNewPeerMessages() {
 	}
 }
 
-void History::insertMessageToBlocks(not_null<HistoryItem*> item) {
+void History::insertMessageToBlocks(not_null<HistoryItem*> item, bool notify) {
 	Expects(item->mainView() == nullptr);
 
 	if (isEmpty()) {
 		addNewToBack(item, false);
+		if (notify) {
+			owner().notifyHistoryChangeDelayed(this);
+		}
 		return;
 	}
 
@@ -3930,7 +3943,9 @@ void History::insertMessageToBlocks(not_null<HistoryItem*> item) {
 				const auto lastDate = chatListTimeId();
 				if (!lastDate || itemDate >= lastDate) {
 					setLastMessage(item);
-					owner().notifyHistoryChangeDelayed(this);
+					if (notify) {
+						owner().notifyHistoryChangeDelayed(this);
+					}
 				}
 				return;
 			}
@@ -3940,9 +3955,20 @@ void History::insertMessageToBlocks(not_null<HistoryItem*> item) {
 	startBuildingFrontBlock();
 	addItemToBlock(item);
 	finishBuildingFrontBlock();
+	if (notify) {
+		owner().notifyHistoryChangeDelayed(this);
+	}
 }
 
 void History::checkLocalMessages() {
+	if (_flags & Flag::InCheckLocalMessages) {
+		return;
+	}
+	_flags |= Flag::InCheckLocalMessages;
+	const auto guard = gsl::finally([&] {
+		_flags &= ~Flag::InCheckLocalMessages;
+	});
+
 	if (isEmpty() && (!loadedAtTop() || !loadedAtBottom())) {
 		return;
 	}
@@ -3955,10 +3981,26 @@ void History::checkLocalMessages() {
 	const auto goodDate = [&](TimeId date) {
 		return (date >= firstDate && date < lastDate);
 	};
+	LOG(("History::checkLocalMessages. Peer: %1, First: %2, Last: %3, Client-side: %4")
+		.arg(peer->id.value)
+		.arg(firstDate)
+		.arg(lastDate)
+		.arg(_clientSideMessages.size()));
+	auto items = std::vector<not_null<HistoryItem*>>();
+	items.reserve(_clientSideMessages.size());
 	for (const auto &item : _clientSideMessages) {
 		if (!item->mainView() && goodDate(item->date())) {
-			insertMessageToBlocks(item);
+			items.push_back(item);
 		}
+	}
+	if (!items.empty()) {
+		std::sort(items.begin(), items.end(), [](auto a, auto b) {
+			return a->date() < b->date();
+		});
+		for (const auto &item : items) {
+			insertMessageToBlocks(item, false);
+		}
+		owner().notifyHistoryChangeDelayed(this);
 	}
 	if (peer->isChannel()
 		&& !_joinedMessage

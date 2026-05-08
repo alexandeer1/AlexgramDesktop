@@ -1344,6 +1344,53 @@ void FillContextMenuItems(
 	const auto view = request.view;
 	const auto owner = &list->session().data();
 	const auto item = request.item;
+	const auto isGhost = (item && item->isGhostDeleted())
+		|| (view && view->data()->isGhostDeleted());
+
+	if (isGhost) {
+		const auto itemId = item ? item->fullId() : (view ? view->data()->fullId() : FullMsgId());
+		const auto lnkPhoto = link
+			? reinterpret_cast<PhotoData*>(
+				link->property(kPhotoLinkMediaProperty).toULongLong())
+			: nullptr;
+		const auto lnkDocument = link
+			? reinterpret_cast<DocumentData*>(
+				link->property(kDocumentLinkMediaProperty).toULongLong())
+			: nullptr;
+		const auto hasSelection = !request.selectedItems.empty()
+			|| !request.selectedText.empty();
+
+		if (lnkPhoto && request.selectedItems.empty()) {
+			AddPhotoActions(result, lnkPhoto, item, list);
+		} else if (lnkDocument) {
+			AddDocumentActions(result, lnkDocument, item, list);
+		} else if (!request.overSelection && view && !hasSelection) {
+			const auto media = view->media();
+			if (const auto photo = media ? media->getPhoto() : nullptr) {
+				AddPhotoActions(result, photo, view->data(), list);
+			} else if (const auto document = media ? media->getDocument() : nullptr) {
+				AddDocumentActions(result, document, view->data(), list);
+			}
+			if (!link && (view->hasVisibleText() || (view->media() && view->media()->hasTextForCopy()))) {
+				if (!list->hasCopyRestriction(view->data())) {
+					result->addAction(tr::lng_context_copy_text(tr::now), [=] {
+						if (const auto item = owner->message(itemId)) {
+							TextUtilities::SetClipboardText(HistoryItemText(item));
+						}
+					}, &st::menuIconCopy);
+				}
+			}
+		}
+		result->addAction(tr::lng_context_delete_msg(tr::now), [=] {
+			if (const auto item = owner->message(itemId)) {
+				item->destroyGhost();
+			}
+		}, &st::menuIconDelete);
+
+		AddSelectionAction(result, request, list);
+		return;
+	}
+
 	const auto itemId = item ? item->fullId() : FullMsgId();
 	const auto lnkPhoto = link
 		? reinterpret_cast<PhotoData*>(

@@ -25,6 +25,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "api/api_updates.h"
 #include "ui/boxes/confirm_box.h"
+#include "ui/widgets/discrete_sliders.h"
 
 namespace Settings {
 
@@ -280,23 +281,9 @@ void AlexgramChats::setupContent() {
 	) | rpl::filter([=](bool checked) {
 		return (checked != Core::App().settings().showMessageId());
 	}) | rpl::on_next([=](bool checked) {
-		const auto confirmed = crl::guard(showMsgIdCb, [=] {
-			Core::App().settings().setShowMessageId(checked);
-			Core::App().saveSettingsDelayed();
-			Core::Restart();
-		});
-		const auto cancelled = crl::guard(showMsgIdCb, [=](Fn<void()> close) {
-			showMsgIdCb->setChecked(
-				Core::App().settings().showMessageId(),
-				Ui::Checkbox::NotifyAboutChange::DontNotify);
-			close();
-		});
-		controller()->show(Ui::MakeConfirmBox({
-			.text = tr::lng_settings_need_restart(),
-			.confirmed = confirmed,
-			.cancelled = cancelled,
-			.confirmText = tr::lng_settings_restart_now(),
-		}));
+		Core::App().settings().setShowMessageId(checked);
+		Core::App().saveSettingsDelayed();
+		Core::App().reprocessAlexSettings();
 	}, showMsgIdCb->lifetime());
 
 	builder.addDividerText(tr::lng_settings_alexgram_show_message_id_about());
@@ -310,23 +297,9 @@ void AlexgramChats::setupContent() {
 	) | rpl::filter([=](bool checked) {
 		return (checked != Core::App().settings().showTimestampSeconds());
 	}) | rpl::on_next([=](bool checked) {
-		const auto confirmed = crl::guard(showSecCb, [=] {
-			Core::App().settings().setShowTimestampSeconds(checked);
-			Core::App().saveSettingsDelayed();
-			Core::Restart();
-		});
-		const auto cancelled = crl::guard(showSecCb, [=](Fn<void()> close) {
-			showSecCb->setChecked(
-				Core::App().settings().showTimestampSeconds(),
-				Ui::Checkbox::NotifyAboutChange::DontNotify);
-			close();
-		});
-		controller()->show(Ui::MakeConfirmBox({
-			.text = tr::lng_settings_need_restart(),
-			.confirmed = confirmed,
-			.cancelled = cancelled,
-			.confirmText = tr::lng_settings_restart_now(),
-		}));
+		Core::App().settings().setShowTimestampSeconds(checked);
+		Core::App().saveSettingsDelayed();
+		Core::App().reprocessAlexSettings();
 	}, showSecCb->lifetime());
 
 	builder.addDividerText(tr::lng_settings_alexgram_show_timestamp_seconds_about());
@@ -340,23 +313,9 @@ void AlexgramChats::setupContent() {
 	) | rpl::filter([=](bool checked) {
 		return (checked != Core::App().settings().showEditedIcon());
 	}) | rpl::on_next([=](bool checked) {
-		const auto confirmed = crl::guard(showEditedIconCb, [=] {
-			Core::App().settings().setShowEditedIcon(checked);
-			Core::App().saveSettingsDelayed();
-			Core::Restart();
-		});
-		const auto cancelled = crl::guard(showEditedIconCb, [=](Fn<void()> close) {
-			showEditedIconCb->setChecked(
-				Core::App().settings().showEditedIcon(),
-				Ui::Checkbox::NotifyAboutChange::DontNotify);
-			close();
-		});
-		controller()->show(Ui::MakeConfirmBox({
-			.text = tr::lng_settings_need_restart(),
-			.confirmed = confirmed,
-			.cancelled = cancelled,
-			.confirmText = tr::lng_settings_restart_now(),
-		}));
+		Core::App().settings().setShowEditedIcon(checked);
+		Core::App().saveSettingsDelayed();
+		Core::App().reprocessAlexSettings();
 	}, showEditedIconCb->lifetime());
 
 	builder.addDividerText(tr::lng_settings_alexgram_show_edited_icon_about());
@@ -370,24 +329,9 @@ void AlexgramChats::setupContent() {
 	) | rpl::filter([=](bool checked) {
 		return (checked != Core::App().settings().showForwardedDate());
 	}) | rpl::on_next([=](bool checked) {
-		const auto confirmed = crl::guard(showForwardedDateCb, [=](Fn<void()> close) {
-			Core::App().settings().setShowForwardedDate(checked);
-			Core::App().saveSettingsDelayed();
-			Core::Restart();
-			close();
-		});
-		const auto cancelled = crl::guard(showForwardedDateCb, [=](Fn<void()> close) {
-			showForwardedDateCb->setChecked(
-				Core::App().settings().showForwardedDate(),
-				Ui::Checkbox::NotifyAboutChange::DontNotify);
-			close();
-		});
-		controller()->show(Ui::MakeConfirmBox({
-			.text = tr::lng_settings_need_restart(),
-			.confirmed = confirmed,
-			.cancelled = cancelled,
-			.confirmText = tr::lng_settings_restart_now(),
-		}));
+		Core::App().settings().setShowForwardedDate(checked);
+		Core::App().saveSettingsDelayed();
+		Core::App().reprocessAlexSettings();
 	}, showForwardedDateCb->lifetime());
 
 	builder.addDividerText(tr::lng_settings_alexgram_show_forwarded_date_about());
@@ -401,24 +345,9 @@ void AlexgramChats::setupContent() {
 	) | rpl::filter([=](bool checked) {
 		return (checked != Core::App().settings().showOnlineStatus());
 	}) | rpl::on_next([=](bool checked) {
-		const auto confirmed = crl::guard(showOnlineStatusCb, [=](Fn<void()> close) {
-			Core::App().settings().setShowOnlineStatus(checked);
-			Core::App().saveSettingsDelayed();
-			Core::Restart();
-			close();
-		});
-		const auto cancelled = crl::guard(showOnlineStatusCb, [=](Fn<void()> close) {
-			showOnlineStatusCb->setChecked(
-				Core::App().settings().showOnlineStatus(),
-				Ui::Checkbox::NotifyAboutChange::DontNotify);
-			close();
-		});
-		controller()->show(Ui::MakeConfirmBox({
-			.text = tr::lng_settings_need_restart(),
-			.confirmed = confirmed,
-			.cancelled = cancelled,
-			.confirmText = tr::lng_settings_restart_now(),
-		}));
+		Core::App().settings().setShowOnlineStatus(checked);
+		Core::App().saveSettingsDelayed();
+		Core::App().reprocessAlexSettings();
 	}, showOnlineStatusCb->lifetime());
 
 	builder.addDividerText(tr::lng_settings_alexgram_show_online_status_about());
@@ -432,24 +361,9 @@ void AlexgramChats::setupContent() {
 	) | rpl::filter([=](bool checked) {
 		return (checked != Core::App().settings().showSmallGifs());
 	}) | rpl::on_next([=](bool checked) {
-		const auto confirmed = crl::guard(showSmallGifsCb, [=](Fn<void()> close) {
-			Core::App().settings().setShowSmallGifs(checked);
-			Core::App().saveSettingsDelayed();
-			Core::Restart();
-			close();
-		});
-		const auto cancelled = crl::guard(showSmallGifsCb, [=](Fn<void()> close) {
-			showSmallGifsCb->setChecked(
-				Core::App().settings().showSmallGifs(),
-				Ui::Checkbox::NotifyAboutChange::DontNotify);
-			close();
-		});
-		controller()->show(Ui::MakeConfirmBox({
-			.text = tr::lng_settings_need_restart(),
-			.confirmed = confirmed,
-			.cancelled = cancelled,
-			.confirmText = tr::lng_settings_restart_now(),
-		}));
+		Core::App().settings().setShowSmallGifs(checked);
+		Core::App().saveSettingsDelayed();
+		Core::App().reprocessAlexSettings();
 	}, showSmallGifsCb->lifetime());
 
 	builder.addDividerText(tr::lng_settings_alexgram_show_small_gifs_about());
@@ -808,6 +722,19 @@ void AlexgramGhostMode::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_read_about());
 	builder.addSkip();
 
+	Builder::SectionBuilder::CheckboxArgs readOnInteractArgs;
+	readOnInteractArgs.title = tr::lng_settings_alexgram_ghost_mode_read_on_interact();
+	readOnInteractArgs.checked = Core::App().settings().ghostReadOnInteract();
+	const auto readOnInteractCb = builder.addCheckbox(std::move(readOnInteractArgs));
+	readOnInteractCb->checkedChanges() | rpl::on_next([=](bool checked) {
+		Core::App().settings().setGhostReadOnInteract(checked);
+		Core::App().saveSettingsDelayed();
+	}, readOnInteractCb->lifetime());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_read_on_interact_about());
+	builder.addSkip();
+
+
 	Builder::SectionBuilder::CheckboxArgs noReadStoriesArgs;
 	noReadStoriesArgs.title = tr::lng_settings_alexgram_ghost_mode_no_read_stories();
 	noReadStoriesArgs.checked = Core::App().settings().ghostDontReadStories();
@@ -857,6 +784,81 @@ void AlexgramGhostMode::setupContent() {
 	}, goOfflineCb->lifetime());
 
 	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_go_offline_about());
+	builder.addSkip();
+
+	Builder::SectionBuilder::CheckboxArgs saveDeletedArgs;
+	saveDeletedArgs.title = tr::lng_settings_alexgram_ghost_mode_save_deleted();
+	saveDeletedArgs.checked = Core::App().settings().ghostSaveDeletedMessages();
+	const auto saveDeletedCb = builder.addCheckbox(std::move(saveDeletedArgs));
+	saveDeletedCb->checkedChanges() | rpl::on_next([=](bool checked) {
+		Core::App().settings().setGhostSaveDeletedMessages(checked);
+		Core::App().saveSettingsDelayed();
+	}, saveDeletedCb->lifetime());
+
+	builder.scope([&] {
+		builder.addSkip(st::settingsCheckboxesSkip);
+
+		Builder::SectionBuilder::CheckboxArgs saveBotDeletedArgs;
+		saveBotDeletedArgs.title = tr::lng_settings_alexgram_ghost_mode_save_bot_deleted();
+		saveBotDeletedArgs.checked = Core::App().settings().ghostSaveBotDeleted();
+		const auto saveBotDeletedCb = builder.addCheckbox(std::move(saveBotDeletedArgs));
+		saveBotDeletedCb->checkedChanges() | rpl::on_next([=](bool checked) {
+			Core::App().settings().setGhostSaveBotDeleted(checked);
+			Core::App().saveSettingsDelayed();
+		}, saveBotDeletedCb->lifetime());
+
+		builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_save_bot_deleted_about());
+		builder.addSkip(st::settingsCheckboxesSkip);
+
+		Builder::SectionBuilder::CheckboxArgs showIconArgs;
+		showIconArgs.title = tr::lng_settings_alexgram_ghost_mode_deleted_show_icon();
+		showIconArgs.checked = Core::App().settings().ghostDeletedShowIcon();
+		const auto showIconCb = builder.addCheckbox(std::move(showIconArgs));
+		showIconCb->checkedChanges() | rpl::on_next([=](bool checked) {
+			Core::App().settings().setGhostDeletedShowIcon(checked);
+			Core::App().saveSettingsDelayed();
+			Core::App().reprocessAlexSettings();
+		}, showIconCb->lifetime());
+
+		builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_deleted_show_icon_about());
+		builder.addSkip(st::settingsCheckboxesSkip);
+
+		Builder::SectionBuilder::CheckboxArgs translucentArgs;
+		translucentArgs.title = tr::lng_settings_alexgram_ghost_mode_translucent_deleted();
+		translucentArgs.checked = Core::App().settings().ghostTranslucentDeleted();
+		const auto translucentCb = builder.addCheckbox(std::move(translucentArgs));
+		translucentCb->checkedChanges() | rpl::on_next([=](bool checked) {
+			Core::App().settings().setGhostTranslucentDeleted(checked);
+			Core::App().saveSettingsDelayed();
+			Core::App().reprocessAlexSettings();
+		}, translucentCb->lifetime());
+
+
+		builder.scope([&] {
+			builder.addSubsectionTitle(tr::lng_settings_alexgram_ghost_mode_deleted_opacity());
+			if (const auto container = builder.container()) {
+				const auto slider = container->add(
+					object_ptr<Ui::SettingsSlider>(container, st::settingsSlider),
+					st::settingsBigScalePadding);
+				for (int i = 1; i <= 10; ++i) {
+					slider->addSection(QString::number(i * 10) + u"%"_q);
+				}
+				slider->setActiveSectionFast(Core::App().settings().ghostDeletedOpacity() / 10 - 1);
+				slider->sectionActivated() | rpl::on_next([=](int section) {
+					Core::App().settings().setGhostDeletedOpacity((section + 1) * 10);
+					Core::App().saveSettingsDelayed();
+					Core::App().reprocessAlexSettings();
+				}, slider->lifetime());
+			}
+			builder.addSkip(st::settingsCheckboxesSkip);
+		}, translucentCb->checkedValue());
+
+		builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_translucent_deleted_about());
+		builder.addSkip();
+
+	}, saveDeletedCb->checkedValue());
+
+	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_save_deleted_about());
 	builder.addSkip();
 
 	Ui::ResizeFitChild(this, content);

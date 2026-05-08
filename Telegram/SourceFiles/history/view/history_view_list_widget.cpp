@@ -2425,7 +2425,15 @@ void ListWidget::paintEvent(QPaintEvent *e) {
 			context.outbg = view->hasOutLayout();
 			context.selection = itemRenderSelection(view);
 			context.highlight = _highlighter.state(item);
+			const auto ghostTranslucent = item->isGhostDeleted()
+				&& Core::App().settings().ghostTranslucentDeleted();
+			if (ghostTranslucent) {
+				p.setOpacity(Core::App().settings().ghostDeletedOpacity() / 100.0);
+			}
 			view->draw(p, context);
+			if (ghostTranslucent) {
+				p.setOpacity(1.0);
+			}
 		}
 		if (_translateTracker) {
 			_translateTracker->add(view);

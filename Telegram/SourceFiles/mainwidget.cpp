@@ -2986,7 +2986,16 @@ void MainWidget::activate() {
 
 void MainWidget::reprocessAlexSettings() {
 	if (_history) {
-		_history->refreshSpoilers();
+		_history->reprocessAlexSettings();
+		_history->update();
+	}
+	if (_mainSection) {
+		_mainSection->reprocessAlexSettings();
+		_mainSection->update();
+	}
+	if (_thirdSection) {
+		_thirdSection->reprocessAlexSettings();
+		_thirdSection->update();
 	}
 }
 
