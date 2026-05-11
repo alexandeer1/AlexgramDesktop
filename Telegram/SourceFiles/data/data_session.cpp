@@ -5,7 +5,9 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "alex/messages_storage.h"
 #include "data/data_session.h"
+
 
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
@@ -2721,6 +2723,9 @@ void Session::updateEditedMessage(const MTPMessage &data) {
 	if (existing->isLocalUpdateMedia() && data.type() == mtpc_message) {
 		updateExistingMessage(data.c_message());
 	}
+	if (Core::App().settings().ghostSaveEditedMessages()) {
+		Alex::Messages::addEditedMessage(existing);
+	}
 	data.match([](const MTPDmessageEmpty &) {
 	}, [&](const MTPDmessageService &data) {
 		existing->applyEdition(data);
@@ -2922,11 +2927,7 @@ void Session::processMessagesDeleted(
 			const auto history = item->history();
 			if (Core::App().settings().ghostSaveDeletedMessages()) {
 				item->setGhostDeleted(true);
-				const auto data = item->ghostDeletedData();
-				if (!data.isEmpty()) {
-					session().settings().setGhostDeleted(item->fullId(), { .messageData = data });
-					session().saveSettingsDelayed();
-				}
+				Alex::Messages::addDeletedMessage(item);
 			} else {
 				item->destroy();
 			}
@@ -2949,11 +2950,7 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 			const auto history = item->history();
 			if (Core::App().settings().ghostSaveDeletedMessages()) {
 				item->setGhostDeleted(true);
-				const auto data = item->ghostDeletedData();
-				if (!data.isEmpty()) {
-					session().settings().setGhostDeleted(item->fullId(), { .messageData = data });
-					session().saveSettingsDelayed();
-				}
+				Alex::Messages::addDeletedMessage(item);
 			} else {
 				item->destroy();
 			}
@@ -2968,42 +2965,85 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 }
 
 void Session::loadGhostDeletedMessages() {
-	const auto ghosts = session().settings().ghostDeletedMessages();
+	const auto userId = session().userId().bare;
+
+	auto ghosts = Alex::Messages::getDeletedMessages(userId, 0, 0, 0, 0, 10000);
+
+	const auto settingsGhosts = session().settings().ghostDeletedMessages();
+	if (ghosts.empty() && !settingsGhosts.empty()) {
+		LOG(("Ghost Info: Migrating %1 ghost deleted messages to database...").arg(settingsGhosts.size()));
+		for (const auto &[id, data] : settingsGhosts) {
+			const auto history = this->history(id.peer);
+			MTPMessage mtp;
+			auto from = reinterpret_cast<const int32*>(data.messageData.constData());
+			const auto end = from + (data.messageData.size() / sizeof(int32));
+			if (mtp.read(from, end)) {
+				const auto item = addNewMessage(
+					id.msg,
+					mtp,
+					MessageFlag::HistoryEntry | MessageFlag::HasFromId,
+					NewMessageType::Existing);
+				if (item) {
+					item->setGhostDeleted(true);
+					item->setGhostDeletedData(data.messageData);
+					Alex::Messages::addDeletedMessage(item);
+					item->destroy(); // We only needed it for mapping
+				}
+			}
+		}
+		session().settings().clearGhostDeleted();
+		session().saveSettingsDelayed();
+		ghosts = Alex::Messages::getDeletedMessages(userId, 0, 0, 0, 0, 10000);
+	}
+
 	if (ghosts.empty()) {
 		return;
 	}
 
-	LOG(("Ghost Info: Loading %1 ghost deleted messages...").arg(ghosts.size()));
+	LOG(("Ghost Info: Loading %1 ghost deleted messages from database...").arg(ghosts.size()));
 
 	auto histories = base::flat_set<not_null<History*>>();
-	for (const auto &[id, data] : ghosts) {
-		const auto history = this->history(id.peer);
-		if (!history->peer->isChannel() || history->peer->asChannel()->amIn()) {
-			MTPMessage message;
-			auto from = reinterpret_cast<const int32*>(data.messageData.constData());
-			const auto end = from + (data.messageData.size() / sizeof(int32));
-			if (!message.read(from, end)) {
-				continue;
-			}
+	for (const auto &data : ghosts) {
+		const auto history = this->history(PeerId(data.dialogId));
 
-			const auto item = addNewMessage(
-				id.msg,
-				message,
-				MessageFlag::HistoryEntry | MessageFlag::HasFromId,
-				NewMessageType::Existing);
 
-			if (item) {
-				item->setGhostDeleted(true);
-				item->setGhostDeletedData(data.messageData);
-				history->registerClientSideMessage(item);
-				histories.insert(history);
-			}
+		MTPMessage message;
+		auto from = reinterpret_cast<const int32*>(data.messageData.data());
+		const auto end = from + (data.messageData.size() / sizeof(int32));
+		if (!message.read(from, end)) {
+			LOG(("Ghost Error: Failed to read MTP message for peer %1, msgId %2")
+				.arg(data.dialogId)
+				.arg(data.messageId));
+			continue;
+		}
+
+		const auto item = addNewMessage(
+			data.messageId,
+			message,
+			MessageFlag::HistoryEntry | MessageFlag::HasFromId,
+			NewMessageType::Existing);
+
+		if (item) {
+			item->setGhostDeleted(true);
+			item->setGhostDeletedData(QByteArray(
+				reinterpret_cast<const char*>(data.messageData.data()),
+				data.messageData.size()));
+			history->registerClientSideMessage(item);
+			histories.insert(history);
+			LOG(("Ghost Info: Registered ghost message %1 for peer %2")
+				.arg(data.messageId)
+				.arg(data.dialogId));
+		} else {
+			LOG(("Ghost Error: Failed to create item for ghost message %1 for peer %2")
+				.arg(data.messageId)
+				.arg(data.dialogId));
 		}
 	}
 	for (const auto history : histories) {
 		history->checkLocalMessages();
 	}
 }
+
 
 void Session::removeDependencyMessage(not_null<HistoryItem*> item) {
 	const auto i = _dependentMessages.find(item);

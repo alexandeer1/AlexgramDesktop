@@ -1091,4 +1091,8 @@ void SessionSettings::removeGhostDeleted(FullMsgId itemId) {
 	_ghostDeletedMessages.remove(itemId);
 }
 
+void SessionSettings::clearGhostDeleted() {
+	_ghostDeletedMessages.clear();
+}
+
 } // namespace Main

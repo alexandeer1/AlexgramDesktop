@@ -247,8 +247,13 @@ rpl::event_stream<bool> &GhostModeNoReadChanges() {
   return stream;
 }
 rpl::event_stream<bool> &GhostSaveDeletedMessagesChanges() {
-  static rpl::event_stream<bool> stream;
-  return stream;
+	static auto result = rpl::event_stream<bool>();
+	return result;
+}
+
+rpl::event_stream<bool> &GhostSaveEditedMessagesChanges() {
+	static auto result = rpl::event_stream<bool>();
+	return result;
 }
 rpl::event_stream<bool> &GhostSaveBotDeletedChanges() {
   static rpl::event_stream<bool> stream;
@@ -2482,15 +2487,33 @@ void Settings::setGhostReadOnInteract(bool value) {
 }
 
 bool Settings::ghostSaveDeletedMessages() {
-  return readPref<bool>("ghost-save-deleted-messages", false);
+  return readPref<bool>("ghost-save-deleted-messages", true);
 }
 rpl::producer<bool> Settings::ghostSaveDeletedMessagesChanges() {
   return GhostSaveDeletedMessagesChanges().events_starting_with(
       ghostSaveDeletedMessages());
 }
 void Settings::setGhostSaveDeletedMessages(bool value) {
-  writePref<bool>("ghost-save-deleted-messages", value);
-  GhostSaveDeletedMessagesChanges().fire_copy(value);
+	_ghostSaveDeletedMessages = value;
+	writePref<bool>("ghost-save-deleted-messages", value);
+
+	GhostSaveDeletedMessagesChanges().fire_copy(value);
+}
+
+bool Settings::ghostSaveEditedMessages() {
+	return readPref<bool>("ghost-save-edited-messages", true);
+}
+
+rpl::producer<bool> Settings::ghostSaveEditedMessagesChanges() {
+	return GhostSaveEditedMessagesChanges().events_starting_with(
+		ghostSaveEditedMessages());
+}
+
+void Settings::setGhostSaveEditedMessages(bool value) {
+	_ghostSaveEditedMessages = value;
+	writePref<bool>("ghost-save-edited-messages", value);
+
+	GhostSaveEditedMessagesChanges().fire_copy(value);
 }
  
 bool Settings::ghostSaveBotDeleted() {

@@ -98,6 +98,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat_helpers.h"
 #include "styles/style_menu_icons.h"
 #include "ui/boxes/edit_factcheck_box.h"
+#include "history/view/history_view_ghost_edits_box.h"
+#include "alex/messages_storage.h"
 #include "ui/boxes/report_box_graphics.h"
 #include "ui/controls/delete_message_context_action.h"
 #include "ui/controls/swipe_handler.h"
@@ -2560,23 +2562,32 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
                           : item->allowsEdit(t) ? item
                                                 : nullptr;
     if (editItem) {
-      const auto editItemId = editItem->fullId();
-      _menu->addAction(
-          tr::lng_context_edit_msg(tr::now),
-          [=] {
-            if (const auto item = session->data().message(editItemId)) {
-              auto it = _selected.find(item);
-              const auto selection =
-                  ((it != _selected.end()) && (it->second != FullSelection))
-                      ? it->second
-                      : TextSelection();
-              if (!selection.empty()) {
-                clearSelected(true);
-              }
-              _widget->editMessage(item, selection);
-            }
-          },
-          &st::menuIconEdit);
+        const auto editItemId = editItem->fullId();
+        _menu->addAction(
+            tr::lng_context_edit_msg(tr::now),
+            [=] {
+                if (const auto item = session->data().message(editItemId)) {
+                    auto it = _selected.find(item);
+                    const auto selection =
+                        ((it != _selected.end()) && (it->second != FullSelection))
+                            ? it->second
+                            : TextSelection();
+                    if (!selection.empty()) {
+                        clearSelected(true);
+                    }
+                    _widget->editMessage(item, selection);
+                }
+            },
+            &st::menuIconEdit);
+    }
+    if (Core::App().settings().ghostSaveEditedMessages()) {
+        const auto userId = item->history()->session().userId().bare;
+        const auto dialogId = item->history()->peer->id.value;
+        if (Alex::Messages::hasLocalEdits(userId, dialogId, item->id.bare)) {
+            _menu->addAction(tr::lng_context_alexgram_edits_history(tr::now), [=] {
+                controller->show(Box(HistoryView::GhostEditsBox, item, controller));
+            }, &st::menuIconRestore);
+        }
     }
     if (session->factchecks().canEdit(item)) {
       const auto text = item->factcheckText();

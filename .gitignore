@@ -85,3 +85,7 @@ settings.local.json
 # Generated changelog page (built by CI, deployed to GitHub Pages)
 /docs/changelog/
 clean_build.bat
+build_output.txt
+settings_alex_clean.cpp
+build_error.txt
+settings_alex_fixed.cpp

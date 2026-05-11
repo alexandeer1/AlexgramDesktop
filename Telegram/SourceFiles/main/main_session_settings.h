@@ -135,6 +135,7 @@ public:
 	[[nodiscard]] bool isGhostDeleted(FullMsgId itemId) const;
 	void setGhostDeleted(FullMsgId itemId, GhostDeletedMessageData &&data);
 	void removeGhostDeleted(FullMsgId itemId);
+	void clearGhostDeleted();
 	[[nodiscard]] const base::flat_map<FullMsgId, GhostDeletedMessageData> &ghostDeletedMessages() const {
 		return _ghostDeletedMessages;
 	}

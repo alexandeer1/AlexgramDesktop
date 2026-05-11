@@ -19,6 +19,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 "lng_settings_alexgram_ask_before_calling" = "Ask before calling";
 "lng_settings_alexgram_ask_before_calling_about" = "Show a confirmation dialog before starting a call.";
+
+"lng_settings_alexgram_ghost_save_deleted" = "Save deleted messages";
+"lng_settings_alexgram_ghost_save_deleted_about" = "Deleted messages will be kept locally.";
+
 "lng_alexgram_ask_call_sure" = "Are you sure you want to call {user}?";
 "lng_menu_add_account" = "Add Account";
 "lng_menu_activate" = "Use this account";
@@ -7982,9 +7986,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_sr_languages_column_native" = "Native name";
 "lng_sr_languages_column_name" = "Language name";
 
-// Keys finished
-
-"lng_settings_alexgram" = "A-Settings";
+"lng_settings_alexgram" = "Alexgram Settings";
 "lng_settings_alexgram_general" = "General";
 "lng_settings_alexgram_translator" = "Translator";
 "lng_settings_alexgram_chats" = "Chats";
@@ -8081,8 +8083,25 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_ghost_mode_deleted_opacity" = "Deleted Message Opacity";
 "lng_settings_alexgram_ghost_mode_deleted_show_icon" = "Show Icon Instead of \"Deleted\"";
 "lng_settings_alexgram_ghost_mode_deleted_show_icon_about" = "Show a small icon next to the timestamp for deleted messages instead of the \"Deleted\" text tag.";
+"lng_settings_alexgram_ghost_manage_storage" = "Manage Deleted Messages Storage";
+"lng_settings_alexgram_ghost_manage_storage_about" = "View and manage locally stored deleted messages. Database size: {size}";
+"lng_settings_alexgram_ghost_storage_report" = "Storage Report";
+"lng_settings_alexgram_ghost_storage_text" = "Text Messages";
+"lng_settings_alexgram_ghost_storage_photos" = "Photos";
+"lng_settings_alexgram_ghost_storage_videos" = "Videos & GIFs";
+"lng_settings_alexgram_ghost_storage_audio" = "Audio & Voice";
+"lng_settings_alexgram_ghost_storage_files" = "Documents & Files";
+"lng_settings_alexgram_ghost_storage_other" = "Other";
+"lng_settings_alexgram_ghost_storage_clear" = "Clear";
+"lng_settings_alexgram_ghost_storage_clear_all" = "Clear All Database";
+"lng_settings_alexgram_ghost_storage_clear_sure" = "Are you sure you want to clear all locally saved messages? This action cannot be undone.";
+"lng_settings_alexgram_ghost_save_edited" = "Save edits history";
+"lng_context_alexgram_edits_history" = "Edits History";
+"lng_settings_alexgram_ghost_save_edited_about" = "Message edits will be kept locally.";
 "lng_alexgram_deleted_label" = "Deleted";
 
 "lng_alexgram_info_id" = "ID";
 "lng_alexgram_info_dc" = "Data Center";
 "lng_alexgram_info_id_copied" = "ID copied to clipboard.";
+
+// Keys finished

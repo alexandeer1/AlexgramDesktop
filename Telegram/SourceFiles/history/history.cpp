@@ -166,7 +166,7 @@ void History::itemRemoved(not_null<HistoryItem*> item) {
 	}
 	checkChatListMessageRemoved(item);
 	itemVanished(item);
-	if (IsClientMsgId(item->id)) {
+	if (IsClientMsgId(item->id) || item->isGhostDeleted()) {
 		unregisterClientSideMessage(item);
 	}
 	if (const auto topic = item->topic()) {
@@ -521,14 +521,12 @@ not_null<HistoryItem*> History::createItem(
 	const auto result = message.match([&](const auto &data) {
 		return makeMessage(id, data, localFlags);
 	});
-	if (Core::App().settings().ghostSaveDeletedMessages()) {
-		auto buffer = mtpBuffer();
-		buffer.reserve(tl::count_length(message) >> 2);
-		message.write(buffer);
-		result->setGhostDeletedData(QByteArray(
-			reinterpret_cast<const char*>(buffer.constData()),
-			buffer.size() * sizeof(mtpPrime)));
-	}
+	auto buffer = mtpBuffer();
+	buffer.reserve(tl::count_length(message) >> 2);
+	message.write(buffer);
+	result->setGhostDeletedData(QByteArray(
+		reinterpret_cast<const char*>(buffer.constData()),
+		buffer.size() * sizeof(mtpPrime)));
 	if (newMessage && result->out() && result->isRegular()) {
 		session().topPeers().increment(peer, result->date());
 		if (result->starsPaid()) {
@@ -3170,14 +3168,16 @@ bool History::shouldBeInChatList() const {
 	} else if (const auto chat = peer->asChat()) {
 		return chat->amIn()
 			|| !lastMessageKnown()
-			|| (lastMessage() != nullptr);
+			|| !blocks.empty()
+			|| !_clientSideMessages.empty();
 	} else if (const auto user = peer->asUser()) {
 		if (user->isBot() && isTopPromoted()) {
 			return true;
 		}
 	}
 	return !lastMessageKnown()
-		|| (lastMessage() != nullptr);
+		|| !blocks.empty()
+		|| !_clientSideMessages.empty();
 }
 
 void History::unknownMessageDeleted(MsgId messageId) {
@@ -3969,13 +3969,13 @@ void History::checkLocalMessages() {
 		_flags &= ~Flag::InCheckLocalMessages;
 	});
 
-	if (isEmpty() && (!loadedAtTop() || !loadedAtBottom())) {
+	if (blocks.empty() && _clientSideMessages.empty() && !_joinedMessage && (!loadedAtTop() || !loadedAtBottom())) {
 		return;
 	}
-	const auto firstDate = loadedAtTop()
+	const auto firstDate = (blocks.empty() || loadedAtTop())
 		? 0
 		: blocks.front()->messages.front()->data()->date();
-	const auto lastDate = loadedAtBottom()
+	const auto lastDate = (blocks.empty() || loadedAtBottom())
 		? std::numeric_limits<TimeId>::max()
 		: blocks.back()->messages.back()->data()->date();
 	const auto goodDate = [&](TimeId date) {
@@ -3989,7 +3989,7 @@ void History::checkLocalMessages() {
 	auto items = std::vector<not_null<HistoryItem*>>();
 	items.reserve(_clientSideMessages.size());
 	for (const auto &item : _clientSideMessages) {
-		if (!item->mainView() && goodDate(item->date())) {
+		if (!item->mainView() && (item->isGhostDeleted() || goodDate(item->date()))) {
 			items.push_back(item);
 		}
 	}
@@ -4059,7 +4059,7 @@ bool History::isEmpty() const {
 }
 
 bool History::isDisplayedEmpty() const {
-	if (!loadedAtTop() || !loadedAtBottom()) {
+	if (!loadedAtTop() || !loadedAtBottom() || !_clientSideMessages.empty()) {
 		return false;
 	}
 	const auto first = findFirstNonEmpty();
@@ -4193,7 +4193,7 @@ void History::clear(ClearType type, bool markEmpty) {
 		// Leave the 'sending' messages in local messages.
 		auto local = base::flat_set<not_null<HistoryItem*>>();
 		for (const auto &item : _clientSideMessages) {
-			if (!item->isSending()) {
+			if (!item->isSending() && !item->isGhostDeleted()) {
 				local.emplace(item);
 			}
 		}
