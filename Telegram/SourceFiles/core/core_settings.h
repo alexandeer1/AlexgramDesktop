@@ -1173,6 +1173,10 @@ public:
 	[[nodiscard]] rpl::producer<bool> ghostSaveDeletedMessagesChanges();
 	void setGhostSaveDeletedMessages(bool value);
 
+	[[nodiscard]] bool ghostSaveEditedMessages();
+	[[nodiscard]] rpl::producer<bool> ghostSaveEditedMessagesChanges();
+	void setGhostSaveEditedMessages(bool value);
+
 	[[nodiscard]] bool ghostSaveBotDeleted();
 	[[nodiscard]] rpl::producer<bool> ghostSaveBotDeletedChanges();
 	void setGhostSaveBotDeleted(bool value);
@@ -1302,6 +1306,8 @@ private:
 	rpl::variable<bool> _largeEmoji = true;
 	rpl::variable<bool> _replaceEmoji = true;
 	rpl::variable<bool> _systemTextReplace = true;
+	rpl::variable<bool> _ghostSaveDeletedMessages = true;
+	rpl::variable<bool> _ghostSaveEditedMessages = true;
 	bool _suggestEmoji = true;
 	bool _suggestStickersByEmoji = true;
 	bool _suggestAnimatedEmoji = true;

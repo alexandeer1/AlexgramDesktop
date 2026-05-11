@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 
 #include "data/data_abstract_structure.h"
+#include "alex/alex_database.h"
+
 #include "data/data_channel.h"
 #include "data/data_forum.h"
 #include "data/data_message_reactions.h"
@@ -265,7 +267,9 @@ void Application::run() {
 	// Depends on notifications settings.
 	_notifications = std::make_unique<Window::Notifications::System>();
 
+	Alex::Database::initialize();
 	startLocalStorage();
+
 
 	style::SetCustomFont(settings().customFontFamily());
 	style::internal::StartFonts();

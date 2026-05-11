@@ -5,7 +5,9 @@ the official desktop application for the Telegram messaging service.
 For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
+#include "alex/messages_storage.h"
 #include "history/history_item.h"
+
 
 #include "api/api_premium.h"
 #include "api/api_sensitive_content.h"
@@ -8063,7 +8065,9 @@ QByteArray HistoryItem::ghostDeletedData() const {
 }
 
 void HistoryItem::destroyGhost() {
-	_history->session().settings().removeGhostDeleted(fullId());
-	_history->session().saveSettingsDelayed();
+	Alex::Messages::removeDeletedMessage(
+		_history->session().userId().bare,
+		_history->peer->id.value,
+		id.bare);
 	destroy();
 }

@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_messages_search.h"
 
 #include "apiwrap.h"
+#include "alex/messages_storage.h"
+
 #include "data/data_channel.h"
 #include "data/data_histories.h"
 #include "data/data_message_reaction_id.h"
@@ -109,12 +111,22 @@ void MessagesSearch::searchRequest() {
 			return;
 		}
 		auto result = MessageIdsList();
+		const auto userId = _history->session().userId().bare;
+		const auto dialogId = _history->peer->id.value;
+
+		const auto dbGhosts = Alex::Messages::getDeletedMessages(userId, dialogId, 0, 0, 0, 1000);
+		for (const auto &data : dbGhosts) {
+			result.push_back(FullMsgId(_history->peer->id, data.messageId));
+		}
 		for (const auto &block : _history->blocks) {
 			if (!block) continue;
 			for (const auto &view : block->messages) {
 				if (!view || !view->data()) continue;
 				if (view->data()->isGhostDeleted()) {
-					result.push_back(view->data()->fullId());
+					const auto id = view->data()->fullId();
+					if (!ranges::contains(result, id)) {
+						result.push_back(id);
+					}
 				}
 			}
 		}
@@ -134,6 +146,7 @@ void MessagesSearch::searchRequest() {
 		_messagesFounds.fire({ int(result.size()), std::move(result), nextToken });
 		return;
 	}
+
 
 	if (!_offsetId) {
 		const auto it = _cacheOfStartByToken.find(nextToken);

@@ -26,9 +26,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_updates.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/widgets/discrete_sliders.h"
+#include "alex/alex_database.h"
+#include "ui/layers/generic_box.h"
+#include "ui/text/format_values.h"
+#include "ui/painter.h"
+#include "styles/style_layers.h"
 
 namespace Settings {
 
+using namespace Builder;
 class AlexgramMain final : public Section<AlexgramMain> {
 public:
 	AlexgramMain(QWidget *parent, not_null<Window::SessionController*> controller) : Section(parent, controller) {
@@ -102,53 +108,46 @@ private:
 };
 
 
-void AlexgramMain::setupContent() {
-	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
-	auto builder = Builder::SectionBuilder(Builder::WidgetContext{ content, controller(), showOtherMethod() });
-	builder.addDivider();
+void BuildAlexgramMainSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addSkip();
 	
-	Builder::SectionBuilder::SectionArgs generalArgs;
+	SectionBuilder::SectionArgs generalArgs;
 	generalArgs.title = tr::lng_settings_alexgram_general();
 	generalArgs.targetSection = AlexgramGeneralSectionId();
 	generalArgs.icon = { &st::menuIconSettings };
 	builder.addSectionButton(std::move(generalArgs));
 
-	Builder::SectionBuilder::SectionArgs translatorArgs;
+	SectionBuilder::SectionArgs translatorArgs;
 	translatorArgs.title = tr::lng_settings_alexgram_translator();
 	translatorArgs.targetSection = AlexgramTranslatorSectionId();
 	translatorArgs.icon = { &st::menuIconTranslate };
 	builder.addSectionButton(std::move(translatorArgs));
 
-	Builder::SectionBuilder::SectionArgs chatsArgs;
+	SectionBuilder::SectionArgs chatsArgs;
 	chatsArgs.title = tr::lng_settings_alexgram_chats();
 	chatsArgs.targetSection = AlexgramChatsSectionId();
 	chatsArgs.icon = { &st::menuIconChatBubble };
 	builder.addSectionButton(std::move(chatsArgs));
 
-	Builder::SectionBuilder::SectionArgs experimentalArgs;
+	SectionBuilder::SectionArgs experimentalArgs;
 	experimentalArgs.title = tr::lng_settings_alexgram_experimental();
 	experimentalArgs.targetSection = AlexgramExperimentalSectionId();
 	experimentalArgs.icon = { &st::menuIconExperimental };
 	builder.addSectionButton(std::move(experimentalArgs));
 
-	Builder::SectionBuilder::SectionArgs ghostModeArgs;
+	SectionBuilder::SectionArgs ghostModeArgs;
 	ghostModeArgs.title = tr::lng_settings_alexgram_ghost_mode();
 	ghostModeArgs.targetSection = AlexgramGhostModeSectionId();
 	ghostModeArgs.icon = { &st::menuIconStealth };
 	builder.addSectionButton(std::move(ghostModeArgs));
 
 	builder.addSkip();
-	Ui::ResizeFitChild(this, content);
 }
 
-void AlexgramGeneral::setupContent() {
-	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
-	auto builder = Builder::SectionBuilder(Builder::WidgetContext{ content, controller(), showOtherMethod() });
-	builder.addDivider();
+void BuildAlexgramGeneralSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addSkip();
 	
-	Builder::SectionBuilder::CheckboxArgs roundArgs;
+	SectionBuilder::CheckboxArgs roundArgs;
 	roundArgs.title = tr::lng_settings_disable_number_rounding();
 	roundArgs.checked = Core::App().settings().disableNumberRounding();
 	const auto checkbox = builder.addCheckbox(std::move(roundArgs));
@@ -159,7 +158,7 @@ void AlexgramGeneral::setupContent() {
 	builder.addDividerText(tr::lng_settings_disable_number_rounding_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs hideTabsArgs;
+	SectionBuilder::CheckboxArgs hideTabsArgs;
 	hideTabsArgs.title = tr::lng_settings_hide_all_chats_tab();
 	hideTabsArgs.checked = Core::App().settings().hideAllChatsTab();
 	const auto hideTabsCb = builder.addCheckbox(std::move(hideTabsArgs));
@@ -171,7 +170,7 @@ void AlexgramGeneral::setupContent() {
 	builder.addDividerText(tr::lng_settings_hide_all_chats_tab_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs removeArchivedArgs;
+	SectionBuilder::CheckboxArgs removeArchivedArgs;
 	removeArchivedArgs.title = tr::lng_settings_remove_archived_from_list();
 	removeArchivedArgs.checked = Core::App().settings().removeArchivedFromList();
 	const auto removeArchivedCb = builder.addCheckbox(std::move(removeArchivedArgs));
@@ -183,7 +182,7 @@ void AlexgramGeneral::setupContent() {
 	builder.addDividerText(tr::lng_settings_remove_archived_from_list_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs hidePremiumArgs;
+	SectionBuilder::CheckboxArgs hidePremiumArgs;
 	hidePremiumArgs.title = tr::lng_settings_hide_premium();
 	hidePremiumArgs.checked = Core::App().settings().hidePremium();
 	const auto hidePremiumCb = builder.addCheckbox(std::move(hidePremiumArgs));
@@ -195,7 +194,7 @@ void AlexgramGeneral::setupContent() {
 	builder.addDividerText(tr::lng_settings_hide_premium_about());
 	builder.addSkip();
 	
-	Builder::SectionBuilder::CheckboxArgs hideHelpArgs;
+	SectionBuilder::CheckboxArgs hideHelpArgs;
 	hideHelpArgs.title = tr::lng_settings_hide_help();
 	hideHelpArgs.checked = Core::App().settings().hideHelp();
 	const auto hideHelpCb = builder.addCheckbox(std::move(hideHelpArgs));
@@ -207,7 +206,7 @@ void AlexgramGeneral::setupContent() {
 	builder.addDividerText(tr::lng_settings_hide_help_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs hidePhoneArgs;
+	SectionBuilder::CheckboxArgs hidePhoneArgs;
 	hidePhoneArgs.title = tr::lng_settings_hide_phone_number();
 	hidePhoneArgs.checked = Core::App().settings().hidePhoneNumber();
 	const auto hidePhoneCb = builder.addCheckbox(std::move(hidePhoneArgs));
@@ -219,16 +218,12 @@ void AlexgramGeneral::setupContent() {
 	builder.addDividerText(tr::lng_settings_hide_phone_number_about());
 	builder.addSkip();
 
-	Ui::ResizeFitChild(this, content);
 }
 
-void AlexgramTranslator::setupContent() {
-	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
-	auto builder = Builder::SectionBuilder(Builder::WidgetContext{ content, controller(), showOtherMethod() });
-	builder.addDivider();
+void BuildAlexgramTranslatorSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs showTranslateArgs;
+	SectionBuilder::CheckboxArgs showTranslateArgs;
 	showTranslateArgs.title = tr::lng_settings_show_translate_button();
 	showTranslateArgs.checked = Core::App().settings().showTranslateButton();
 	const auto showTranslateCb = builder.addCheckbox(std::move(showTranslateArgs));
@@ -240,7 +235,7 @@ void AlexgramTranslator::setupContent() {
 	builder.addDividerText(tr::lng_settings_show_translate_button_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs translateChatArgs;
+	SectionBuilder::CheckboxArgs translateChatArgs;
 	translateChatArgs.title = tr::lng_translate_settings_chat();
 	translateChatArgs.checked = Core::App().settings().translateChatEnabled();
 	const auto translateChatCb = builder.addCheckbox(std::move(translateChatArgs));
@@ -252,16 +247,12 @@ void AlexgramTranslator::setupContent() {
 	builder.addDividerText(tr::lng_translate_settings_about());
 	builder.addSkip();
 
-	Ui::ResizeFitChild(this, content);
 }
 
-void AlexgramChats::setupContent() {
-	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
-	auto builder = Builder::SectionBuilder(Builder::WidgetContext{ content, controller(), showOtherMethod() });
-	builder.addDivider();
+void BuildAlexgramChatsSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs linkPreviewArgs;
+	SectionBuilder::CheckboxArgs linkPreviewArgs;
 	linkPreviewArgs.title = tr::lng_settings_alexgram_disable_link_preview();
 	linkPreviewArgs.checked = Core::App().settings().disableLinkPreviewByDefault();
 	const auto linkPreviewCb = builder.addCheckbox(std::move(linkPreviewArgs));
@@ -273,7 +264,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_disable_link_preview_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs showMsgIdArgs;
+	SectionBuilder::CheckboxArgs showMsgIdArgs;
 	showMsgIdArgs.title = tr::lng_settings_alexgram_show_message_id();
 	showMsgIdArgs.checked = Core::App().settings().showMessageId();
 	const auto showMsgIdCb = builder.addCheckbox(std::move(showMsgIdArgs));
@@ -289,7 +280,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_show_message_id_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs showSecArgs;
+	SectionBuilder::CheckboxArgs showSecArgs;
 	showSecArgs.title = tr::lng_settings_alexgram_show_timestamp_seconds();
 	showSecArgs.checked = Core::App().settings().showTimestampSeconds();
 	const auto showSecCb = builder.addCheckbox(std::move(showSecArgs));
@@ -305,7 +296,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_show_timestamp_seconds_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs showEditedIconArgs;
+	SectionBuilder::CheckboxArgs showEditedIconArgs;
 	showEditedIconArgs.title = tr::lng_settings_alexgram_show_edited_icon();
 	showEditedIconArgs.checked = Core::App().settings().showEditedIcon();
 	const auto showEditedIconCb = builder.addCheckbox(std::move(showEditedIconArgs));
@@ -321,7 +312,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_show_edited_icon_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs showForwardedDateArgs;
+	SectionBuilder::CheckboxArgs showForwardedDateArgs;
 	showForwardedDateArgs.title = tr::lng_settings_alexgram_show_forwarded_date();
 	showForwardedDateArgs.checked = Core::App().settings().showForwardedDate();
 	const auto showForwardedDateCb = builder.addCheckbox(std::move(showForwardedDateArgs));
@@ -337,7 +328,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_show_forwarded_date_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs showOnlineStatusArgs;
+	SectionBuilder::CheckboxArgs showOnlineStatusArgs;
 	showOnlineStatusArgs.title = tr::lng_settings_alexgram_show_online_status();
 	showOnlineStatusArgs.checked = Core::App().settings().showOnlineStatus();
 	const auto showOnlineStatusCb = builder.addCheckbox(std::move(showOnlineStatusArgs));
@@ -353,7 +344,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_show_online_status_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs showSmallGifsArgs;
+	SectionBuilder::CheckboxArgs showSmallGifsArgs;
 	showSmallGifsArgs.title = tr::lng_settings_alexgram_show_small_gifs();
 	showSmallGifsArgs.checked = Core::App().settings().showSmallGifs();
 	const auto showSmallGifsCb = builder.addCheckbox(std::move(showSmallGifsArgs));
@@ -369,7 +360,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_show_small_gifs_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs treatGifsAsVideosArgs;
+	SectionBuilder::CheckboxArgs treatGifsAsVideosArgs;
 	treatGifsAsVideosArgs.title = tr::lng_settings_alexgram_treat_gifs_as_videos();
 	treatGifsAsVideosArgs.checked = Core::App().settings().treatGifsAsVideos();
 	const auto treatGifsAsVideosCb = builder.addCheckbox(std::move(treatGifsAsVideosArgs));
@@ -389,7 +380,7 @@ void AlexgramChats::setupContent() {
 				Ui::Checkbox::NotifyAboutChange::DontNotify);
 			close();
 		});
-		controller()->show(Ui::MakeConfirmBox({
+		builder.controller()->show(Ui::MakeConfirmBox({
 			.text = tr::lng_settings_need_restart(),
 			.confirmed = confirmed,
 			.cancelled = cancelled,
@@ -400,7 +391,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_treat_gifs_as_videos_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs autoPauseVideoArgs;
+	SectionBuilder::CheckboxArgs autoPauseVideoArgs;
 	autoPauseVideoArgs.title = tr::lng_settings_alexgram_auto_pause_video();
 	autoPauseVideoArgs.checked = Core::App().settings().autoPauseVideo();
 	const auto autoPauseVideoCb = builder.addCheckbox(std::move(autoPauseVideoArgs));
@@ -413,7 +404,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_auto_pause_video_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs noAutoPlayNextVoiceArgs;
+	SectionBuilder::CheckboxArgs noAutoPlayNextVoiceArgs;
 	noAutoPlayNextVoiceArgs.title = tr::lng_settings_alexgram_no_autoplay_next_voice();
 	noAutoPlayNextVoiceArgs.checked = Core::App().settings().noAutoPlayNextVoice();
 	const auto noAutoPlayNextVoiceCb = builder.addCheckbox(std::move(noAutoPlayNextVoiceArgs));
@@ -426,7 +417,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_no_autoplay_next_voice_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs showSpoilersArgs;
+	SectionBuilder::CheckboxArgs showSpoilersArgs;
 	showSpoilersArgs.title = tr::lng_settings_alexgram_show_spoilers_directly();
 	showSpoilersArgs.checked = Core::App().settings().showSpoilersDirectly();
 	const auto showSpoilersCb = builder.addCheckbox(std::move(showSpoilersArgs));
@@ -440,7 +431,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_show_spoilers_directly_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs hideGroupStickersArgs;
+	SectionBuilder::CheckboxArgs hideGroupStickersArgs;
 	hideGroupStickersArgs.title = tr::lng_settings_alexgram_hide_group_stickers();
 	hideGroupStickersArgs.checked = Core::App().settings().hideGroupStickers();
 	const auto hideGroupStickersCb = builder.addCheckbox(std::move(hideGroupStickersArgs));
@@ -453,7 +444,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_hide_group_stickers_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs unlimitedRecentStickersArgs;
+	SectionBuilder::CheckboxArgs unlimitedRecentStickersArgs;
 	unlimitedRecentStickersArgs.title = tr::lng_settings_alexgram_unlimited_recent_stickers();
 	unlimitedRecentStickersArgs.checked = Core::App().settings().unlimitedRecentStickers();
 	const auto unlimitedRecentStickersCb = builder.addCheckbox(std::move(unlimitedRecentStickersArgs));
@@ -493,7 +484,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_unlimited_recent_stickers_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs hideSideShareButtonArgs;
+	SectionBuilder::CheckboxArgs hideSideShareButtonArgs;
 	hideSideShareButtonArgs.title = tr::lng_settings_alexgram_hide_side_share_button();
 	hideSideShareButtonArgs.checked = Core::App().settings().hideSideShareButton();
 	const auto hideSideShareButtonCb = builder.addCheckbox(std::move(hideSideShareButtonArgs));
@@ -507,7 +498,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_hide_side_share_button_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs hideSendAsButtonArgs;
+	SectionBuilder::CheckboxArgs hideSendAsButtonArgs;
 	hideSendAsButtonArgs.title = tr::lng_settings_alexgram_hide_send_as_button();
 	hideSendAsButtonArgs.checked = Core::App().settings().hideSendAsButton();
 	const auto hideSendAsButtonCb = builder.addCheckbox(std::move(hideSendAsButtonArgs));
@@ -520,7 +511,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_hide_send_as_button_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs hideChannelBottomBarArgs;
+	SectionBuilder::CheckboxArgs hideChannelBottomBarArgs;
 	hideChannelBottomBarArgs.title = tr::lng_settings_alexgram_hide_channel_bottom_bar();
 	hideChannelBottomBarArgs.checked = Core::App().settings().hideChannelBottomBar();
 	const auto hideChannelBottomBarCb = builder.addCheckbox(std::move(hideChannelBottomBarArgs));
@@ -533,7 +524,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_hide_channel_bottom_bar_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs askBeforeLinkArgs;
+	SectionBuilder::CheckboxArgs askBeforeLinkArgs;
 	askBeforeLinkArgs.title = tr::lng_settings_alexgram_ask_before_link();
 	askBeforeLinkArgs.checked = Core::App().settings().askBeforeLink();
 	const auto askBeforeLinkCb = builder.addCheckbox(std::move(askBeforeLinkArgs));
@@ -546,7 +537,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_ask_before_link_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs askBeforeInlineLinkArgs;
+	SectionBuilder::CheckboxArgs askBeforeInlineLinkArgs;
 	askBeforeInlineLinkArgs.title = tr::lng_settings_alexgram_ask_before_inline_link();
 	askBeforeInlineLinkArgs.checked = Core::App().settings().askBeforeInlineLink();
 	const auto askBeforeInlineLinkCb = builder.addCheckbox(std::move(askBeforeInlineLinkArgs));
@@ -559,7 +550,7 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_ask_before_inline_link_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs askBeforeCallingArgs;
+	SectionBuilder::CheckboxArgs askBeforeCallingArgs;
 	askBeforeCallingArgs.title = tr::lng_settings_alexgram_ask_before_calling();
 	askBeforeCallingArgs.checked = Core::App().settings().askBeforeCalling();
 	const auto askBeforeCallingCb = builder.addCheckbox(std::move(askBeforeCallingArgs));
@@ -572,16 +563,12 @@ void AlexgramChats::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_ask_before_calling_about());
 	builder.addSkip();
 
-	Ui::ResizeFitChild(this, content);
 }
 
-void AlexgramExperimental::setupContent() {
-	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
-	auto builder = Builder::SectionBuilder(Builder::WidgetContext{ content, controller(), showOtherMethod() });
-	builder.addDivider();
+void BuildAlexgramExperimentalSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs unlimitedPinnedArgs;
+	SectionBuilder::CheckboxArgs unlimitedPinnedArgs;
 	unlimitedPinnedArgs.title = tr::lng_settings_alexgram_unlimited_pinned();
 	unlimitedPinnedArgs.checked = Core::App().settings().unlimitedPinned();
 	const auto unlimitedPinnedCb = builder.addCheckbox(std::move(unlimitedPinnedArgs));
@@ -594,7 +581,7 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_unlimited_pinned_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs unlimitedFavoriteStickersArgs;
+	SectionBuilder::CheckboxArgs unlimitedFavoriteStickersArgs;
 	unlimitedFavoriteStickersArgs.title = tr::lng_settings_alexgram_unlimited_favorite_stickers();
 	unlimitedFavoriteStickersArgs.checked = Core::App().settings().unlimitedFavoriteStickers();
 	const auto unlimitedFavoriteStickersCb = builder.addCheckbox(std::move(unlimitedFavoriteStickersArgs));
@@ -607,7 +594,7 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_unlimited_favorite_stickers_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs uploadSpeedBoostArgs;
+	SectionBuilder::CheckboxArgs uploadSpeedBoostArgs;
 	uploadSpeedBoostArgs.title = tr::lng_settings_alexgram_upload_speed_boost();
 	uploadSpeedBoostArgs.checked = Core::App().settings().uploadSpeedBoost();
 	const auto uploadSpeedBoostCb = builder.addCheckbox(std::move(uploadSpeedBoostArgs));
@@ -620,7 +607,7 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_upload_speed_boost_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs downloadSpeedBoostArgs;
+	SectionBuilder::CheckboxArgs downloadSpeedBoostArgs;
 	downloadSpeedBoostArgs.title = tr::lng_settings_alexgram_download_speed_boost();
 	downloadSpeedBoostArgs.checked = Core::App().settings().downloadSpeedBoost();
 	const auto downloadSpeedBoostCb = builder.addCheckbox(std::move(downloadSpeedBoostArgs));
@@ -633,7 +620,7 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_download_speed_boost_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs typingInsteadStickerArgs;
+	SectionBuilder::CheckboxArgs typingInsteadStickerArgs;
 	typingInsteadStickerArgs.title = tr::lng_settings_alexgram_send_typing_instead_sticker();
 	typingInsteadStickerArgs.checked = Core::App().settings().sendTypingInsteadOfSticker();
 	const auto typingInsteadStickerCb = builder.addCheckbox(std::move(typingInsteadStickerArgs));
@@ -646,7 +633,7 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_send_typing_instead_sticker_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs hideStoriesArgs;
+	SectionBuilder::CheckboxArgs hideStoriesArgs;
 	hideStoriesArgs.title = tr::lng_settings_alexgram_hide_stories_from_header();
 	hideStoriesArgs.checked = Core::App().settings().hideStoriesFromHeader();
 	const auto hideStoriesCb = builder.addCheckbox(std::move(hideStoriesArgs));
@@ -659,7 +646,7 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_hide_stories_from_header_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs disableStoriesArgs;
+	SectionBuilder::CheckboxArgs disableStoriesArgs;
 	disableStoriesArgs.title = tr::lng_settings_alexgram_disable_stories();
 	disableStoriesArgs.checked = Core::App().settings().disableStories();
 	const auto disableStoriesCb = builder.addCheckbox(std::move(disableStoriesArgs));
@@ -675,7 +662,7 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_disable_stories_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs sendMp4AsVideoArgs;
+	SectionBuilder::CheckboxArgs sendMp4AsVideoArgs;
 	sendMp4AsVideoArgs.title = tr::lng_settings_alexgram_send_mp4_as_video();
 	sendMp4AsVideoArgs.checked = Core::App().settings().sendMp4AsVideo();
 	const auto sendMp4AsVideoCb = builder.addCheckbox(std::move(sendMp4AsVideoArgs));
@@ -688,7 +675,7 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_send_mp4_as_video_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs dolby8DArgs;
+	SectionBuilder::CheckboxArgs dolby8DArgs;
 	dolby8DArgs.title = tr::lng_settings_alexgram_dolby_8d();
 	dolby8DArgs.checked = Core::App().settings().dolby8D();
 	const auto dolby8DCb = builder.addCheckbox(std::move(dolby8DArgs));
@@ -701,16 +688,64 @@ void AlexgramExperimental::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_dolby_8d_about());
 	builder.addSkip();
 
-	Ui::ResizeFitChild(this, content);
 }
 
-void AlexgramGhostMode::setupContent() {
-	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
-	auto builder = Builder::SectionBuilder(Builder::WidgetContext{ content, controller(), showOtherMethod() });
-	builder.addDivider();
+void GhostStorageBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionController*> controller) {
+	box->setTitle(tr::lng_settings_alexgram_ghost_storage_report());
+
+	const auto userId = controller->session().userId().bare;
+
+	auto stats = Alex::Database::getStorageStats(userId);
+
+	auto container = box->addRow(object_ptr<Ui::VerticalLayout>(box));
+
+	const auto addCategory = [&](const QString &label, const Alex::StorageStats::Entry &entry, int type) {
+		if (entry.count == 0) return;
+
+		auto text = label + u" ("_q + QString::number(entry.count) + u", "_q + Ui::FormatSizeText(entry.size) + u")"_q;
+		auto button = container->add(object_ptr<Ui::SettingsButton>(
+			container,
+			rpl::single(text),
+			st::settingsButton));
+
+		button->setClickedCallback([=] {
+			Alex::Database::clearStorage(userId, type);
+			box->closeBox();
+			controller->show(Box(GhostStorageBox, controller));
+		});
+	};
+
+	addCategory(tr::lng_settings_alexgram_ghost_storage_text(tr::now), stats.text, 0);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_photos(tr::now), stats.photo, 1);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_videos(tr::now), stats.video, 2);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_audio(tr::now), stats.audio, 3);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_files(tr::now), stats.document, 4);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_other(tr::now), stats.other, 5);
+	addCategory(tr::lng_settings_alexgram_ghost_save_edited(tr::now), stats.edits, -1);
+
+	if (stats.total.count == 0 && stats.edits.count == 0) {
+		container->add(object_ptr<Ui::FlatLabel>(container, u"No saved data found locally."_q, st::defaultFlatLabel), st::boxRowPadding);
+	}
+
+	box->addButton(tr::lng_settings_alexgram_ghost_storage_clear_all(), [=] {
+		controller->show(Ui::MakeConfirmBox({
+			.text = tr::lng_settings_alexgram_ghost_storage_clear_sure(),
+			.confirmed = [=](Fn<void()> close) {
+				Alex::Database::clearAllStorage(userId);
+				close();
+				box->closeBox();
+			},
+			.confirmText = tr::lng_settings_alexgram_ghost_storage_clear(tr::now),
+		}));
+	}, st::attentionBoxButton);
+
+	box->addButton(tr::lng_close(), [=] { box->closeBox(); });
+}
+
+void BuildAlexgramGhostModeSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs noReadArgs;
+	SectionBuilder::CheckboxArgs noReadArgs;
 	noReadArgs.title = tr::lng_settings_alexgram_ghost_mode_no_read();
 	noReadArgs.checked = Core::App().settings().ghostModeNoRead();
 	const auto noReadCb = builder.addCheckbox(std::move(noReadArgs));
@@ -722,7 +757,7 @@ void AlexgramGhostMode::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_read_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs readOnInteractArgs;
+	SectionBuilder::CheckboxArgs readOnInteractArgs;
 	readOnInteractArgs.title = tr::lng_settings_alexgram_ghost_mode_read_on_interact();
 	readOnInteractArgs.checked = Core::App().settings().ghostReadOnInteract();
 	const auto readOnInteractCb = builder.addCheckbox(std::move(readOnInteractArgs));
@@ -735,7 +770,7 @@ void AlexgramGhostMode::setupContent() {
 	builder.addSkip();
 
 
-	Builder::SectionBuilder::CheckboxArgs noReadStoriesArgs;
+	SectionBuilder::CheckboxArgs noReadStoriesArgs;
 	noReadStoriesArgs.title = tr::lng_settings_alexgram_ghost_mode_no_read_stories();
 	noReadStoriesArgs.checked = Core::App().settings().ghostDontReadStories();
 	const auto noReadStoriesCb = builder.addCheckbox(std::move(noReadStoriesArgs));
@@ -747,7 +782,7 @@ void AlexgramGhostMode::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_read_stories_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs noOnlineArgs;
+	SectionBuilder::CheckboxArgs noOnlineArgs;
 	noOnlineArgs.title = tr::lng_settings_alexgram_ghost_mode_no_online();
 	noOnlineArgs.checked = Core::App().settings().ghostDontSendOnline();
 	const auto noOnlineCb = builder.addCheckbox(std::move(noOnlineArgs));
@@ -759,7 +794,7 @@ void AlexgramGhostMode::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_online_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs noTypingArgs;
+	SectionBuilder::CheckboxArgs noTypingArgs;
 	noTypingArgs.title = tr::lng_settings_alexgram_ghost_mode_no_typing();
 	noTypingArgs.checked = Core::App().settings().ghostDontSendTyping();
 	const auto noTypingCb = builder.addCheckbox(std::move(noTypingArgs));
@@ -771,7 +806,7 @@ void AlexgramGhostMode::setupContent() {
 	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_no_typing_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs goOfflineArgs;
+	SectionBuilder::CheckboxArgs goOfflineArgs;
 	goOfflineArgs.title = tr::lng_settings_alexgram_ghost_mode_go_offline();
 	goOfflineArgs.checked = Core::App().settings().ghostGoOffline();
 	const auto goOfflineCb = builder.addCheckbox(std::move(goOfflineArgs));
@@ -779,14 +814,14 @@ void AlexgramGhostMode::setupContent() {
 		Core::App().settings().setGhostGoOffline(checked);
 		Core::App().saveSettingsDelayed();
 		if (checked) {
-			controller()->session().updates().updateOnline(0, true);
+			builder.controller()->session().updates().updateOnline(0, true);
 		}
 	}, goOfflineCb->lifetime());
 
 	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_go_offline_about());
 	builder.addSkip();
 
-	Builder::SectionBuilder::CheckboxArgs saveDeletedArgs;
+	SectionBuilder::CheckboxArgs saveDeletedArgs;
 	saveDeletedArgs.title = tr::lng_settings_alexgram_ghost_mode_save_deleted();
 	saveDeletedArgs.checked = Core::App().settings().ghostSaveDeletedMessages();
 	const auto saveDeletedCb = builder.addCheckbox(std::move(saveDeletedArgs));
@@ -798,7 +833,7 @@ void AlexgramGhostMode::setupContent() {
 	builder.scope([&] {
 		builder.addSkip(st::settingsCheckboxesSkip);
 
-		Builder::SectionBuilder::CheckboxArgs saveBotDeletedArgs;
+		SectionBuilder::CheckboxArgs saveBotDeletedArgs;
 		saveBotDeletedArgs.title = tr::lng_settings_alexgram_ghost_mode_save_bot_deleted();
 		saveBotDeletedArgs.checked = Core::App().settings().ghostSaveBotDeleted();
 		const auto saveBotDeletedCb = builder.addCheckbox(std::move(saveBotDeletedArgs));
@@ -807,10 +842,20 @@ void AlexgramGhostMode::setupContent() {
 			Core::App().saveSettingsDelayed();
 		}, saveBotDeletedCb->lifetime());
 
-		builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_save_bot_deleted_about());
+		builder.add([&](const WidgetContext &ctx) {
+			auto result = object_ptr<Ui::FlatLabel>(
+				ctx.container,
+				tr::lng_settings_alexgram_ghost_mode_save_bot_deleted_about(),
+				st::defaultFlatLabel);
+			result->setTextColorOverride(st::windowSubTextFg->c);
+			return SectionBuilder::WidgetToAdd{
+				std::move(result),
+				{ st::settingsCheckboxesSkip * 3, 0, st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip }
+			};
+		});
 		builder.addSkip(st::settingsCheckboxesSkip);
 
-		Builder::SectionBuilder::CheckboxArgs showIconArgs;
+		SectionBuilder::CheckboxArgs showIconArgs;
 		showIconArgs.title = tr::lng_settings_alexgram_ghost_mode_deleted_show_icon();
 		showIconArgs.checked = Core::App().settings().ghostDeletedShowIcon();
 		const auto showIconCb = builder.addCheckbox(std::move(showIconArgs));
@@ -820,10 +865,20 @@ void AlexgramGhostMode::setupContent() {
 			Core::App().reprocessAlexSettings();
 		}, showIconCb->lifetime());
 
-		builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_deleted_show_icon_about());
+		builder.add([&](const WidgetContext &ctx) {
+			auto result = object_ptr<Ui::FlatLabel>(
+				ctx.container,
+				tr::lng_settings_alexgram_ghost_mode_deleted_show_icon_about(),
+				st::defaultFlatLabel);
+			result->setTextColorOverride(st::windowSubTextFg->c);
+			return SectionBuilder::WidgetToAdd{
+				std::move(result),
+				{ st::settingsCheckboxesSkip * 3, 0, st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip }
+			};
+		});
 		builder.addSkip(st::settingsCheckboxesSkip);
 
-		Builder::SectionBuilder::CheckboxArgs translucentArgs;
+		SectionBuilder::CheckboxArgs translucentArgs;
 		translucentArgs.title = tr::lng_settings_alexgram_ghost_mode_translucent_deleted();
 		translucentArgs.checked = Core::App().settings().ghostTranslucentDeleted();
 		const auto translucentCb = builder.addCheckbox(std::move(translucentArgs));
@@ -835,11 +890,22 @@ void AlexgramGhostMode::setupContent() {
 
 
 		builder.scope([&] {
-			builder.addSubsectionTitle(tr::lng_settings_alexgram_ghost_mode_deleted_opacity());
+			builder.add([&](const WidgetContext &ctx) {
+				auto result = object_ptr<Ui::FlatLabel>(
+					ctx.container,
+					tr::lng_settings_alexgram_ghost_mode_deleted_opacity(),
+					st::defaultFlatLabel);
+				result->setTextColorOverride(st::windowActiveTextFg->c);
+				return SectionBuilder::WidgetToAdd{
+					std::move(result),
+					{ st::settingsCheckboxesSkip * 3, st::settingsCheckboxesSkip, st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip }
+				};
+			});
+
 			if (const auto container = builder.container()) {
 				const auto slider = container->add(
 					object_ptr<Ui::SettingsSlider>(container, st::settingsSlider),
-					st::settingsBigScalePadding);
+					st::settingsBigScalePadding + QMargins(st::settingsCheckboxesSkip * 2, 0, 0, 0));
 				for (int i = 1; i <= 10; ++i) {
 					slider->addSection(QString::number(i * 10) + u"%"_q);
 				}
@@ -853,19 +919,115 @@ void AlexgramGhostMode::setupContent() {
 			builder.addSkip(st::settingsCheckboxesSkip);
 		}, translucentCb->checkedValue());
 
-		builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_translucent_deleted_about());
+		builder.add([&](const WidgetContext &ctx) {
+			auto result = object_ptr<Ui::FlatLabel>(
+				ctx.container,
+				tr::lng_settings_alexgram_ghost_mode_translucent_deleted_about(),
+				st::defaultFlatLabel);
+			result->setTextColorOverride(st::windowSubTextFg->c);
+			return SectionBuilder::WidgetToAdd{
+				std::move(result),
+				{ st::settingsCheckboxesSkip * 3, 0, st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip }
+			};
+		});
+		builder.addSkip(st::settingsCheckboxesSkip);
+
+		const auto userId = builder.controller()->session().userId().bare;
+
+		SectionBuilder::ButtonArgs storageArgs;
+		storageArgs.title = tr::lng_settings_alexgram_ghost_manage_storage();
+		storageArgs.label = Alex::Database::storageStatsValue(userId)
+			| rpl::map([](const Alex::StorageStats &stats) {
+				return Ui::FormatSizeText(stats.databaseFileSize);
+			});
+		storageArgs.icon = { &st::menuIconSettings };
+		builder.addButton(std::move(storageArgs))->setClickedCallback([=] {
+			builder.controller()->show(Box(GhostStorageBox, builder.controller()));
+		});
+
+		builder.addSkip(st::settingsCheckboxesSkip);
+
+	}, saveDeletedCb->checkedValue(), [=](SectionBuilder::ToggledScopePtr wrap) {
+		const auto container = wrap->entity();
+		container->paintRequest() | rpl::on_next([container](QRect) {
+			Painter p(container);
+			const auto skip = st::settingsCheckboxesSkip;
+			const auto rect = container->rect().marginsRemoved(QMargins(skip, 0, skip, skip));
+
+			p.setRenderHint(QPainter::Antialiasing);
+
+			p.setPen(Qt::NoPen);
+			p.setBrush(st::windowBgOver);
+			p.drawRoundedRect(rect, st::boxRadius, st::boxRadius);
+
+			p.setBrush(st::windowActiveTextFg);
+			const auto linePadding = st::boxRadius;
+			p.drawRoundedRect(QRect(rect.x(), rect.y() + linePadding, st::lineWidth * 3, rect.height() - linePadding * 2), float(st::lineWidth * 1.5), float(st::lineWidth * 1.5));
+		}, container->lifetime());
+	});
+
+	builder.scope([&] {
+		builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_save_deleted_about());
 		builder.addSkip();
+	}, saveDeletedCb->checkedValue() | rpl::map([](bool checked) { return !checked; }));
 
-	}, saveDeletedCb->checkedValue());
+	SectionBuilder::CheckboxArgs saveEditedArgs;
+	saveEditedArgs.title = tr::lng_settings_alexgram_ghost_save_edited();
+	saveEditedArgs.checked = Core::App().settings().ghostSaveEditedMessages();
+	const auto saveEditedCb = builder.addCheckbox(std::move(saveEditedArgs));
+	saveEditedCb->checkedChanges() | rpl::on_next([=](bool checked) {
+		Core::App().settings().setGhostSaveEditedMessages(checked);
+		Core::App().saveSettingsDelayed();
+	}, saveEditedCb->lifetime());
 
-	builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_save_deleted_about());
+	builder.addDividerText(tr::lng_settings_alexgram_ghost_save_edited_about());
 	builder.addSkip();
 
+}
+
+void AlexgramMain::setupContent() {
+	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+	auto builder = SectionBuilder(WidgetContext{ content, controller(), showOtherMethod() });
+	BuildAlexgramMainSection(builder);
 	Ui::ResizeFitChild(this, content);
 }
 
-void BuildAlexSection(Builder::SectionBuilder &builder) {
+void AlexgramGeneral::setupContent() {
+	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+	auto builder = SectionBuilder(WidgetContext{ content, controller(), showOtherMethod() });
+	BuildAlexgramGeneralSection(builder);
+	Ui::ResizeFitChild(this, content);
 }
+
+void AlexgramTranslator::setupContent() {
+	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+	auto builder = SectionBuilder(WidgetContext{ content, controller(), showOtherMethod() });
+	BuildAlexgramTranslatorSection(builder);
+	Ui::ResizeFitChild(this, content);
+}
+
+void AlexgramChats::setupContent() {
+	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+	auto builder = SectionBuilder(WidgetContext{ content, controller(), showOtherMethod() });
+	BuildAlexgramChatsSection(builder);
+	Ui::ResizeFitChild(this, content);
+}
+
+void AlexgramExperimental::setupContent() {
+	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+	auto builder = SectionBuilder(WidgetContext{ content, controller(), showOtherMethod() });
+	BuildAlexgramExperimentalSection(builder);
+	Ui::ResizeFitChild(this, content);
+}
+
+void AlexgramGhostMode::setupContent() {
+	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
+	auto builder = SectionBuilder(WidgetContext{ content, controller(), showOtherMethod() });
+	BuildAlexgramGhostModeSection(builder);
+	Ui::ResizeFitChild(this, content);
+}
+
+
 
 Type AlexgramSectionId() {
 	return SectionFactory<AlexgramMain>::Instance();
@@ -891,11 +1053,11 @@ Type AlexgramGhostModeSectionId() {
 	return SectionFactory<AlexgramGhostMode>::Instance();
 }
 
-const auto kMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramSectionId(), MainId(), &tr::lng_settings_alexgram, &st::menuIconManage }, BuildAlexSection);
-const auto kGeneralMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramGeneralSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_general, &st::menuIconSettings }, BuildAlexSection);
-const auto kTranslatorMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramTranslatorSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_translator, &st::menuIconTranslate }, BuildAlexSection);
-const auto kChatsMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramChatsSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_chats, &st::menuIconChatBubble }, BuildAlexSection);
-const auto kExperimentalMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramExperimentalSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_experimental, &st::menuIconExperimental }, BuildAlexSection);
-const auto kGhostModeMeta = Builder::BuildHelper(Builder::SectionMeta{ AlexgramGhostModeSectionId(), AlexgramSectionId(), &tr::lng_settings_alexgram_ghost_mode, &st::menuIconStealth }, BuildAlexSection);
+const auto kMeta = BuildHelper({ .id = AlexgramSectionId(), .parentId = MainId(), .title = &tr::lng_settings_alexgram, .icon = &st::menuIconManage }, [](SectionBuilder &builder) { BuildAlexgramMainSection(builder); });
+const auto kGeneralMeta = BuildHelper({ .id = AlexgramGeneralSectionId(), .parentId = AlexgramSectionId(), .title = &tr::lng_settings_alexgram_general, .icon = &st::menuIconSettings }, [](SectionBuilder &builder) { BuildAlexgramGeneralSection(builder); });
+const auto kTranslatorMeta = BuildHelper({ .id = AlexgramTranslatorSectionId(), .parentId = AlexgramSectionId(), .title = &tr::lng_settings_alexgram_translator, .icon = &st::menuIconTranslate }, [](SectionBuilder &builder) { BuildAlexgramTranslatorSection(builder); });
+const auto kChatsMeta = BuildHelper({ .id = AlexgramChatsSectionId(), .parentId = AlexgramSectionId(), .title = &tr::lng_settings_alexgram_chats, .icon = &st::menuIconChatBubble }, [](SectionBuilder &builder) { BuildAlexgramChatsSection(builder); });
+const auto kExperimentalMeta = BuildHelper({ .id = AlexgramExperimentalSectionId(), .parentId = AlexgramSectionId(), .title = &tr::lng_settings_alexgram_experimental, .icon = &st::menuIconExperimental }, [](SectionBuilder &builder) { BuildAlexgramExperimentalSection(builder); });
+const auto kGhostModeMeta = BuildHelper({ .id = AlexgramGhostModeSectionId(), .parentId = AlexgramSectionId(), .title = &tr::lng_settings_alexgram_ghost_mode, .icon = &st::menuIconStealth }, [](SectionBuilder &builder) { BuildAlexgramGhostModeSection(builder); });
 
 } // namespace Settings

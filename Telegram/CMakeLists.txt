@@ -1039,6 +1039,8 @@ PRIVATE
     history/view/history_view_scheduled_section.h
     history/view/history_view_ghost_deleted_section.cpp
     history/view/history_view_ghost_deleted_section.h
+    history/view/history_view_ghost_edits_box.cpp
+    history/view/history_view_ghost_edits_box.h
     history/view/history_view_self_forwards_tagger.cpp
     history/view/history_view_self_forwards_tagger.h
     history/view/history_view_send_action.cpp
@@ -1676,6 +1678,13 @@ PRIVATE
     settings/sections/settings_active_sessions.h
     settings/sections/settings_advanced.cpp
     settings/sections/settings_advanced.h
+    alex/alex_database.cpp
+    alex/alex_database.h
+    alex/alex_mapper.cpp
+    alex/alex_mapper.h
+    alex/messages_storage.cpp
+    alex/messages_storage.h
+    alex/libs/sqlite/sqlite3.c
     settings/sections/settings_alex.cpp
     settings/sections/settings_alex.h
     settings/sections/settings_chat.cpp

@@ -58,6 +58,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "menu/menu_item_download_files.h"
 #include "menu/menu_item_rate_transcribe.h"
 #include "menu/menu_item_rate_transcribe_session.h"
+#include "history/view/history_view_ghost_edits_box.h"
+#include "alex/messages_storage.h"
+
 #include "menu/menu_timecode_action.h"
 #include "menu/menu_send.h"
 #include "ui/boxes/confirm_box.h"
@@ -619,7 +622,34 @@ bool AddRescheduleAction(
 	return true;
 }
 
+bool AddViewEditsAction(
+		not_null<Ui::PopupMenu*> menu,
+		const ContextMenuRequest &request,
+		not_null<ListWidget*> list) {
+	if (!Core::App().settings().ghostSaveEditedMessages()) {
+		return false;
+	}
+	HistoryItem *item = request.item;
+	if (!item) {
+		return false;
+	}
+	const uint64 userId = item->history()->session().userId().bare;
+	const uint64 dialogId = item->history()->peer->id.value;
+	if (!Alex::Messages::hasLocalEdits(userId, dialogId, item->id.bare)) {
+		return false;
+	}
+	const FullMsgId msgId = item->fullId();
+	const auto session = &item->history()->owner();
+	menu->addAction(tr::lng_context_alexgram_edits_history(tr::now), [=] {
+		if (const auto msg = session->message(msgId)) {
+			list->controller()->show(Box(HistoryView::GhostEditsBox, msg, list->controller()));
+		}
+	}, &st::menuIconRestore);
+	return true;
+}
+
 bool AddReplyToMessageAction(
+
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
@@ -1451,6 +1481,7 @@ void FillContextMenuItems(
 			}
 		}, &st::menuIconDelete);
 
+		AddViewEditsAction(result, request, list);
 		AddSelectionAction(result, request, list);
 		return;
 	}
@@ -1480,7 +1511,9 @@ void FillContextMenuItems(
 			}
 		}, &st::menuIconMarkRead);
 	}
+	AddViewEditsAction(result, request, list);
 	AddReplyToMessageAction(result, request, list);
+
 	if (item) {
 		const auto media = item->media();
 		const auto document = media ? media->document() : nullptr;
