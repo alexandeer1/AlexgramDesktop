@@ -1513,8 +1513,10 @@ void Session::deleteConversationLocally(not_null<PeerData*> peer) {
 		if (history->folderKnown()) {
 			setChatPinned(history, FilterId(), false);
 		}
-		removeChatListEntry(history);
-		history->clearFolder();
+		history->updateChatListExistence();
+		if (!history->inChatList()) {
+			history->clearFolder();
+		}
 
 		// We want to mark the channel as left before unloading the history,
 		// otherwise some parts of updating may return us to the chats list.
@@ -3063,9 +3065,6 @@ void Session::loadGhostDeletedMessages() {
 				data.messageData.size()));
 			history->registerClientSideMessage(item);
 			histories.insert(history);
-			LOG(("Ghost Info: Registered ghost message %1 for peer %2")
-				.arg(data.messageId)
-				.arg(data.dialogId));
 		} else {
 			LOG(("Ghost Error: Failed to create item for ghost message %1 for peer %2")
 				.arg(data.messageId)
@@ -3073,7 +3072,11 @@ void Session::loadGhostDeletedMessages() {
 		}
 	}
 	for (const auto history : histories) {
+		if (!history->folderKnown()) {
+			history->clearFolder();
+		}
 		history->checkLocalMessages();
+		history->updateChatListExistence();
 	}
 }
 

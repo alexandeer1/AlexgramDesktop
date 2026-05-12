@@ -247,6 +247,10 @@ rpl::event_stream<bool> &Dolby8DChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &GhostModeEnabledChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 rpl::event_stream<bool> &GhostModeNoReadChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
@@ -2409,6 +2413,19 @@ rpl::producer<bool> Settings::dolby8DChanges() {
 void Settings::setDolby8D(bool value) {
   writePref<bool>("dolby-8d", value);
   Dolby8DChanges().fire_copy(value);
+}
+
+bool Settings::ghostModeEnabled() {
+  return readPref<bool>("ghost-mode-enabled", false);
+}
+
+rpl::producer<bool> Settings::ghostModeEnabledChanges() {
+  return GhostModeEnabledChanges().events_starting_with(ghostModeEnabled());
+}
+
+void Settings::setGhostModeEnabled(bool value) {
+  writePref<bool>("ghost-mode-enabled", value);
+  GhostModeEnabledChanges().fire_copy(value);
 }
 
 bool Settings::ghostModeNoRead() {

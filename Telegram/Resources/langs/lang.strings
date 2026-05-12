@@ -8275,7 +8275,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_send_mp4_as_video_about" = "When sending .mp4 files as documents, treat them as videos so they are streamable and have a preview.";
 "lng_settings_alexgram_dolby_8d" = "Dolby 8D Sound Effect";
 "lng_settings_alexgram_dolby_8d_about" = "Enable a surround-sound panning effect that makes audio feel like it's moving around your head. Works best with headphones.";
-"lng_settings_alexgram_ghost_mode" = "Ghost Mode";
+"lng_settings_alexgram_ghost_mode_master" = "Ghost Mode";
+"lng_settings_alexgram_ghost_mode_master_about" = "When enabled, it automatically activates stealth features: hiding read receipts, story views, online status, and typing status.";
+"lng_settings_alexgram_ghost_mode" = "Ghost Mode Settings";
 "lng_settings_alexgram_ghost_mode_no_read" = "Don't Read Messages";
 "lng_settings_alexgram_ghost_mode_no_read_about" = "Read messages without sending a read receipt to the sender.";
 "lng_settings_alexgram_ghost_mode_no_read_stories" = "Don't Read Stories";

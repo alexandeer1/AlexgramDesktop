@@ -301,52 +301,40 @@ StorageStats getStorageStats(ID userId) {
 		const auto dbPath = u"./tdata/alexdata.db"_q;
 		stats.databaseFileSize = QFileInfo(dbPath).size();
 
-		auto messages = storage.get_all<DeletedMessage>(
-			where(column<DeletedMessage>(&DeletedMessage::userId) == userId)
-		);
+		auto getCatStats = [&](int type) -> Alex::StorageStats::Entry {
+			auto count = storage.count<DeletedMessage>(
+				where(column<DeletedMessage>(&DeletedMessage::userId) == userId and
+					  column<DeletedMessage>(&DeletedMessage::documentType) == type)
+			);
+			auto sizePtr = std::move(storage.select(
+				sum(column<DeletedMessage>(&DeletedMessage::messageData)),
+				where(column<DeletedMessage>(&DeletedMessage::userId) == userId and
+					  column<DeletedMessage>(&DeletedMessage::documentType) == type)
+			).front());
+			return { (int)count, (int64)(sizePtr ? *sizePtr : 0) };
+		};
 
-		for (const auto &msg : messages) {
-			const int64 size = msg.messageData.size();
-			stats.total.count++;
-			stats.total.size += size;
+		stats.text = getCatStats(0);
+		stats.photo = getCatStats(1);
+		stats.video = getCatStats(2);
+		stats.audio = getCatStats(3);
+		stats.document = getCatStats(4);
+		stats.other = getCatStats(5);
 
-			switch (msg.documentType) {
-			case 0: // Text
-				stats.text.count++;
-				stats.text.size += size;
-				break;
-			case 1: // Photo
-				stats.photo.count++;
-				stats.photo.size += size;
-				break;
-			case 2: // Video/Gif
-				stats.video.count++;
-				stats.video.size += size;
-				break;
-			case 3: // Audio/Voice
-				stats.audio.count++;
-				stats.audio.size += size;
-				break;
-			case 4: // Document/File
-				stats.document.count++;
-				stats.document.size += size;
-				break;
-			default:
-				stats.other.count++;
-				stats.other.size += size;
-				break;
-			}
-		}
+		stats.total.count = stats.text.count + stats.photo.count + stats.video.count + stats.audio.count + stats.document.count + stats.other.count;
+		stats.total.size = stats.text.size + stats.photo.size + stats.video.size + stats.audio.size + stats.document.size + stats.other.size;
 
-		auto edited = storage.get_all<EditedMessage>(
+		auto editCount = storage.count<EditedMessage>(
 			where(column<EditedMessage>(&EditedMessage::userId) == userId)
 		);
-		for (const auto &msg : edited) {
-			const int64 size = msg.messageData.size();
-			stats.edits.count++;
-			stats.edits.size += size;
-		}
-	} catch (...) {
+		auto editSizePtr = std::move(storage.select(
+			sum(column<EditedMessage>(&EditedMessage::messageData)),
+			where(column<EditedMessage>(&EditedMessage::userId) == userId)
+		).front());
+		stats.edits = { (int)editCount, (int64)(editSizePtr ? *editSizePtr : 0) };
+
+	} catch (const std::exception &ex) {
+		LOG(("Alex::Database Stats Error: %1").arg(ex.what()));
 	}
 	return stats;
 }
@@ -354,7 +342,7 @@ StorageStats getStorageStats(ID userId) {
 rpl::producer<StorageStats> storageStatsValue(ID userId) {
 	return rpl::single(rpl::empty_value())
 		| rpl::then(storageChanged.events())
-		| rpl::map([=] {
+		| rpl::map([=](auto) {
 			return rpl::make_producer<StorageStats>([=](auto consumer) {
 				crl::async([=] {
 					auto stats = getStorageStats(userId);

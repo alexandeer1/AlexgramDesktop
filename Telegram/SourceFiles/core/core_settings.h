@@ -1145,6 +1145,10 @@ public:
 	[[nodiscard]] rpl::producer<bool> dolby8DChanges();
 	void setDolby8D(bool value);
 
+	[[nodiscard]] bool ghostModeEnabled();
+	[[nodiscard]] rpl::producer<bool> ghostModeEnabledChanges();
+	void setGhostModeEnabled(bool value);
+
 	[[nodiscard]] bool ghostModeNoRead();
 	[[nodiscard]] rpl::producer<bool> ghostModeNoReadChanges();
 	void setGhostModeNoRead(bool value);

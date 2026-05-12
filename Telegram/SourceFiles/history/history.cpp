@@ -3221,7 +3221,7 @@ bool History::shouldBeInChatList() const {
 		return true;
 	} else if (const auto channel = peer->asChannel()) {
 		if (!channel->amIn()) {
-			return isTopPromoted();
+			return isTopPromoted() || !_clientSideMessages.empty();
 		}
 	} else if (const auto chat = peer->asChat()) {
 		return chat->amIn()
