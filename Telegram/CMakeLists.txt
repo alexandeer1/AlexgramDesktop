@@ -1642,6 +1642,8 @@ PRIVATE
     settings/sections/settings_active_sessions.h
     settings/sections/settings_advanced.cpp
     settings/sections/settings_advanced.h
+    alex/alex_crash_report.cpp
+    alex/alex_crash_report.h
     alex/alex_database.cpp
     alex/alex_database.h
     alex/alex_mapper.cpp

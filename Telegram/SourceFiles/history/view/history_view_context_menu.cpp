@@ -1411,6 +1411,12 @@ void FillContextMenuItems(
 				}
 			}
 		}
+		result->addAction(tr::lng_context_to_msg(tr::now), [=] {
+			if (const auto item = owner->message(itemId)) {
+				list->controller()->showMessage(item);
+			}
+		}, &st::menuIconShowInChat);
+
 		result->addAction(tr::lng_context_delete_msg(tr::now), [=] {
 			if (const auto item = owner->message(itemId)) {
 				item->destroyGhost();

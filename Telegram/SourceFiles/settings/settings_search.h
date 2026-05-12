@@ -87,6 +87,8 @@ private:
 	std::vector<Ui::SettingsButton*> _visibleButtons;
 	base::flat_set<not_null<Ui::SettingsButton*>> _trackedButtons;
 	base::unique_qptr<Ui::PopupMenu> _contextMenu;
+	bool _indexing = false;
+	bool _reindexAfter = false;
 	int _selected = -1;
 
 };

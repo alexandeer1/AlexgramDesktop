@@ -776,10 +776,10 @@ largeEmojiOutline: 1px;
 largeEmojiPadding: margins(0px, 0px, 0px, 0px);
 largeEmojiSkip: 4px;
 
-historyEditedIcon: icon {{ "menu/edit", historyOutIconFg }};
+historyEditedIcon: icon {{ "chat/paid_edit-21x21-15x15", historyOutIconFg, point(0px, 1px) }};
 historyEditedIconEmoji: IconEmoji {
 	icon: historyEditedIcon;
-	padding: margins(0px, 0px, 2px, 0px);
+	padding: margins(0px, 0px, 0px, 0px);
 }
 
 historyDeletedIcon: icon {{ "menu/delete_small", historyOutIconFg, point(0px, 3px) }};

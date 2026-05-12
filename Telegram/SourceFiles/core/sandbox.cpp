@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/crash_report_window.h"
 #include "core/application.h"
 #include "core/launcher.h"
+#include "alex/alex_crash_report.h"
 #include "core/local_url_handlers.h"
 #include "core/update_checker.h"
 #include "core/deadlock_detector.h"
@@ -354,30 +355,20 @@ void Sandbox::singleInstanceChecked() {
 	}
 
 	refreshGlobalProxy();
-	if (!Logs::started() || !Logs::instanceChecked()) {
+	if (!Logs::started()) {
 		new NotStartedWindow();
 		return;
 	}
+
+	// Check for "working" file which indicates an improper shutdown (hang/crash)
+	const auto workingPath = cWorkingDir() + u"tdata/working"_q;
+	const auto wasImproperShutdown = QFile::exists(workingPath);
+	LOG(("Crash Debug: Checking for working file at '%1', exists: %2").arg(workingPath).arg(wasImproperShutdown ? "YES" : "NO"));
+
 	const auto result = CrashReports::Start();
-	v::match(result, [&](CrashReports::Status status) {
-		if (status == CrashReports::CantOpen) {
-			new NotStartedWindow();
-		} else {
-			launchApplication();
-		}
-	}, [&](const QByteArray &crashdump) {
-		// If crash dump is empty with that status it means that we
-		// didn't close the application properly. Just ignore for now.
-		if (crashdump.isEmpty()) {
-			if (CrashReports::Restart() == CrashReports::CantOpen) {
-				new NotStartedWindow();
-			} else {
-				launchApplication();
-			}
-			return;
-		}
+	const auto showCrashWindow = [&](const QByteArray &crashdump) {
 		_lastCrashDump = crashdump;
-		auto window = new LastCrashedWindow(
+		auto window = new Alex::CrashWindow(
 			_lastCrashDump,
 			[=] { launchApplication(); });
 		window->proxyChanges(
@@ -385,7 +376,37 @@ void Sandbox::singleInstanceChecked() {
 			_sandboxProxy = std::move(proxy);
 			refreshGlobalProxy();
 		}, window->lifetime());
+	};
+
+	v::match(result, [&](CrashReports::Status status) {
+		if (status == CrashReports::CantOpen) {
+			new NotStartedWindow();
+			return;
+		}
+		// If CrashReports didn't find a dump (file didn't exist or couldn't be opened),
+		// but our manual check found it existed just before, or if we want to force test.
+		if (wasImproperShutdown) {
+			showCrashWindow(QByteArray("IMPROPER_SHUTDOWN"));
+		}
+	}, [&](const QByteArray &crashdump) {
+		// If file existed, CrashReports returns the content (can be empty if no minidump).
+		if (crashdump.isEmpty()) {
+			showCrashWindow(QByteArray("IMPROPER_SHUTDOWN"));
+		} else {
+			showCrashWindow(crashdump);
+		}
 	});
+
+	if (PreLaunchWindow::instance()) {
+		return;
+	}
+
+	if (!Logs::instanceChecked()) {
+		new NotStartedWindow();
+		return;
+	}
+
+	launchApplication();
 }
 
 void Sandbox::socketDisconnected() {

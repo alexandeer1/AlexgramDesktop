@@ -2944,6 +2944,13 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
       }
     }
     _menu->addAction(
+        tr::lng_context_to_msg(tr::now),
+        [=] {
+          _controller->showMessage(item);
+        },
+        &st::menuIconShowInChat);
+
+    _menu->addAction(
         tr::lng_context_delete_msg(tr::now),
         [=] {
           if (const auto message =
@@ -4021,12 +4028,24 @@ void HistoryInner::updateSize() {
 void HistoryInner::setShownPinned(HistoryItem *item) { _pinnedItem = item; }
 
 void HistoryInner::reprocessAlexSettings() {
-  enumerateItems<EnumItemsDirection::TopToBottom>(
-      [&](not_null<Element *> view, int top, int bottom) {
-        session().data().requestItemViewRefresh(view->data());
-        return true;
-      });
-  update();
+	const auto refresh = [&](History *history) {
+		if (!history) {
+			return;
+		}
+		for (const auto &block : history->blocks) {
+			for (const auto &view : block->messages) {
+				view->itemTextUpdated();
+				view->itemDataChanged();
+				view->setPendingResize();
+			}
+		}
+		history->setHasPendingResizedItems();
+	};
+	refresh(_migrated);
+	refresh(_history);
+
+	_recountedAfterPendingResizedItems = false;
+	updateSize();
 }
 
 void HistoryInner::refreshSpoilers() {

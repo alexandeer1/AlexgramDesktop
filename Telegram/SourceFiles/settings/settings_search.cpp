@@ -35,6 +35,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_menu_icons.h"
 #include "styles/style_settings.h"
 #include "styles/style_widgets.h"
+#include <crl/crl_async.h>
+#include <crl/crl_on_main.h>
 
 namespace Settings {
 namespace {
@@ -260,51 +262,74 @@ void Search::setupCustomizations() {
 }
 
 void Search::buildIndex() {
-	_entries.clear();
-	_firstLetterIndex.clear();
-	_entryIdToIndex.clear();
+	if (_indexing) {
+		_reindexAfter = true;
+		return;
+	}
+	_indexing = true;
+	_reindexAfter = false;
 
-	const auto &registry = Builder::SearchRegistry::Instance();
-	const auto rawEntries = registry.collectAll(&controller()->session());
+	const auto session = &controller()->session();
+	const auto faq = session->faqSuggestions().entries();
 
-	_entries.reserve(rawEntries.size());
-	for (const auto &entry : rawEntries) {
-		const auto index = int(_entries.size());
-		auto indexed = IndexedEntry{
-			.entry = entry,
-			.terms = PrepareEntryWords(entry),
-			.depth = CalculateDepth(entry.section, registry),
-		};
-		if (!entry.id.isEmpty()) {
-			_entryIdToIndex[entry.id] = index;
+	crl::async([=, faq = std::move(faq)]() mutable {
+		const auto &registry = Builder::SearchRegistry::Instance();
+		const auto rawEntries = registry.collectAll(session);
+
+		auto entries = std::vector<IndexedEntry>();
+		auto entryIdToIndex = base::flat_map<QString, int>();
+		auto firstLetterIndex = base::flat_map<QChar, base::flat_set<int>>();
+
+		entries.reserve(rawEntries.size() + faq.size());
+		for (const auto &entry : rawEntries) {
+			const auto index = int(entries.size());
+			auto indexed = IndexedEntry{
+				.entry = entry,
+				.terms = PrepareEntryWords(entry),
+				.depth = CalculateDepth(entry.section, registry),
+			};
+			if (!entry.id.isEmpty()) {
+				entryIdToIndex[entry.id] = index;
+			}
+			entries.push_back(std::move(indexed));
 		}
-		_entries.push_back(std::move(indexed));
-	}
 
-	_faqStartIndex = int(_entries.size());
+		const auto faqStartIndex = int(entries.size());
+		for (const auto &faqEntry : faq) {
+			auto entry = Builder::SearchEntry{
+				.title = faqEntry.title,
+			};
+			auto indexed = IndexedEntry{
+				.entry = std::move(entry),
+				.terms = TextUtilities::PrepareSearchWords(faqEntry.title),
+				.depth = 1000,
+				.faqUrl = faqEntry.url,
+				.faqSection = faqEntry.section,
+			};
+			entries.push_back(std::move(indexed));
+		}
 
-	const auto &faq = controller()->session().faqSuggestions();
-	for (const auto &faqEntry : faq.entries()) {
-		auto entry = Builder::SearchEntry{
-			.title = faqEntry.title,
-		};
-		auto indexed = IndexedEntry{
-			.entry = std::move(entry),
-			.terms = TextUtilities::PrepareSearchWords(faqEntry.title),
-			.depth = 1000,
-			.faqUrl = faqEntry.url,
-			.faqSection = faqEntry.section,
-		};
-		_entries.push_back(std::move(indexed));
-	}
-
-	for (auto i = 0; i < int(_entries.size()); ++i) {
-		for (const auto &term : _entries[i].terms) {
-			if (!term.isEmpty()) {
-				_firstLetterIndex[term[0]].insert(i);
+		for (auto i = 0; i < int(entries.size()); ++i) {
+			for (const auto &term : entries[i].terms) {
+				if (!term.isEmpty()) {
+					firstLetterIndex[term[0]].insert(i);
+				}
 			}
 		}
-	}
+
+		crl::on_main(this, [this, entries = std::move(entries), entryIdToIndex = std::move(entryIdToIndex), firstLetterIndex = std::move(firstLetterIndex), faqStartIndex]() mutable {
+			_entries = std::move(entries);
+			_entryIdToIndex = std::move(entryIdToIndex);
+			_firstLetterIndex = std::move(firstLetterIndex);
+			_faqStartIndex = faqStartIndex;
+			_indexing = false;
+			if (_reindexAfter) {
+				buildIndex();
+			} else if (_searchField) {
+				rebuildResults(_searchController ? _searchController->query() : QString());
+			}
+		});
+	});
 }
 
 void Search::clearSelection() {
@@ -494,6 +519,7 @@ not_null<Ui::SettingsButton*> Search::createEntryButton(
 }
 
 void Search::rebuildResults(const QString &query) {
+	LOG(("Settings Search Debug: rebuildResults for query: '%1'").arg(query));
 	for (auto i = 0, count = _list->count(); i != count; ++i) {
 		_list->widgetAt(i)->hide();
 	}
