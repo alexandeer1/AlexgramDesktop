@@ -3063,7 +3063,6 @@ void Session::loadGhostDeletedMessages() {
 			item->setGhostDeletedData(QByteArray(
 				reinterpret_cast<const char*>(data.messageData.data()),
 				data.messageData.size()));
-			history->registerClientSideMessage(item);
 			histories.insert(history);
 		} else {
 			LOG(("Ghost Error: Failed to create item for ghost message %1 for peer %2")
