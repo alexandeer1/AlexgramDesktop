@@ -142,6 +142,10 @@ rpl::event_stream<bool> &ShowEditedIconChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &ShowTranslatedIconChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 rpl::event_stream<bool> &ShowForwardedDateChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
@@ -1358,8 +1362,39 @@ std::optional<int> Settings::readPrefImpl<int>(std::string_view key) {
   return {};
 }
 
-template <> void Settings::writePrefImpl<int>(std::string_view key, int value) {
+template <>
+void Settings::writePrefImpl<int>(std::string_view key, int value) {
   writePrefGeneric(key, QByteArray::number(value));
+}
+
+template <>
+std::optional<QString> Settings::readPrefImpl<QString>(std::string_view key) {
+	if (const auto data = readPrefGeneric(key)) {
+		return QString::fromUtf8(*data);
+	}
+	return {};
+}
+
+template <>
+void Settings::writePrefImpl<QString>(std::string_view key, QString value) {
+	writePrefGeneric(key, value.toUtf8());
+}
+
+template <>
+std::optional<uint64> Settings::readPrefImpl<uint64>(std::string_view key) {
+	if (const auto data = readPrefGeneric(key)) {
+		auto ok = false;
+		const auto result = data->toULongLong(&ok);
+		if (ok) {
+			return result;
+		}
+	}
+	return {};
+}
+
+template <>
+void Settings::writePrefImpl<uint64>(std::string_view key, uint64 value) {
+	writePrefGeneric(key, QByteArray::number(value));
 }
 
 QString Settings::getSoundPath(const QString &key) const {
@@ -2074,6 +2109,19 @@ void Settings::setShowEditedIcon(bool value) {
   ShowEditedIconChanges().fire_copy(value);
 }
 
+bool Settings::showTranslatedIcon() {
+  return readPref<bool>("show-translated-icon", true);
+}
+
+rpl::producer<bool> Settings::showTranslatedIconChanges() {
+  return ShowTranslatedIconChanges().events_starting_with(showTranslatedIcon());
+}
+
+void Settings::setShowTranslatedIcon(bool value) {
+  writePref<bool>("show-translated-icon", value);
+  ShowTranslatedIconChanges().fire_copy(value);
+}
+
 bool Settings::showForwardedDate() {
   return readPref<bool>("show-forwarded-date", true);
 }
@@ -2579,6 +2627,31 @@ rpl::producer<bool> Settings::ghostDeletedShowIconChanges() {
 void Settings::setGhostDeletedShowIcon(bool value) {
   writePref<bool>("ghost-deleted-show-icon", value);
   GhostDeletedShowIconChanges().fire_copy(value);
+}
+
+auto Settings::translatorProvider() -> TranslatorProvider {
+  return static_cast<TranslatorProvider>(
+      readPref<int>("translator-provider", 1));
+}
+
+void Settings::setTranslatorProvider(TranslatorProvider value) {
+  writePref<int>("translator-provider", static_cast<int>(value));
+}
+
+QString Settings::translatorLlmUrl() {
+	return readPref<QString>("translator-llm-url", "https://api.openai.com/v1/chat/completions");
+}
+
+void Settings::setTranslatorLlmUrl(const QString &value) {
+	writePref<QString>("translator-llm-url", value);
+}
+
+QString Settings::translatorLlmKey() {
+	return readPref<QString>("translator-llm-key", "");
+}
+
+void Settings::setTranslatorLlmKey(const QString &value) {
+	writePref<QString>("translator-llm-key", value);
 }
 
 } // namespace Core

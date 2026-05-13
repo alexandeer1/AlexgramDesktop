@@ -146,7 +146,8 @@ bool BottomInfo::isWide() const {
 		|| !_replies.isEmpty()
 		|| _effect
 		|| _data.tonStake
-		|| (_data.flags & Data::Flag::GhostDeleted);
+		|| (_data.flags & Data::Flag::GhostDeleted)
+		|| (_data.flags & Data::Flag::Translated);
 }
 
 TextState BottomInfo::textState(
@@ -451,6 +452,8 @@ void BottomInfo::layout() {
 void BottomInfo::layoutDateText() {
 	const auto showEditedIcon = (_data.flags & Data::Flag::Edited)
 		&& Core::App().settings().showEditedIcon();
+	const auto showTranslatedIcon = (_data.flags & Data::Flag::Translated)
+		&& Core::App().settings().showTranslatedIcon();
 	const auto edited = ((_data.flags & Data::Flag::Edited) && !showEditedIcon)
 		? (tr::lng_edited(tr::now) + ' ')
 		: (_data.flags & Data::Flag::EstimateDate)
@@ -494,6 +497,10 @@ void BottomInfo::layoutDateText() {
 		afterAuthorWidth += st::historyDeletedIconEmoji.icon.width()
 			+ st::msgDateFont->width(u" "_q);
 	}
+	if (showTranslatedIcon) {
+		afterAuthorWidth += st::historyTranslatedIconEmoji.icon.width()
+			+ st::msgDateFont->width(u" "_q);
+	}
 	const auto authorWidth = st::msgDateFont->width(author);
 	const auto maxWidth = st::maxSignatureSize;
 	_authorElided = !author.isEmpty()
@@ -527,6 +534,9 @@ void BottomInfo::layoutDateText() {
 		if (showDeletedIcon) {
 			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
 		}
+		if (showTranslatedIcon) {
+			marked.append(st::historyTranslatedIconEmoji).append(u" "_q);
+		}
 		if (showEditedIcon) {
 			marked.append(st::historyEditedIconEmoji).append(u" "_q);
 		}
@@ -534,6 +544,9 @@ void BottomInfo::layoutDateText() {
 	} else if (name.isEmpty()) {
 		if (showDeletedIcon) {
 			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+		}
+		if (showTranslatedIcon) {
+			marked.append(st::historyTranslatedIconEmoji).append(u" "_q);
 		}
 		if (showEditedIcon) {
 			marked.append(st::historyEditedIconEmoji).append(u" "_q);
@@ -543,6 +556,9 @@ void BottomInfo::layoutDateText() {
 		marked.append(name).append(prefix);
 		if (showDeletedIcon) {
 			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+		}
+		if (showTranslatedIcon) {
+			marked.append(st::historyTranslatedIconEmoji).append(u" "_q);
 		}
 		if (showEditedIcon) {
 			marked.append(st::historyEditedIconEmoji).append(u" "_q);
@@ -667,6 +683,11 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	result.msgId = item->id;
 	if (item->isGhostDeleted()) {
 		result.flags |= Flag::GhostDeleted;
+	}
+	if (const auto translation = item->translation()) {
+		if (translation->used) {
+			result.flags |= Flag::Translated;
+		}
 	}
 	if (message->hasOutLayout()) {
 		result.flags |= Flag::OutLayout;

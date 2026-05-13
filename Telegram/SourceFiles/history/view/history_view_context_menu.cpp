@@ -1409,13 +1409,44 @@ void FillContextMenuItems(
 						}
 					}, &st::menuIconCopy);
 				}
+
+				const auto item = view->data().get();
+				const auto mediaHasTextForCopy = view->media() && view->media()->hasTextForCopy();
+				const auto translate = mediaHasTextForCopy
+					? (HistoryView::TransribedText(item)
+						.append('\n')
+						.append(item->originalText()))
+					: item->originalText();
+				const auto translation = item->translation();
+				if (translation && translation->used) {
+					result->addAction(tr::lng_context_hide_translation(tr::now), [=] {
+						if (const auto item = owner->message(itemId)) {
+							list->toggleTranslation(item);
+						}
+					}, &st::menuIconTranslate);
+				} else if (!translate.text.isEmpty() && !Ui::SkipTranslate(translate)) {
+					const auto requested = translation && translation->requested;
+					const auto used = translation && translation->used;
+					const auto label = requested
+						? u"Translating..."_q
+						: used
+						? tr::lng_translate_show_original(tr::now)
+						: tr::lng_context_translate(tr::now);
+					result->addAction(label, [=] {
+						if (const auto item = owner->message(itemId)) {
+							list->toggleTranslation(item);
+						}
+					}, &st::menuIconTranslate)->setEnabled(!requested);
+				}
 			}
 		}
-		result->addAction(tr::lng_context_to_msg(tr::now), [=] {
-			if (const auto item = owner->message(itemId)) {
-				list->controller()->showMessage(item);
-			}
-		}, &st::menuIconShowInChat);
+		if (list->elementContext() == Context::GhostDeleted) {
+			result->addAction(tr::lng_context_to_msg(tr::now), [=] {
+				if (const auto item = owner->message(itemId)) {
+					list->controller()->showMessage(item);
+				}
+			}, &st::menuIconShowInChat);
+		}
 
 		result->addAction(tr::lng_context_delete_msg(tr::now), [=] {
 			if (const auto item = owner->message(itemId)) {
@@ -1558,35 +1589,25 @@ void FillContextMenuItems(
 					.append(item->originalText()))
 				: item->originalText();
 			const auto translation = item->translation();
-			const auto translated = translation && translation->used;
-			if (translated) {
+			if (translation && translation->used) {
 				result->addAction(tr::lng_context_hide_translation(tr::now), [=] {
 					if (const auto item = owner->message(itemId)) {
 						list->toggleTranslation(item);
 					}
 				}, &st::menuIconTranslate);
 			} else if (!translate.text.isEmpty() && !Ui::SkipTranslate(translate)) {
-				result->addAction(u"!!! TEST !!!"_q, [=] {
-					const auto item = owner->message(itemId);
-					if (!item) {
-						return;
+				const auto requested = translation && translation->requested;
+				const auto used = translation && translation->used;
+				const auto label = requested
+					? u"Translating..."_q
+					: used
+					? tr::lng_translate_show_original(tr::now)
+					: tr::lng_context_translate(tr::now);
+				result->addAction(label, [=] {
+					if (const auto item = owner->message(itemId)) {
+						list->toggleTranslation(item);
 					}
-					const auto text = mediaHasTextForCopy
-						? (HistoryView::TransribedText(item)
-							.append('\n')
-							.append(item->originalText()))
-						: item->originalText();
-					
-					// ALWAYS show the box from the context menu as requested.
-					list->controller()->show(Box([=](not_null<Ui::GenericBox*> box) {
-						Ui::TranslateBox(
-							box,
-							item->history()->peer,
-							MsgId(),
-							text,
-							list->hasCopyRestriction(item));
-					}));
-				}, &st::menuIconTranslate);
+				}, &st::menuIconTranslate)->setEnabled(!requested);
 			}
 		}
 	}

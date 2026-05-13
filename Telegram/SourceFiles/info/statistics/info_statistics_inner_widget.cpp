@@ -68,10 +68,12 @@ void AddContextMenu(
 				session->showMessage(item);
 			}
 		};
-		contextMenu->get()->addAction(
-			tr::lng_context_to_msg(tr::now),
-			crl::guard(controller, go),
-			&st::menuIconShowInChat);
+		if (!item->isGhostDeleted()) {
+			contextMenu->get()->addAction(
+				tr::lng_context_to_msg(tr::now),
+				crl::guard(controller, go),
+				&st::menuIconShowInChat);
+		}
 		contextMenu->get()->popup(QCursor::pos());
 	};
 

@@ -724,9 +724,9 @@ void SessionSettings::addFromSerialized(const QByteArray &serialized) {
 						"Bad data for SessionSettings::addFromSerialized()"));
 					return;
 				}
-				ghostReadTill.emplace(
-					DeserializePeerId(peerId),
-					MsgId(int32(tillId)));
+					ghostReadTill.emplace(
+						DeserializePeerId(peerId),
+						MsgId(tillId));
 			}
 		}
 	}

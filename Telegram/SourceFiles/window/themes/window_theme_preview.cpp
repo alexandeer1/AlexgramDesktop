@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/themes/window_theme_preview.h"
 
 #include "dialogs/dialogs_three_state_icon.h"
+#include "window/themes/window_themes_embedded.h"
 #include "lang/lang_keys.h"
 #include "lottie/lottie_icon.h"
 #include "platform/platform_window_title.h"
@@ -1097,7 +1098,19 @@ std::unique_ptr<Preview> PreviewFromFile(
 	const auto cache = &result->instance.cached;
 	if (bytes.isEmpty()) {
 		if (!LoadFromFile(filepath, instance, cache, &object.content)) {
-			return nullptr;
+			if (filepath.isEmpty() && !cloud.settings.empty()) {
+				const auto dark = IsNightMode();
+				const auto type = dark
+					? Data::CloudThemeType::Dark
+					: Data::CloudThemeType::Light;
+				const auto it = cloud.settings.find(type);
+				const auto accent = (it != end(cloud.settings))
+					? std::make_optional(it->second.accentColor)
+					: std::nullopt;
+				PreparePaletteCallback(dark, accent)(instance->palette);
+			} else {
+				return nullptr;
+			}
 		}
 	} else {
 		object.content = bytes;

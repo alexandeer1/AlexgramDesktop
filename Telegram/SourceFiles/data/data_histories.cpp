@@ -26,6 +26,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session_settings.h"
 #include "window/notifications_manager.h"
 #include "history/history.h"
+#include "history/history_unread_things.h"
 #include "history/history_item.h"
 #include "history/history_item_helpers.h"
 #include "history/view/history_view_element.h"
@@ -374,6 +375,36 @@ void Histories::readInboxTill(
 		history->session().settings().setGhostReadTill(
 			history->peer->id,
 			tillId);
+
+		// [Alexgram] Local Read Receipts For Ghost Mode
+		if (history->unreadCountKnown()) {
+			if (!history->unreadCount()) {
+				history->clearUnreadMentionsFor(0);
+				history->clearUnreadReactionsFor(0, nullptr);
+				history->clearUnreadPollVotesFor(0);
+				history->unsetFirstUnreadMessage();
+				history->destroyUnreadBar();
+			} else {
+				const auto clear = [&](auto proxy, const auto &ids) {
+					auto toClear = std::vector<MsgId>();
+					for (const auto id : ids) {
+						if (id <= tillId) toClear.push_back(id);
+					}
+					for (const auto id : toClear) proxy.erase(id);
+				};
+				clear(history->unreadMentions(), history->unreadMentionsIds());
+				clear(history->unreadReactions(), history->unreadReactionsIds());
+				clear(history->unreadPollVotes(), history->unreadPollVotesIds());
+
+				if (const auto view = history->firstUnreadMessage()) {
+					if (view->data()->id <= tillId) {
+						history->unsetFirstUnreadMessage();
+						history->calculateFirstUnreadMessage();
+					}
+				}
+			}
+		}
+		Core::App().notifications().clearIncomingFromHistory(history);
 	}
 }
 

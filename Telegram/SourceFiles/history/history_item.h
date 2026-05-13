@@ -7,9 +7,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
-#include "base/runtime_composer.h"
+#include "data/data_types.h"
 #include "data/data_media_types.h"
+#include "base/runtime_composer.h"
 #include "history/history_item_edition.h"
+#include "history/view/history_view_item_preview.h"
 
 #include <any>
 
@@ -77,6 +79,7 @@ class ServiceMessagePainter;
 
 namespace Ui {
 struct ColorCollectible;
+struct TranslateProviderResult;
 } // namespace Ui
 
 struct HistoryItemCommonFields {
@@ -487,8 +490,8 @@ public:
 		not_null<Data::Thread*> to) const;
 	[[nodiscard]] const HistoryMessageTranslation *translation() const;
 	[[nodiscard]] bool translationShowRequiresCheck(LanguageId to) const;
-	bool translationShowRequiresRequest(LanguageId to);
-	void translationDone(LanguageId to, TextWithEntities result);
+	bool translationShowRequiresRequest(LanguageId to, bool manual = false);
+	void translationDone(LanguageId to, Ui::TranslateProviderResult &&result);
 	void translationToggle(
 		not_null<HistoryMessageTranslation*> translation,
 		bool used);

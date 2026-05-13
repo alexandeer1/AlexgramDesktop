@@ -8106,4 +8106,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_alexgram_info_dc" = "Data Center";
 "lng_alexgram_info_id_copied" = "ID copied to clipboard.";
 
+"lng_settings_alexgram_show_translated_icon" = "Show Icon for Translated Messages";
+"lng_settings_alexgram_show_translated_icon_about" = "Show a translate icon next to the timestamp for messages that have been translated.";
+
 // Keys finished

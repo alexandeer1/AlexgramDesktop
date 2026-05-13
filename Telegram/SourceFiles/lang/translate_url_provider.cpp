@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "lang/translate_url_provider.h"
 
+#include "lang/translate_helper.h"
 #include "spellcheck/platform/platform_language.h"
 #include "ui/text/text_entity.h"
 
@@ -201,31 +202,17 @@ public:
 			TranslateProviderRequest request,
 			LanguageId to,
 			Fn<void(TranslateProviderResult)> done) override {
-		if (request.text.text.isEmpty()) {
+		if (request.text.text.isEmpty() && request.buttons.empty()) {
 			done(TranslateProviderResult{
 				.error = TranslateProviderError::Unknown,
 			});
 			return;
 		}
 
-		auto protectedText = request.text.text;
-		const auto &entities = request.text.entities;
-		if (!entities.empty()) {
-			// Wrap entities from back to front.
-			for (auto i = int(entities.size()); i != 0; --i) {
-				const auto &entity = entities[i - 1];
-				const auto isObject = (entity.type() == EntityType::CustomEmoji);
-				if (isObject) {
-					protectedText.replace(
-						entity.offset(),
-						entity.length(),
-						u" {E%1} "_q.arg(i - 1));
-				} else {
-					// Wrap: {S0}text{F0}
-					protectedText.insert(entity.offset() + entity.length(), u"{F%1}"_q.arg(i - 1));
-					protectedText.insert(entity.offset(), u"{S%1}"_q.arg(i - 1));
-				}
-			}
+		const auto wrapped = WrapForTranslation(request.text);
+		auto protectedText = wrapped.text;
+		for (auto i = 0; i != int(request.buttons.size()); ++i) {
+			protectedText += u"\n<b%1>%2</b%1>"_q.arg(i).arg(request.buttons[i]);
 		}
 
 		auto url = _urlTemplate;
@@ -283,54 +270,23 @@ public:
 				auto formatted = FormatJsonResponse(body).value_or(
 					QString::fromUtf8(body));
 
-				auto resultEntities = EntitiesInText();
-				if (!entities.empty()) {
-					for (auto i = 0; i != int(entities.size()); ++i) {
-						const auto &original = entities[i];
-						if (original.type() == EntityType::CustomEmoji) {
-							const auto pattern = u"[\\s\\p{P}]*\\{\\s*E\\s*%1\\s*\\}[\\s\\p{P}]*"_q.arg(i);
-							auto regex = QRegularExpression(pattern, QRegularExpression::CaseInsensitiveOption);
-							const auto match = regex.match(formatted);
-							if (match.hasMatch()) {
-								const int start = match.capturedStart();
-								formatted.replace(start, match.capturedLength(), u" "_q);
-								resultEntities.push_back(EntityInText(original.type(), start, 1, original.data()));
-							}
-						} else {
-							// Find start {S0} and end {F0}
-							const auto sPattern = u"[\\s\\p{P}]*\\{\\s*S\\s*%1\\s*\\}[\\s\\p{P}]*"_q.arg(i);
-							const auto fPattern = u"[\\s\\p{P}]*\\{\\s*F\\s*%1\\s*\\}[\\s\\p{P}]*"_q.arg(i);
-							auto sRegex = QRegularExpression(sPattern, QRegularExpression::CaseInsensitiveOption);
-							auto fRegex = QRegularExpression(fPattern, QRegularExpression::CaseInsensitiveOption);
-							const auto sMatch = sRegex.match(formatted);
-							const auto fMatch = fRegex.match(formatted);
-							if (sMatch.hasMatch() && fMatch.hasMatch()) {
-								int sStart = sMatch.capturedStart();
-								int sLen = sMatch.capturedLength();
-								formatted.remove(sStart, sLen);
-								
-								const auto fMatchAfter = fRegex.match(formatted);
-								if (fMatchAfter.hasMatch()) {
-									int fStart = fMatchAfter.capturedStart();
-									int fLen = fMatchAfter.capturedLength();
-									formatted.remove(fStart, fLen);
-									resultEntities.push_back(EntityInText(original.type(), sStart, fStart - sStart, original.data()));
-								}
-							} else if (sMatch.hasMatch()) {
-								formatted.remove(sMatch.capturedStart(), sMatch.capturedLength());
-							} else if (fMatch.hasMatch()) {
-								formatted.remove(fMatch.capturedStart(), fMatch.capturedLength());
-							}
-						}
-					}
-					std::sort(resultEntities.begin(), resultEntities.end(), [](const auto &a, const auto &b) {
-						return a.offset() < b.offset();
-					});
+				static const auto btnRe = QRegularExpression(
+					u"(?:<|＜|&lt;)\\s*[bB](\\d+)\\s*(?:>|＞|&gt;)(.*?)(?:<|＜|&lt;)\\s*/\\s*[bB]\\d+\\s*(?:>|＞|&gt;)"_q,
+					QRegularExpression::CaseInsensitiveOption | QRegularExpression::DotMatchesEverythingOption);
+				
+				auto btnIt = btnRe.globalMatch(formatted);
+				auto btnMap = base::flat_map<int, QString>();
+				while (btnIt.hasNext()) {
+					auto match = btnIt.next();
+					btnMap[match.captured(1).toInt()] = match.captured(2).trimmed();
 				}
-				TextWithEntities resultText;
-				resultText.text = formatted;
-				resultText.entities = resultEntities;
-				result.text = resultText;
+				for (auto i = 0; i != int(request.buttons.size()); ++i) {
+					const auto it = btnMap.find(i);
+					result.buttons.push_back((it != btnMap.end()) ? it->second : QString());
+				}
+				formatted.remove(btnRe);
+
+				result.text = UnwrapFromTranslation(formatted.trimmed(), wrapped);
 			}
 			done(std::move(result));
 			reply->deleteLater();

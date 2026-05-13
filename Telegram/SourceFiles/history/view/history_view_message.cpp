@@ -2900,6 +2900,7 @@ bool Message::hasFromPhoto() const {
 	case Context::Monoforum:
 		return (delegate()->elementChatMode() == ElementChatMode::Wide);
 	case Context::History:
+	case Context::GhostDeleted:
 	case Context::ChatPreview:
 	case Context::TTLViewer:
 	case Context::Pinned:
@@ -4324,6 +4325,7 @@ bool Message::hasFromName() const {
 	case Context::Monoforum:
 		return data()->out() || data()->from()->isChannel();
 	case Context::History:
+	case Context::GhostDeleted:
 	case Context::ChatPreview:
 	case Context::TTLViewer:
 	case Context::Pinned:
@@ -4400,7 +4402,8 @@ bool Message::hasOutLayout() const {
 				return true;
 			}
 			return (context() == Context::SavedSublist
-					|| context() == Context::History)
+					|| context() == Context::History
+					|| context() == Context::GhostDeleted)
 				&& (!forwarded->forwardOfForward()
 					? (forwarded->originalSender
 						&& forwarded->originalSender->isSelf())
@@ -4495,7 +4498,7 @@ bool Message::hasFastReply() const {
 		if (isCommentsRootView()) {
 			return false;
 		}
-	} else if (context() != Context::History) {
+	} else if (context() != Context::History && context() != Context::GhostDeleted) {
 		return false;
 	}
 	const auto peer = data()->history()->peer;

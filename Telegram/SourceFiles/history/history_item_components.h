@@ -388,10 +388,12 @@ private:
 struct HistoryMessageTranslation
 : RuntimeComponent<HistoryMessageTranslation, HistoryItem> {
 	TextWithEntities text;
+	std::vector<QString> buttons;
 	LanguageId to;
 	bool requested = false;
 	bool failed = false;
 	bool used = false;
+	bool manual = false;
 };
 
 struct HistoryMessageReplyMarkup

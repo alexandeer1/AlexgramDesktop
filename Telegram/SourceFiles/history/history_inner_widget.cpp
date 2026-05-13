@@ -2941,14 +2941,33 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
               },
               &st::menuIconCopy);
         }
+        const auto mediaHasTextForCopy = media && media->hasTextForCopy();
+        const auto translate = mediaHasTextForCopy
+            ? (HistoryView::TransribedText(item).append('\n').append(
+                  item->originalText()))
+            : item->originalText();
+        const auto translation = item->translation();
+        if (translation && translation->used) {
+          _menu->addAction(
+              tr::lng_context_hide_translation(tr::now),
+              [=] {
+                if (const auto msg = session->data().message(itemId)) {
+                  _translateTracker->toggleTranslation(msg);
+                }
+              },
+              &st::menuIconTranslate);
+        } else if (!translate.text.isEmpty() && !Ui::SkipTranslate(translate)) {
+          _menu->addAction(
+              tr::lng_context_translate(tr::now),
+              [=] {
+                if (const auto msg = session->data().message(itemId)) {
+                  _translateTracker->toggleTranslation(msg);
+                }
+              },
+              &st::menuIconTranslate);
+        }
       }
     }
-    _menu->addAction(
-        tr::lng_context_to_msg(tr::now),
-        [=] {
-          _controller->showMessage(item);
-        },
-        &st::menuIconShowInChat);
 
     _menu->addAction(
         tr::lng_context_delete_msg(tr::now),
