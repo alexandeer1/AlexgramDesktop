@@ -1630,10 +1630,9 @@ void History::registerClientSideMessage(not_null<HistoryItem*> item) {
 }
 
 void History::unregisterClientSideMessage(not_null<HistoryItem*> item) {
-	const auto removed = _clientSideMessages.remove(item);
-	Assert(removed);
-
-	session().changes().historyUpdated(this, UpdateFlag::ClientSideMessages);
+	if (_clientSideMessages.remove(item)) {
+		session().changes().historyUpdated(this, UpdateFlag::ClientSideMessages);
+	}
 }
 
 const base::flat_set<not_null<HistoryItem*>> &History::clientSideMessages() {

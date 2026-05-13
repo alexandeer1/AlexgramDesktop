@@ -7974,8 +7974,12 @@ void HistoryItem::overrideMedia(std::unique_ptr<Data::Media> media) {
 void HistoryItem::setGhostDeleted(bool ghostDeleted) {
 	if (ghostDeleted) {
 		_flags |= MessageFlag::DeletedLocally;
+		_history->registerClientSideMessage(this);
 	} else {
 		_flags &= ~MessageFlag::DeletedLocally;
+		if (!IsClientMsgId(id)) {
+			_history->unregisterClientSideMessage(this);
+		}
 	}
 	history()->owner().notifyItemDataChange(this);
 }
