@@ -24,7 +24,9 @@ namespace {
 const auto kLanguageNamePrefix = "cloud_lng_language_";
 const auto kTranslateToPrefix = "cloud_lng_translate_to_";
 
-[[nodiscard]] std::vector<LanguageId> TranslationLanguagesList() {
+} // namespace
+
+std::vector<LanguageId> TranslationLanguagesList() {
 	// If adding some languages here you need to check that it is
 	// supported on the server. Right now server supports those:
 	//
@@ -126,6 +128,8 @@ const auto kTranslateToPrefix = "cloud_lng_translate_to_";
 		{ QLocale::Yiddish },
 	};
 }
+
+namespace {
 
 class Row final : public SettingsButton {
 public:

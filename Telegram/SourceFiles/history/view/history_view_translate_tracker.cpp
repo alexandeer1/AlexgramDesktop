@@ -159,7 +159,7 @@ void TranslateTracker::switchTranslation(
 		LanguageId id) {
 	_history->session().api().transcribes().checkSummaryToTranslate(
 		item->fullId());
-	if (item->translationShowRequiresRequest(id)) {
+	if (item->translationShowRequiresRequest(id, false)) {
 		_itemsToRequest.emplace(
 			item->fullId(),
 			ItemToRequest{ int(item->originalText().text.size()) });
@@ -170,13 +170,14 @@ void TranslateTracker::toggleTranslation(not_null<HistoryItem*> item) {
 	if (const auto translation = item->Get<HistoryMessageTranslation>()) {
 		if (translation->used) {
 			item->translationToggle(translation, false);
+			translation->manual = false;
 			return;
 		}
 	}
 	const auto to = _history->translatedTo()
 		? _history->translatedTo()
 		: Ui::ChooseTranslateTo(_history);
-	if (!item->translationShowRequiresRequest(to)) {
+	if (!item->translationShowRequiresRequest(to, true)) {
 		return;
 	}
 
@@ -190,8 +191,11 @@ void TranslateTracker::toggleTranslation(not_null<HistoryItem*> item) {
 		_history->peer,
 		item->id,
 		std::move(text));
+	const auto id = item->fullId();
 	_provider->request(request, to, [=](Ui::TranslateProviderResult &&result) {
-		item->translationDone(to, std::move(result.text).value_or(TextWithEntities()));
+		if (const auto item = _history->owner().message(id)) {
+			item->translationDone(to, std::move(result));
+		}
 	});
 }
 
@@ -363,9 +367,7 @@ void TranslateTracker::requestSome() {
 			}
 			const auto &id = _requested[index];
 			if (const auto item = owner->message(id)) {
-				item->translationDone(
-					to,
-					result.text.value_or(TextWithEntities()));
+				item->translationDone(to, std::move(result));
 			}
 		},
 		[=] {
@@ -397,6 +399,12 @@ void TranslateTracker::applyLimit() {
 				if (const auto j = _itemsToRequest.find(i->first)
 					; j != end(_itemsToRequest)) {
 					if (const auto item = owner->message(i->first)) {
+						if (const auto translation = item->translation()) {
+							if (translation->manual) {
+								++i;
+								continue;
+							}
+						}
 						item->translationShowRequiresRequest({});
 					}
 					_itemsToRequest.erase(j);

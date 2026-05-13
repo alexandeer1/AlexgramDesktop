@@ -74,6 +74,7 @@ enum class Context : char {
 	ShortcutMessages,
 	ScheduledTopic,
 	ChatPreview,
+	GhostDeleted,
 };
 
 enum class OnlyEmojiAndSpaces : char {

@@ -182,7 +182,7 @@ QRect GhostDeletedWidget::floatPlayerAvailableRect() {
 }
 
 Context GhostDeletedWidget::listContext() {
-	return Context::History;
+	return Context::GhostDeleted;
 }
 
 bool GhostDeletedWidget::listScrollTo(int top, bool syntetic) {

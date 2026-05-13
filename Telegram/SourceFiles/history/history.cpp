@@ -3425,6 +3425,17 @@ void History::applyDialogFields(
 			if (ghostRead > maxInboxRead) {
 				maxInboxRead = ghostRead;
 				unreadCount = 0;
+
+				const auto clear = [&](auto proxy, const auto &ids) {
+					auto toClear = std::vector<MsgId>();
+					for (const auto id : ids) {
+						if (id <= ghostRead) toClear.push_back(id);
+					}
+					for (const auto id : toClear) proxy.erase(id);
+				};
+				clear(unreadMentions(), unreadMentionsIds());
+				clear(unreadReactions(), unreadReactionsIds());
+				clear(unreadPollVotes(), unreadPollVotesIds());
 			}
 		}
 		if (maxInboxRead + 1 >= _inboxReadBefore.value_or(1)) {

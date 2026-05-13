@@ -1162,7 +1162,7 @@ void ListWidget::showContextMenu(
 	_contextMenu = base::make_unique_q<Ui::PopupMenu>(
 		this,
 		st::popupMenuWithIcons);
-	if (item->isHistoryEntry()) {
+	if (item->isHistoryEntry() && !item->isGhostDeleted()) {
 		_contextMenu->addAction(
 			tr::lng_context_to_msg(tr::now),
 			[=] {

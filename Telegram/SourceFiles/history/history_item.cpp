@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "alex/messages_storage.h"
 #include "history/history_item.h"
+#include "lang/translate_provider.h"
 
 
 #include "api/api_premium.h"
@@ -3081,10 +3082,13 @@ bool HistoryItem::translationShowRequiresCheck(LanguageId to) const {
 	if (!to) {
 		if (const auto translation = Get<HistoryMessageTranslation>()) {
 			return (!translation->failed && translation->text.empty())
-				|| translation->used;
+				|| (translation->used && !translation->manual);
 		}
 		return false;
 	} else if (const auto translation = Get<HistoryMessageTranslation>()) {
+		if (translation->manual) {
+			return false;
+		}
 		if (translation->to == to) {
 			return !translation->used && !translation->text.empty();
 		}
@@ -3094,20 +3098,22 @@ bool HistoryItem::translationShowRequiresCheck(LanguageId to) const {
 	}
 }
 
-bool HistoryItem::translationShowRequiresRequest(LanguageId to) {
+bool HistoryItem::translationShowRequiresRequest(LanguageId to, bool manual) {
 	// When changing be sure to reflect in translationShowRequiresCheck(to).
 	if (!to) {
 		if (const auto translation = Get<HistoryMessageTranslation>()) {
-			if (!translation->failed && translation->text.empty()) {
+			if (!translation->failed && translation->text.empty() && !translation->manual) {
 				Assert(!translation->used);
 				RemoveComponents(HistoryMessageTranslation::Bit());
-			} else {
+			} else if (!translation->manual || manual) {
 				translationToggle(translation, false);
+				translation->manual = false;
 			}
 		}
 		return false;
 	} else if (const auto translation = Get<HistoryMessageTranslation>()) {
 		if (translation->to == to && !translation->failed && !translation->text.empty()) {
+			translation->manual = manual;
 			translationToggle(translation, true);
 			return false;
 		}
@@ -3119,12 +3125,14 @@ bool HistoryItem::translationShowRequiresRequest(LanguageId to) {
 		translation->requested = true;
 		translation->failed = false;
 		translation->text = {};
+		translation->manual = manual;
 		return true;
 	} else {
 		AddComponents(HistoryMessageTranslation::Bit());
 		const auto added = Get<HistoryMessageTranslation>();
 		added->to = to;
 		added->requested = true;
+		added->manual = manual;
 		return true;
 	}
 }
@@ -3132,20 +3140,32 @@ bool HistoryItem::translationShowRequiresRequest(LanguageId to) {
 void HistoryItem::translationToggle(
 		not_null<HistoryMessageTranslation*> translation,
 		bool used) {
-	if (translation->used != used && !translation->text.empty()) {
+	if (translation->used != used && (!translation->text.empty() || !translation->buttons.empty())) {
 		translation->used = used;
+		if (const auto markup = inlineReplyMarkup()) {
+			markup->inlineKeyboard = nullptr;
+		}
 		_history->owner().requestItemViewRefresh(this);
 		_history->owner().updateDependentMessages(this);
 	}
 }
 
-void HistoryItem::translationDone(LanguageId to, TextWithEntities result) {
+void HistoryItem::translationDone(LanguageId to, Ui::TranslateProviderResult &&result) {
 	const auto set = [&](not_null<HistoryMessageTranslation*> translation) {
-		if (result.empty()) {
+		if (!result.text && result.buttons.empty()) {
+			LOG(("HistoryItem Error: translationDone empty result for %1").arg(static_cast<long long>(id.bare)));
 			translation->failed = true;
 		} else {
-			translation->text = std::move(result);
-			if (_history->translatedTo() == to || !_history->translatedTo()) {
+			if (result.text) {
+				translation->text = std::move(*result.text);
+			}
+			translation->buttons = std::move(result.buttons);
+			if (const auto markup = inlineReplyMarkup()) {
+				markup->inlineKeyboard = nullptr;
+			}
+			if (_history->translatedTo() == to
+				|| !_history->translatedTo()
+				|| translation->manual) {
 				translationToggle(translation, true);
 			}
 		}

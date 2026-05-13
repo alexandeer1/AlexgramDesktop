@@ -2974,13 +2974,6 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
     }
 
     _menu->addAction(
-        tr::lng_context_to_msg(tr::now),
-        [=] {
-          _controller->showMessage(item);
-        },
-        &st::menuIconShowInChat);
-
-    _menu->addAction(
         tr::lng_context_delete_msg(tr::now),
         [=] {
           if (const auto message =

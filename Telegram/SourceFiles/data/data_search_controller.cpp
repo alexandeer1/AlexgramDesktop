@@ -270,11 +270,11 @@ SearchResult ParseSearchResult(
 		result.noSkipRange = [&]() -> MsgRange {
 			switch (direction) {
 			case Data::LoadDirection::Before: // All old loaded.
-				return { 0, result.noSkipRange.till };
+				return { 0, std::max(MsgId(0), result.noSkipRange.till) };
 			case Data::LoadDirection::Around: // All loaded.
 				return { 0, ServerMaxMsgId };
 			case Data::LoadDirection::After: // All new loaded.
-				return { result.noSkipRange.from, ServerMaxMsgId };
+				return { std::min(result.noSkipRange.from, ServerMaxMsgId), ServerMaxMsgId };
 			}
 			Unexpected("Direction in ParseSearchResult");
 		}();

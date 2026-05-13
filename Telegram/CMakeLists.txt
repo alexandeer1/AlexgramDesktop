@@ -1312,8 +1312,16 @@ PRIVATE
     lang/lang_translator.h
     lang/translate_mtproto_provider.cpp
     lang/translate_mtproto_provider.h
+    lang/translate_helper.cpp
+    lang/translate_helper.h
     lang/translate_provider.cpp
     lang/translate_provider.h
+    lang/translate_bing_provider.cpp
+    lang/translate_bing_provider.h
+    lang/translate_extra_providers.cpp
+    lang/translate_extra_providers.h
+    lang/translate_yandex_provider.cpp
+    lang/translate_yandex_provider.h
     lang/translate_url_provider.cpp
     lang/translate_url_provider.h
     layout/layout_document_generic_preview.cpp

@@ -22,6 +22,7 @@ class GenericBox;
 [[nodiscard]] QString LanguageName(LanguageId id);
 [[nodiscard]] QString LanguageNameNative(LanguageId id);
 
+[[nodiscard]] std::vector<LanguageId> TranslationLanguagesList();
 [[nodiscard]] rpl::producer<QString> TranslateBarTo(LanguageId id);
 [[nodiscard]] QString TranslateMenuDont(tr::now_t, LanguageId id);
 

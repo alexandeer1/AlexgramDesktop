@@ -285,14 +285,24 @@ void CloudThemes::resolve(
 		const QString &slug,
 		const FullMsgId &clickFromMessageId) {
 	_session->api().request(_resolveRequestId).cancel();
-	_resolveRequestId = _session->api().request(MTPaccount_GetTheme(
-		MTP_string(Format()),
-		MTP_inputThemeSlug(MTP_string(slug))
-	)).done([=](const MTPTheme &result) {
+	const auto format = Format();
+	auto request = [=](const QString &f) {
+		return _session->api().request(MTPaccount_GetTheme(
+			MTP_string(f),
+			MTP_inputThemeSlug(MTP_string(slug))
+		));
+	};
+	_resolveRequestId = request(format).done([=](const MTPTheme &result) {
 		showPreview(controller, result);
 	}).fail([=](const MTP::Error &error) {
-		if (error.type() == u"THEME_FORMAT_INVALID"_q) {
-			controller->show(Ui::MakeInformBox(tr::lng_theme_no_desktop()));
+		if (error.type() == u"THEME_FORMAT_INVALID"_q && !format.isEmpty()) {
+			_resolveRequestId = request(QString()).done([=](const MTPTheme &result) {
+				showPreview(controller, result);
+			}).fail([=](const MTP::Error &error) {
+				controller->show(Ui::MakeInformBox(tr::lng_theme_no_desktop()));
+			}).send();
+		} else {
+			MTP::ShowErrorFallback(controller->uiShow(), error);
 		}
 	}).send();
 }
@@ -301,7 +311,7 @@ void CloudThemes::showPreview(
 		not_null<Window::Controller*> controller,
 		const MTPTheme &data) {
 	data.match([&](const MTPDtheme &data) {
-		showPreview(controller, CloudTheme::Parse(_session, data));
+		showPreview(controller, CloudTheme::Parse(_session, data, true));
 	});
 }
 
@@ -315,12 +325,25 @@ void CloudThemes::showPreview(
 			Window::Theme::CreateForExistingBox,
 			controller,
 			cloud));
+	} else if (!cloud.settings.empty()) {
+		applyFromDocument(cloud);
 	} else {
 		controller->show(Ui::MakeInformBox(tr::lng_theme_no_desktop()));
 	}
 }
 
 void CloudThemes::applyFromDocument(const CloudTheme &cloud) {
+	if (!cloud.documentId) {
+		auto preview = Window::Theme::PreviewFromFile(
+			QByteArray(),
+			QString(),
+			cloud);
+		if (preview) {
+			Window::Theme::Apply(std::move(preview));
+			Window::Theme::KeepApplied();
+		}
+		return;
+	}
 	const auto document = _session->data().document(cloud.documentId);
 	loadDocumentAndInvoke(_updatingFrom, cloud, document, [=](
 			std::shared_ptr<Data::DocumentMedia> media) {

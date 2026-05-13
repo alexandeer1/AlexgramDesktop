@@ -118,6 +118,18 @@ public:
 		CloseToTaskbar = 1,
 		RunInBackground = 2,
 	};
+	enum class TranslatorProvider {
+		Telegram = 0,
+		GoogleGtx = 1,
+		GoogleAt = 2,
+		Bing = 3,
+		Yandex = 4,
+		MicrosoftEdge = 5,
+		Tencent = 6,
+		Caiyun = 7,
+		DeepL = 8,
+		ChatGpt = 9,
+	};
 
 	static constexpr auto kDefaultVolume = 0.9;
 
@@ -1052,6 +1064,10 @@ public:
 	[[nodiscard]] rpl::producer<bool> showEditedIconChanges();
 	void setShowEditedIcon(bool value);
 
+	[[nodiscard]] bool showTranslatedIcon();
+	[[nodiscard]] rpl::producer<bool> showTranslatedIconChanges();
+	void setShowTranslatedIcon(bool value);
+
 	[[nodiscard]] bool showForwardedDate();
 	[[nodiscard]] rpl::producer<bool> showForwardedDateChanges();
 	void setShowForwardedDate(bool value);
@@ -1144,6 +1160,14 @@ public:
 	[[nodiscard]] bool dolby8D();
 	[[nodiscard]] rpl::producer<bool> dolby8DChanges();
 	void setDolby8D(bool value);
+
+	[[nodiscard]] TranslatorProvider translatorProvider();
+	void setTranslatorProvider(TranslatorProvider value);
+
+	[[nodiscard]] QString translatorLlmUrl();
+	void setTranslatorLlmUrl(const QString &value);
+	[[nodiscard]] QString translatorLlmKey();
+	void setTranslatorLlmKey(const QString &value);
 
 	[[nodiscard]] bool ghostModeEnabled();
 	[[nodiscard]] rpl::producer<bool> ghostModeEnabledChanges();
@@ -1318,6 +1342,7 @@ private:
 	rpl::variable<bool> _cornerReply = true;
 
 	rpl::variable<bool> _showTranslateButton = true;
+	rpl::variable<bool> _showTranslatedIcon = true;
 	rpl::variable<bool> _cornerReaction = true;
 	rpl::variable<bool> _spellcheckerEnabled = true;
 	PlaybackSpeed _videoPlaybackSpeed;

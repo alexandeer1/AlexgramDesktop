@@ -1167,7 +1167,7 @@ Element::Element(
 , _context(delegate->elementContext()) {
 	history()->owner().registerItemView(this);
 	refreshMedia(replacing);
-	if (_context == Context::History) {
+	if (_context == Context::History || _context == Context::GhostDeleted) {
 		history()->setHasPendingResizedItems();
 	}
 	if (data->isFakeAboutView()) {
@@ -1375,7 +1375,7 @@ void Element::addVerticalMargins(int top, int bottom) {
 
 void Element::setPendingResize() {
 	_flags |= Flag::NeedsResize;
-	if (_context == Context::History) {
+	if (_context == Context::History || _context == Context::GhostDeleted) {
 		data()->_history->setHasPendingResizedItems();
 	}
 }
@@ -2970,7 +2970,7 @@ Element::~Element() {
 	if (_data->mainView() == this) {
 		_data->clearMainView();
 	}
-	if (_context == Context::History) {
+	if (_context == Context::History || _context == Context::GhostDeleted) {
 		history()->owner().notifyViewRemoved(this);
 	}
 	history()->owner().unregisterItemView(this);

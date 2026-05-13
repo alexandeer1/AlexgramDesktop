@@ -806,6 +806,7 @@ ReplyKeyboard::ReplyKeyboard(
 		const auto context = _item->fullId();
 		const auto rowCount = int(markup->data.rows.size());
 		_rows.reserve(rowCount);
+		int globalButtonIndex = 0;
 		for (auto i = 0; i != rowCount; ++i) {
 			const auto &row = markup->data.rows[i];
 			const auto rowSize = int(row.size());
@@ -817,12 +818,23 @@ ReplyKeyboard::ReplyKeyboard(
 				static const auto RegExp = QRegularExpression("\\b"
 					+ Ui::kCreditsCurrency
 					+ "\\b");
+				const auto translation = _item->translation();
+				const auto translatedButtons = (translation && translation->used)
+					? &translation->buttons
+					: nullptr;
+				const auto buttonIndex = globalButtonIndex++;
+				const auto originalText = row[j].text;
+				const auto translatedText = (translatedButtons
+					&& buttonIndex < int(translatedButtons->size()))
+					? (*translatedButtons)[buttonIndex]
+					: QString();
 				const auto type = row[j].type;
+				const auto rawText = (translatedText.isEmpty() ? originalText : translatedText);
 				const auto text = (type == Type::Buy)
-					? base::duplicate(row[j].text).replace(
+					? base::duplicate(rawText).replace(
 						RegExp,
 						QChar(0x2B50))
-					: row[j].text;
+					: rawText;
 				const auto withEmoji = [&](const style::IconEmoji &icon) {
 					return Ui::Text::IconEmoji(&icon).append(text);
 				};

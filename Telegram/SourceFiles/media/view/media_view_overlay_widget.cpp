@@ -1968,7 +1968,7 @@ void OverlayWidget::fillContextMenuActions(
 			[=] { saveCancel(); },
 			&st::mediaMenuIconCancel);
 	}
-	if (_message && _message->isRegular()) {
+	if (_message && _message->isRegular() && !_message->isGhostDeleted()) {
 		addAction(
 			tr::lng_context_to_msg(tr::now),
 			[=] { toMessage(); },

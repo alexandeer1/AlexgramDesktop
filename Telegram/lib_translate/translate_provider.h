@@ -19,6 +19,7 @@ enum class TranslateProviderError {
 
 struct TranslateProviderResult {
 	std::optional<TextWithEntities> text;
+	std::vector<QString> buttons;
 	TranslateProviderError error = TranslateProviderError::None;
 };
 
@@ -29,6 +30,7 @@ struct TranslateProviderRequest {
 	PeerId peerId = 0;
 	MsgId msgId = 0;
 	TextWithEntities text;
+	std::vector<QString> buttons;
 };
 
 class TranslateProvider {

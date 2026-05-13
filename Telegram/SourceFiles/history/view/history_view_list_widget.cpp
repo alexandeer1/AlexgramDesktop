@@ -116,7 +116,7 @@ constexpr auto kScrollDateHideOnDayCrossingTimeout = crl::time(3000);
 		Context context,
 		History *history) {
 	if (!history
-		|| (context != Context::History && context != Context::Replies)) {
+		|| (context != Context::History && context != Context::GhostDeleted && context != Context::Replies)) {
 		return nullptr;
 	}
 	return std::make_unique<ReadMetricsTracker>(history->peer);
