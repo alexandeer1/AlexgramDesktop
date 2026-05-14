@@ -356,11 +356,11 @@ void AbstractMosaicLayout::layoutRow(Row &row, int fullWidth) {
 
 	// Enumerate items in the order of growing maxWidth()
 	// for that sort item indices by maxWidth().
-	int indices[kInlineItemsMaxPerRow];
+	auto indices = std::array<int, kInlineItemsMaxPerRow>();
 	for (auto i = 0; i != count; ++i) {
 		indices[i] = i;
 	}
-	std::sort(indices, indices + count, [&](int a, int b) {
+	std::sort(begin(indices), begin(indices) + count, [&](int a, int b) {
 		return row.items[a]->maxWidth() < row.items[b]->maxWidth();
 	});
 

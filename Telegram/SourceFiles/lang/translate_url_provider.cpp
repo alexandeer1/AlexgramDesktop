@@ -246,8 +246,12 @@ public:
 		}
 
 		auto networkRequest = QNetworkRequest(requestUrl);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+		networkRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+#else
 		networkRequest.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
 		networkRequest.setAttribute(QNetworkRequest::HttpPipeliningAllowedAttribute, true);
+#endif
 		networkRequest.setHeader(QNetworkRequest::UserAgentHeader, u"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"_q);
 		networkRequest.setRawHeader("Referer", "https://translate.google.com/");
 

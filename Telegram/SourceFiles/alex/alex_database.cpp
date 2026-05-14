@@ -12,102 +12,109 @@
 #include <rpl/flatten_latest.h>
 #include <crl/crl_async.h>
 #include <crl/crl_on_main.h>
+#include "core/launcher.h"
 
 using namespace sqlite_orm;
 
 namespace Alex {
 
-auto storage = make_storage(
-	"./tdata/alexdata.db",
-	make_table<SchemaVersion>(
-		"SchemaVersion",
-		make_column("id", &SchemaVersion::id, primary_key()),
-		make_column("version", &SchemaVersion::version)
-	),
-	make_index("idx_deleted_message_userId_dialogId_topicId_messageId",
-			   column<DeletedMessage>(&DeletedMessage::userId),
-			   column<DeletedMessage>(&DeletedMessage::dialogId),
-			   column<DeletedMessage>(&DeletedMessage::topicId),
-			   column<DeletedMessage>(&DeletedMessage::messageId)),
-	make_index("idx_edited_message_userId_dialogId_messageId",
-			   column<EditedMessage>(&EditedMessage::userId),
-			   column<EditedMessage>(&EditedMessage::dialogId),
-			   column<EditedMessage>(&EditedMessage::messageId)),
-	make_table<DeletedMessage>(
-		"DeletedMessage",
-		make_column("fakeId", &DeletedMessage::fakeId, primary_key().autoincrement()),
-		make_column("userId", &DeletedMessage::userId),
-		make_column("dialogId", &DeletedMessage::dialogId),
-		make_column("groupedId", &DeletedMessage::groupedId),
-		make_column("peerId", &DeletedMessage::peerId),
-		make_column("fromId", &DeletedMessage::fromId),
-		make_column("topicId", &DeletedMessage::topicId),
-		make_column("messageId", &DeletedMessage::messageId),
-		make_column("date", &DeletedMessage::date),
-		make_column("flags", &DeletedMessage::flags),
-		make_column("editDate", &DeletedMessage::editDate),
-		make_column("views", &DeletedMessage::views),
-		make_column("fwdFlags", &DeletedMessage::fwdFlags),
-		make_column("fwdFromId", &DeletedMessage::fwdFromId),
-		make_column("fwdName", &DeletedMessage::fwdName),
-		make_column("fwdDate", &DeletedMessage::fwdDate),
-		make_column("fwdPostAuthor", &DeletedMessage::fwdPostAuthor),
-		make_column("replyFlags", &DeletedMessage::replyFlags),
-		make_column("replyMessageId", &DeletedMessage::replyMessageId),
-		make_column("replyPeerId", &DeletedMessage::replyPeerId),
-		make_column("replyTopId", &DeletedMessage::replyTopId),
-		make_column("replyForumTopic", &DeletedMessage::replyForumTopic),
-		make_column("replySerialized", &DeletedMessage::replySerialized),
-		make_column("entityCreateDate", &DeletedMessage::entityCreateDate),
-		make_column("text", &DeletedMessage::text),
-		make_column("textEntities", &DeletedMessage::textEntities),
-		make_column("messageData", &DeletedMessage::messageData),
-		make_column("mediaPath", &DeletedMessage::mediaPath),
-		make_column("hqThumbPath", &DeletedMessage::hqThumbPath),
-		make_column("documentType", &DeletedMessage::documentType),
-		make_column("documentSerialized", &DeletedMessage::documentSerialized),
-		make_column("thumbsSerialized", &DeletedMessage::thumbsSerialized),
-		make_column("documentAttributesSerialized", &DeletedMessage::documentAttributesSerialized),
-		make_column("mimeType", &DeletedMessage::mimeType)
-	),
-	make_table<EditedMessage>(
-		"EditedMessage",
-		make_column("fakeId", &EditedMessage::fakeId, primary_key().autoincrement()),
-		make_column("userId", &EditedMessage::userId),
-		make_column("dialogId", &EditedMessage::dialogId),
-		make_column("groupedId", &EditedMessage::groupedId),
-		make_column("peerId", &EditedMessage::peerId),
-		make_column("fromId", &EditedMessage::fromId),
-		make_column("topicId", &EditedMessage::topicId),
-		make_column("messageId", &EditedMessage::messageId),
-		make_column("date", &EditedMessage::date),
-		make_column("flags", &EditedMessage::flags),
-		make_column("editDate", &EditedMessage::editDate),
-		make_column("views", &EditedMessage::views),
-		make_column("fwdFlags", &EditedMessage::fwdFlags),
-		make_column("fwdFromId", &EditedMessage::fwdFromId),
-		make_column("fwdName", &EditedMessage::fwdName),
-		make_column("fwdDate", &EditedMessage::fwdDate),
-		make_column("fwdPostAuthor", &EditedMessage::fwdPostAuthor),
-		make_column("replyFlags", &EditedMessage::replyFlags),
-		make_column("replyMessageId", &EditedMessage::replyMessageId),
-		make_column("replyPeerId", &EditedMessage::replyPeerId),
-		make_column("replyTopId", &EditedMessage::replyTopId),
-		make_column("replyForumTopic", &EditedMessage::replyForumTopic),
-		make_column("replySerialized", &EditedMessage::replySerialized),
-		make_column("entityCreateDate", &EditedMessage::entityCreateDate),
-		make_column("text", &EditedMessage::text),
-		make_column("textEntities", &EditedMessage::textEntities),
-		make_column("messageData", &EditedMessage::messageData),
-		make_column("mediaPath", &EditedMessage::mediaPath),
-		make_column("hqThumbPath", &EditedMessage::hqThumbPath),
-		make_column("documentType", &EditedMessage::documentType),
-		make_column("documentSerialized", &EditedMessage::documentSerialized),
-		make_column("thumbsSerialized", &EditedMessage::thumbsSerialized),
-		make_column("documentAttributesSerialized", &EditedMessage::documentAttributesSerialized),
-		make_column("mimeType", &EditedMessage::mimeType)
-	)
-);
+auto CreateStorage(const std::string &path) {
+	return make_storage(
+		path,
+		make_table<SchemaVersion>(
+			"SchemaVersion",
+			make_column("id", &SchemaVersion::id, primary_key()),
+			make_column("version", &SchemaVersion::version)
+		),
+		make_index("idx_deleted_message_userId_dialogId_topicId_messageId",
+				   column<DeletedMessage>(&DeletedMessage::userId),
+				   column<DeletedMessage>(&DeletedMessage::dialogId),
+				   column<DeletedMessage>(&DeletedMessage::topicId),
+				   column<DeletedMessage>(&DeletedMessage::messageId)),
+		make_index("idx_edited_message_userId_dialogId_messageId",
+				   column<EditedMessage>(&EditedMessage::userId),
+				   column<EditedMessage>(&EditedMessage::dialogId),
+				   column<EditedMessage>(&EditedMessage::messageId)),
+		make_table<DeletedMessage>(
+			"DeletedMessage",
+			make_column("fakeId", &DeletedMessage::fakeId, primary_key().autoincrement()),
+			make_column("userId", &DeletedMessage::userId),
+			make_column("dialogId", &DeletedMessage::dialogId),
+			make_column("groupedId", &DeletedMessage::groupedId),
+			make_column("peerId", &DeletedMessage::peerId),
+			make_column("fromId", &DeletedMessage::fromId),
+			make_column("topicId", &DeletedMessage::topicId),
+			make_column("messageId", &DeletedMessage::messageId),
+			make_column("date", &DeletedMessage::date),
+			make_column("flags", &DeletedMessage::flags),
+			make_column("editDate", &DeletedMessage::editDate),
+			make_column("views", &DeletedMessage::views),
+			make_column("fwdFlags", &DeletedMessage::fwdFlags),
+			make_column("fwdFromId", &DeletedMessage::fwdFromId),
+			make_column("fwdName", &DeletedMessage::fwdName),
+			make_column("fwdDate", &DeletedMessage::fwdDate),
+			make_column("fwdPostAuthor", &DeletedMessage::fwdPostAuthor),
+			make_column("replyFlags", &DeletedMessage::replyFlags),
+			make_column("replyMessageId", &DeletedMessage::replyMessageId),
+			make_column("replyPeerId", &DeletedMessage::replyPeerId),
+			make_column("replyTopId", &DeletedMessage::replyTopId),
+			make_column("replyForumTopic", &DeletedMessage::replyForumTopic),
+			make_column("replySerialized", &DeletedMessage::replySerialized),
+			make_column("entityCreateDate", &DeletedMessage::entityCreateDate),
+			make_column("text", &DeletedMessage::text),
+			make_column("textEntities", &DeletedMessage::textEntities),
+			make_column("messageData", &DeletedMessage::messageData),
+			make_column("mediaPath", &DeletedMessage::mediaPath),
+			make_column("hqThumbPath", &DeletedMessage::hqThumbPath),
+			make_column("documentType", &DeletedMessage::documentType),
+			make_column("documentSerialized", &DeletedMessage::documentSerialized),
+			make_column("thumbsSerialized", &DeletedMessage::thumbsSerialized),
+			make_column("documentAttributesSerialized", &DeletedMessage::documentAttributesSerialized),
+			make_column("mimeType", &DeletedMessage::mimeType)
+		),
+		make_table<EditedMessage>(
+			"EditedMessage",
+			make_column("fakeId", &EditedMessage::fakeId, primary_key().autoincrement()),
+			make_column("userId", &EditedMessage::userId),
+			make_column("dialogId", &EditedMessage::dialogId),
+			make_column("groupedId", &EditedMessage::groupedId),
+			make_column("peerId", &EditedMessage::peerId),
+			make_column("fromId", &EditedMessage::fromId),
+			make_column("topicId", &EditedMessage::topicId),
+			make_column("messageId", &EditedMessage::messageId),
+			make_column("date", &EditedMessage::date),
+			make_column("flags", &EditedMessage::flags),
+			make_column("editDate", &EditedMessage::editDate),
+			make_column("views", &EditedMessage::views),
+			make_column("fwdFlags", &EditedMessage::fwdFlags),
+			make_column("fwdFromId", &EditedMessage::fwdFromId),
+			make_column("fwdName", &EditedMessage::fwdName),
+			make_column("fwdDate", &EditedMessage::fwdDate),
+			make_column("fwdPostAuthor", &EditedMessage::fwdPostAuthor),
+			make_column("replyFlags", &EditedMessage::replyFlags),
+			make_column("replyMessageId", &EditedMessage::replyMessageId),
+			make_column("replyPeerId", &EditedMessage::replyPeerId),
+			make_column("replyTopId", &EditedMessage::replyTopId),
+			make_column("replyForumTopic", &EditedMessage::replyForumTopic),
+			make_column("replySerialized", &EditedMessage::replySerialized),
+			make_column("entityCreateDate", &EditedMessage::entityCreateDate),
+			make_column("text", &EditedMessage::text),
+			make_column("textEntities", &EditedMessage::textEntities),
+			make_column("messageData", &EditedMessage::messageData),
+			make_column("mediaPath", &EditedMessage::mediaPath),
+			make_column("hqThumbPath", &EditedMessage::hqThumbPath),
+			make_column("documentType", &EditedMessage::documentType),
+			make_column("documentSerialized", &EditedMessage::documentSerialized),
+			make_column("thumbsSerialized", &EditedMessage::thumbsSerialized),
+			make_column("documentAttributesSerialized", &EditedMessage::documentAttributesSerialized),
+			make_column("mimeType", &EditedMessage::mimeType)
+		)
+	);
+}
+
+using Storage = decltype(CreateStorage(""));
+std::unique_ptr<Storage> storage;
+
 
 rpl::event_stream<> storageChanged;
 
@@ -117,13 +124,13 @@ void runMigrations() {
 	constexpr int kLatestVersion = 0; // No migrations yet
 	int currentVersion = 0;
 	try {
-		if (auto versionRow = storage.get_pointer<SchemaVersion>(1)) {
+		if (auto versionRow = storage->get_pointer<SchemaVersion>(1)) {
 			currentVersion = versionRow->version;
 		} else {
-			storage.insert(SchemaVersion{1, 0});
+			storage->insert(SchemaVersion{1, 0});
 		}
 	} catch (...) {
-		storage.insert(SchemaVersion{1, 0});
+		storage->insert(SchemaVersion{1, 0});
 	}
 
 	if (currentVersion >= kLatestVersion) {
@@ -132,28 +139,30 @@ void runMigrations() {
 }
 
 void initialize() {
+	const auto path = (cWorkingDir() + u"tdata/alexdata.db"_q).toStdString();
+	storage = std::make_unique<Storage>(CreateStorage(path));
 	try {
-		storage.sync_schema(true);
+		storage->sync_schema(true);
 		runMigrations();
-		storage.sync_schema(true);
+		storage->sync_schema(true);
 	} catch (const std::exception &ex) {
 		LOG(("Alex::Database initialization failed: %1").arg(ex.what()));
-		storage.sync_schema(true);
-		if (!storage.get_pointer<SchemaVersion>(1)) {
-			storage.insert(SchemaVersion{1, 0});
+		storage->sync_schema(true);
+		if (!storage->get_pointer<SchemaVersion>(1)) {
+			storage->insert(SchemaVersion{1, 0});
 		}
 	}
 }
 
 void addEditedMessage(const EditedMessage &message) {
 	try {
-		storage.begin_transaction();
-		storage.insert(message);
-		storage.commit();
+		storage->begin_transaction();
+		storage->insert(message);
+		storage->commit();
 		storageChanged.fire({});
 	} catch (std::exception &ex) {
 		try {
-			storage.rollback();
+			storage->rollback();
 		} catch (...) {
 		}
 		LOG(("Alex::Database: Failed to save edited message: %1").arg(ex.what()));
@@ -162,7 +171,7 @@ void addEditedMessage(const EditedMessage &message) {
 
 std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageId, ID minId, ID maxId, int totalLimit) {
 	try {
-		return storage.get_all<EditedMessage>(
+		return storage->get_all<EditedMessage>(
 			where(
 				column<EditedMessage>(&EditedMessage::userId) == userId and
 				column<EditedMessage>(&EditedMessage::dialogId) == dialogId and
@@ -180,7 +189,7 @@ std::vector<EditedMessage> getEditedMessages(ID userId, ID dialogId, ID messageI
 
 bool hasLocalEdits(ID userId, ID dialogId, ID messageId) {
 	try {
-		return !storage.select(
+		return !storage->select(
 			columns(column<EditedMessage>(&EditedMessage::messageId)),
 			where(
 				column<EditedMessage>(&EditedMessage::userId) == userId and
@@ -196,13 +205,13 @@ bool hasLocalEdits(ID userId, ID dialogId, ID messageId) {
 
 void addDeletedMessage(const DeletedMessage &message) {
 	try {
-		storage.begin_transaction();
-		storage.insert(message);
-		storage.commit();
+		storage->begin_transaction();
+		storage->insert(message);
+		storage->commit();
 		storageChanged.fire({});
 	} catch (std::exception &ex) {
 		try {
-			storage.rollback();
+			storage->rollback();
 		} catch (...) {
 		}
 		LOG(("Alex::Database: Failed to save deleted message: %1").arg(ex.what()));
@@ -212,7 +221,7 @@ void addDeletedMessage(const DeletedMessage &message) {
 std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicId, ID minId, ID maxId, int totalLimit, const std::string &searchQuery) {
 	try {
 		if (searchQuery.empty()) {
-			return storage.get_all<DeletedMessage>(
+			return storage->get_all<DeletedMessage>(
 				where(
 					column<DeletedMessage>(&DeletedMessage::userId) == userId and
 					(column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId or dialogId == 0) and
@@ -234,7 +243,7 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 			escaped += c;
 		}
 		const auto pattern = "%" + escaped + "%";
-		return storage.get_all<DeletedMessage>(
+		return storage->get_all<DeletedMessage>(
 			where(
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
 				(column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId or dialogId == 0) and
@@ -253,7 +262,7 @@ std::vector<DeletedMessage> getDeletedMessages(ID userId, ID dialogId, ID topicI
 
 bool hasDeletedMessages(ID userId, ID dialogId, ID topicId) {
 	try {
-		return !storage.select(
+		return !storage->select(
 			columns(column<DeletedMessage>(&DeletedMessage::dialogId)),
 			where(
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
@@ -269,7 +278,7 @@ bool hasDeletedMessages(ID userId, ID dialogId, ID topicId) {
 
 void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
 	try {
-		storage.remove_all<DeletedMessage>(
+		storage->remove_all<DeletedMessage>(
 			where(
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
 				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
@@ -283,7 +292,7 @@ void clearDeletedMessages(ID userId, ID dialogId, ID topicId) {
 
 void removeDeletedMessage(ID userId, ID dialogId, ID messageId) {
 	try {
-		storage.remove_all<DeletedMessage>(
+		storage->remove_all<DeletedMessage>(
 			where(
 				column<DeletedMessage>(&DeletedMessage::userId) == userId and
 				column<DeletedMessage>(&DeletedMessage::dialogId) == dialogId and
@@ -298,15 +307,15 @@ void removeDeletedMessage(ID userId, ID dialogId, ID messageId) {
 StorageStats getStorageStats(ID userId) {
 	StorageStats stats;
 	try {
-		const auto dbPath = u"./tdata/alexdata.db"_q;
+		const auto dbPath = cWorkingDir() + u"tdata/alexdata.db"_q;
 		stats.databaseFileSize = QFileInfo(dbPath).size();
 
 		auto getCatStats = [&](int type) -> Alex::StorageStats::Entry {
-			auto count = storage.count<DeletedMessage>(
+			auto count = storage->count<DeletedMessage>(
 				where(column<DeletedMessage>(&DeletedMessage::userId) == userId and
 					  column<DeletedMessage>(&DeletedMessage::documentType) == type)
 			);
-			auto sizePtr = std::move(storage.select(
+			auto sizePtr = std::move(storage->select(
 				sum(column<DeletedMessage>(&DeletedMessage::messageData)),
 				where(column<DeletedMessage>(&DeletedMessage::userId) == userId and
 					  column<DeletedMessage>(&DeletedMessage::documentType) == type)
@@ -324,10 +333,10 @@ StorageStats getStorageStats(ID userId) {
 		stats.total.count = stats.text.count + stats.photo.count + stats.video.count + stats.audio.count + stats.document.count + stats.other.count;
 		stats.total.size = stats.text.size + stats.photo.size + stats.video.size + stats.audio.size + stats.document.size + stats.other.size;
 
-		auto editCount = storage.count<EditedMessage>(
+		auto editCount = storage->count<EditedMessage>(
 			where(column<EditedMessage>(&EditedMessage::userId) == userId)
 		);
-		auto editSizePtr = std::move(storage.select(
+		auto editSizePtr = std::move(storage->select(
 			sum(column<EditedMessage>(&EditedMessage::messageData)),
 			where(column<EditedMessage>(&EditedMessage::userId) == userId)
 		).front());
@@ -359,18 +368,18 @@ rpl::producer<StorageStats> storageStatsValue(ID userId) {
 void clearStorage(ID userId, int documentType) {
 	try {
 		if (documentType == -1) {
-			storage.remove_all<EditedMessage>(
+			storage->remove_all<EditedMessage>(
 				where(column<EditedMessage>(&EditedMessage::userId) == userId)
 			);
 		} else {
-			storage.remove_all<DeletedMessage>(
+			storage->remove_all<DeletedMessage>(
 				where(
 					column<DeletedMessage>(&DeletedMessage::userId) == userId and
 					column<DeletedMessage>(&DeletedMessage::documentType) == documentType
 				)
 			);
 		}
-		storage.vacuum();
+		storage->vacuum();
 		storageChanged.fire({});
 	} catch (...) {
 	}
@@ -378,13 +387,13 @@ void clearStorage(ID userId, int documentType) {
 
 void clearAllStorage(ID userId) {
 	try {
-		storage.remove_all<DeletedMessage>(
+		storage->remove_all<DeletedMessage>(
 			where(column<DeletedMessage>(&DeletedMessage::userId) == userId)
 		);
-		storage.remove_all<EditedMessage>(
+		storage->remove_all<EditedMessage>(
 			where(column<EditedMessage>(&EditedMessage::userId) == userId)
 		);
-		storage.vacuum();
+		storage->vacuum();
 		storageChanged.fire({});
 	} catch (...) {
 	}

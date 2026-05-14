@@ -520,7 +520,9 @@ void Renderer::initParagraphBidi() {
 		return;
 	}
 
-	_paragraphAnalysis.resize(_paragraphLength);
+	if (_paragraphLength > 0) {
+		_paragraphAnalysis.resize(_paragraphLength);
+	}
 	BidiAlgorithm bidi(
 		_str + _paragraphStart,
 		_paragraphAnalysis.data(),

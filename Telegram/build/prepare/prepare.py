@@ -60,6 +60,7 @@ usedPrefix = os.path.realpath(os.path.join(libsDir, 'local'))
 optionsList = [
     'qt6',
     'skip-release',
+    'skip-debug',
     'build-stackwalk',
 ]
 options = []
@@ -250,6 +251,11 @@ def filterByPlatform(commands):
             #     inscope = True
             if 'release' in scopes:
                 if 'skip-release' in options:
+                    inscope = False
+                elif len(scopes) == 1:
+                    continue
+            if 'debug' in scopes:
+                if 'skip-debug' in options:
                     inscope = False
                 elif len(scopes) == 1:
                     continue
@@ -644,11 +650,15 @@ mac:
 stage('opus', """
     git clone -b v1.5.2 https://github.com/xiph/opus.git
     cd opus
-win:
+win_debug:
     cmake -B out . ^
         -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
         -DOPUS_STATIC_RUNTIME=ON
     cmake --build out --config Debug
+win_release:
+    cmake -B out . ^
+        -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
+        -DOPUS_STATIC_RUNTIME=ON
     cmake --build out --config Release
     cmake --install out --config Release
 mac:
@@ -747,16 +757,19 @@ win:
     echo cpu = '%TARGET%' >> %FILE%
     echo endian = 'little' >> %FILE%
 
+win_debug:
 depends:python/Scripts/activate.bat
     %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
     meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=debug -Denable_tools=false -Denable_tests=false %DAV1D_ASM_DISABLE% -Db_vscrt=mtd builddir-debug
     meson compile -C builddir-debug
     meson install -C builddir-debug
-release:
+    deactivate
+win_release:
+depends:python/Scripts/activate.bat
+    %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
     meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=release -Denable_tools=false -Denable_tests=false -Db_vscrt=mt builddir-release
     meson compile -C builddir-release
     meson install -C builddir-release
-win:
     copy %LIBS_DIR%\\local\\lib\\libdav1d.a %LIBS_DIR%\\local\\lib\\dav1d.lib
     deactivate
 mac:
@@ -1064,7 +1077,10 @@ win64:
     SET "TOOLCHAIN=x86_64-win64-vs17"
 winarm:
     SET "TOOLCHAIN=arm64-win64-vs17"
-win:
+win_debug:
+depends:patches/build_libvpx_win.sh
+    bash --login ../patches/build_libvpx_win.sh
+win_release:
 depends:patches/build_libvpx_win.sh
     bash --login ../patches/build_libvpx_win.sh
 mac:
@@ -1510,9 +1526,11 @@ win:
     )
     cd ..
 
-    SET CONFIGURATIONS=-debug
-release:
     SET CONFIGURATIONS=-debug-and-release
+skip-release:
+    SET CONFIGURATIONS=-debug
+skip-debug:
+    SET CONFIGURATIONS=-release
 win:
     """ + removeDir('"%LIBS_DIR%\\Qt-' + qt + '"') + """
     SET ANGLE_DIR=%LIBS_DIR%\\tg_angle
@@ -1603,9 +1621,11 @@ win:
     for /r %%i in (..\\..\\patches\\qtbase_%QT%\\*) do git apply %%i -v
     cd ..
 
-    SET CONFIGURATIONS=-debug
-release:
     SET CONFIGURATIONS=-debug-and-release
+skip-release:
+    SET CONFIGURATIONS=-debug
+skip-debug:
+    SET CONFIGURATIONS=-release
 win:
     """ + removeDir('"%LIBS_DIR%\\Qt' + qt + '"') + """
     SET MOZJPEG_DIR=%LIBS_DIR%\\mozjpeg

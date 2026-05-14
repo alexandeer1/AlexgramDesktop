@@ -90,3 +90,15 @@ build_output.txt
 settings_alex_clean.cpp
 build_error.txt
 settings_alex_fixed.cpp
+out_linux/CMakeCache.txt
+out_linux/CMakeFiles/cmake.check_cache
+out_linux/CMakeFiles/CMakeConfigureLog.yaml
+out_linux/CMakeFiles/3.28.3/CMakeCCompiler.cmake
+out_linux/CMakeFiles/3.28.3/CMakeCXXCompiler.cmake
+out_linux/CMakeFiles/3.28.3/CMakeDetermineCompilerABI_C.bin
+out_linux/CMakeFiles/3.28.3/CMakeDetermineCompilerABI_CXX.bin
+out_linux/CMakeFiles/3.28.3/CMakeSystem.cmake
+out_linux/CMakeFiles/3.28.3/CompilerIdC/a.out
+out_linux/CMakeFiles/3.28.3/CompilerIdC/CMakeCCompilerId.c
+out_linux/CMakeFiles/3.28.3/CompilerIdCXX/a.out
+out_linux/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp
