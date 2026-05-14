@@ -21,6 +21,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Lowercase image tag.
+        run: echo "IMAGE_TAG=$(echo ghcr.io/${{ github.repository }}/centos_env:latest | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: First set up.
         run: |
           sudo apt update
