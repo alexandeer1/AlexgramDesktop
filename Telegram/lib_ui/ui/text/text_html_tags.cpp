@@ -169,8 +169,8 @@ void AddUnique(
 		const TextWithEntities &text,
 		const EntityInText &entity) {
 	const auto textSize = text.text.size();
-	const auto from = std::clamp(entity.offset(), 0, textSize);
-	const auto till = std::clamp(entity.offset() + entity.length(), 0, textSize);
+	const auto from = std::clamp(entity.offset(), qsizetype(0), textSize);
+	const auto till = std::clamp(entity.offset() + entity.length(), qsizetype(0), textSize);
 	return (till > from)
 		? QStringView(text.text).mid(from, till - from).toString()
 		: QString();
@@ -327,8 +327,8 @@ void AddLinkRunSegment(
 		if (link.isEmpty()) {
 			continue;
 		}
-		const auto from = std::clamp(tag.offset, 0, textSize);
-		const auto till = std::clamp(tag.offset + tag.length, 0, textSize);
+		const auto from = std::clamp(tag.offset, 0, int(textSize));
+		const auto till = std::clamp(tag.offset + tag.length, 0, int(textSize));
 		if (till <= from) {
 			continue;
 		}
@@ -1071,7 +1071,7 @@ void AppendText(ParseState &state, QString text) {
 		return;
 	}
 	auto start = 0;
-	for (auto i = 0, size = text.size(); i != size;) {
+	for (auto i = qsizetype(0), size = text.size(); i != size;) {
 		if (!IsCollapsibleSpace(text[i])) {
 			++i;
 			continue;
@@ -1351,8 +1351,8 @@ QString TextWithTagsToHtml(const TextWithTags &text) {
 	auto events = std::vector<HtmlTagEvent>();
 	events.reserve(4 * text.tags.size());
 	for (const auto &tag : text.tags) {
-		const auto from = std::clamp(tag.offset, 0, textSize);
-		const auto till = std::clamp(tag.offset + tag.length, 0, textSize);
+		const auto from = std::clamp(tag.offset, 0, int(textSize));
+		const auto till = std::clamp(tag.offset + tag.length, 0, int(textSize));
 		if (till <= from) {
 			continue;
 		}
