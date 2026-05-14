@@ -65,7 +65,8 @@ parts:
         version="$version-beta"
       fi
 
-      version="${version}$(git describe --tags | sed 's,^v[^-]\+,,')"
+      git_version=$(git describe --tags 2>/dev/null | sed 's,^v[^-]\+,,' || echo "")
+      version="${version}${git_version}"
 
       craftctl set version="$version"
     override-build: |
