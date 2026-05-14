@@ -169,8 +169,8 @@ void AddUnique(
 		const TextWithEntities &text,
 		const EntityInText &entity) {
 	const auto textSize = text.text.size();
-	const auto from = std::clamp(entity.offset(), qsizetype(0), textSize);
-	const auto till = std::clamp(entity.offset() + entity.length(), qsizetype(0), textSize);
+	const auto from = std::clamp(qsizetype(entity.offset()), qsizetype(0), textSize);
+	const auto till = std::clamp(qsizetype(entity.offset() + entity.length()), qsizetype(0), textSize);
 	return (till > from)
 		? QStringView(text.text).mid(from, till - from).toString()
 		: QString();
