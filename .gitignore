@@ -101,3 +101,7 @@ out_linux/CMakeFiles/3.28.3/CompilerIdC/a.out
 out_linux/CMakeFiles/3.28.3/CompilerIdC/CMakeCCompilerId.c
 out_linux/CMakeFiles/3.28.3/CompilerIdCXX/a.out
 out_linux/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp
+
+# Build artifacts
+/ada/
+/protobuf/
