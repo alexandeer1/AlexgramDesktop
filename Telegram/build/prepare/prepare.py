@@ -1659,7 +1659,7 @@ skip-release:
 skip-debug:
     SET CONFIGURATIONS=-release
 win:
-    """ + removeDir('"%LIBS_DIR%\\Qt' + qt + '"') + """
+    """ + removeDir('"%LIBS_DIR%\\Qt-' + qt + '"') + """
     SET MOZJPEG_DIR=%LIBS_DIR%\\mozjpeg
     SET OPENSSL_DIR=%LIBS_DIR%\\openssl3
     SET OPENSSL_LIBS_DIR=%OPENSSL_DIR%\\out

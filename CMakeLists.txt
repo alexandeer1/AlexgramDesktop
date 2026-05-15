@@ -45,6 +45,10 @@ endif()
 get_filename_component(submodules_loc "Telegram" REALPATH)
 get_filename_component(cmake_helpers_loc "cmake" REALPATH)
 
+if (APPLE)
+    list(APPEND CMAKE_PREFIX_PATH /opt/homebrew /usr/local)
+endif()
+
 if (NOT DESKTOP_APP_USE_PACKAGED AND WIN32)
     if (EXISTS "${third_party_loc}/python/Scripts/python.exe")
         set(Python3_EXECUTABLE ${third_party_loc}/python/Scripts/python.exe)
