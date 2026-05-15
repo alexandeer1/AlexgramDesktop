@@ -81,8 +81,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            Libraries
-            ThirdParty
+            ${{ env.REPO_NAME }}/Libraries
+            ${{ env.REPO_NAME }}/ThirdParty
           key: ${{ runner.OS }}-libs-${{ hashFiles(format('{0}/{1}', env.REPO_NAME, env.PREPARE_PATH)) }}
           restore-keys: ${{ runner.OS }}-libs-
 
