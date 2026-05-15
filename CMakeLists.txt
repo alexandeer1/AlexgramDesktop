@@ -55,7 +55,7 @@ get_filename_component(submodules_loc "Telegram" REALPATH)
 get_filename_component(cmake_helpers_loc "cmake" REALPATH)
 
 if (APPLE)
-    list(APPEND CMAKE_PREFIX_PATH /opt/homebrew /usr/local)
+    list(APPEND CMAKE_PREFIX_PATH /opt/homebrew /opt/homebrew/opt/qt /usr/local /usr/local/opt/qt)
 endif()
 
 if (NOT DESKTOP_APP_USE_PACKAGED AND WIN32)
