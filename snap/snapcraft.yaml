@@ -80,6 +80,7 @@ parts:
       - -DTDESKTOP_API_HASH=d524b414d21f4d37f08684c1df41ac9c
     override-pull: |
       craftctl default
+      git submodule update --init --recursive
 
       version_file=Telegram/build/version
       version=$(sed -n "s/AppVersionStr[ ]\+\(.*\)\+/\1/p" $version_file)
