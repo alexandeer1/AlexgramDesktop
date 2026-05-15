@@ -1627,7 +1627,8 @@ mac:
         -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
         -DCMAKE_PREFIX_PATH="$USED_PREFIX" \
         -DQT_NO_HANDLE_APPLE_SINGLE_ARCH_CROSS_COMPILING=ON \
-        -DQT_SYNC_HEADERS_AT_CONFIGURE_TIME=ON
+        -DQT_SYNC_HEADERS_AT_CONFIGURE_TIME=ON \
+        -DQT_BUILD_SBOM=OFF
 
     cmake --build .
     cmake --install .
@@ -1664,6 +1665,7 @@ win:
         -platform win32-msvc ^
         -D ZLIB_WINAPI ^
         -- ^
+        -D QT_BUILD_SBOM=OFF ^
         -D OPENSSL_FOUND=1 ^
         -D OPENSSL_INCLUDE_DIR="%OPENSSL_DIR%\\include" ^
         -D LIB_EAY_DEBUG="%OPENSSL_LIBS_DIR%.dbg\\libcrypto.lib" ^
@@ -1689,10 +1691,10 @@ win:
         -D LCMS2_LIBRARIES="%LCMS2_DIR%\\out\\Release\\src\\liblcms2.a"
 
     cmake --build . --config Debug
-    python -c "import os; [open(p, 'w').write(open(p).read().replace('file(CREATE_LINK', '#file(CREATE_LINK')) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if 'file(CREATE_LINK' in open(p).read()]"
+    python -c "import os, re; [open(p, 'w').write(re.sub(r'file\s*\(\s*CREATE_LINK', '#file(CREATE_LINK', open(p).read(), flags=re.I)) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if re.search(r'file\s*\(\s*CREATE_LINK', open(p).read(), flags=re.I)]"
     cmake --install . --config Debug
     cmake --build .
-    python -c "import os; [open(p, 'w').write(open(p).read().replace('file(CREATE_LINK', '#file(CREATE_LINK')) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if 'file(CREATE_LINK' in open(p).read()]"
+    python -c "import os, re; [open(p, 'w').write(re.sub(r'file\s*\(\s*CREATE_LINK', '#file(CREATE_LINK', open(p).read(), flags=re.I)) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if re.search(r'file\s*\(\s*CREATE_LINK', open(p).read(), flags=re.I)]"
     cmake --install .
 """)
 

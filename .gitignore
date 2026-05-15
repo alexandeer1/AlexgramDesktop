@@ -106,3 +106,4 @@ out_linux/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp
 # Build artifacts
 /ada/
 /protobuf/
+install_docker.sh
