@@ -41,13 +41,37 @@ parts:
       - LDFLAGS: ${LDFLAGS:+$LDFLAGS} -Wl,--push-state,--no-as-needed,-ldav1d,--pop-state -s
     build-packages:
       - clang
+      - libasound2-dev
       - libboost-regex-dev
+      - libdav1d-dev
+      - libdbus-1-dev
+      - libdrm-dev
+      - libegl1-mesa-dev
+      - libexpat1-dev
+      - libfontconfig1-dev
+      - libfreetype6-dev
+      - libgl1-mesa-dev
       - libheif-dev
+      - libicu-dev
       - libjxl-dev
+      - liblzma-dev
+      - libopenh264-dev
+      - libopus-dev
+      - libpulse-dev
       - libssl-dev
+      - libva-dev
+      - libvdpau-dev
+      - libvpx-dev
+      - libx11-dev
+      - libx11-xcb-dev
       - libxcb-keysyms1-dev
+      - libxcb-randr0-dev
       - libxcb-record0-dev
       - libxcb-screensaver0-dev
+      - libxext-dev
+      - libxrender-dev
+      - libxtst-dev
+      - libzstd-dev
     cmake-generator: Ninja
     cmake-parameters:
       - -DCMAKE_BUILD_TYPE=Release
@@ -65,7 +89,10 @@ parts:
         version="$version-beta"
       fi
 
-      git_version=$(git describe --tags 2>/dev/null | sed 's,^v[^-]\+,,' || echo "")
+      git_version=$(git describe --tags 2>/dev/null || echo "")
+      if [ -n "$git_version" ]; then
+        git_version=$(echo "$git_version" | sed 's,^v[^-]\+,,' )
+      fi
       version="${version}${git_version}"
 
       craftctl set version="$version"

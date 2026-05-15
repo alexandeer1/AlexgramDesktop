@@ -360,7 +360,7 @@ void AbstractMosaicLayout::layoutRow(Row &row, int fullWidth) {
 	for (auto i = 0; i != count; ++i) {
 		indices[i] = i;
 	}
-	std::sort(begin(indices), begin(indices) + count, [&](int a, int b) {
+	std::sort(indices.begin(), indices.begin() + std::min<int>(count, kInlineItemsMaxPerRow), [&](int a, int b) {
 		return row.items[a]->maxWidth() < row.items[b]->maxWidth();
 	});
 
