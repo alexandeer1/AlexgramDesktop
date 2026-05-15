@@ -1688,6 +1688,7 @@ win:
         -D LCMS2_INCLUDE_DIR="%LCMS2_DIR%\\include" ^
         -D LCMS2_LIBRARIES="%LCMS2_DIR%\\out\\Release\\src\\liblcms2.a"
 
+    powershell -Command "Get-ChildItem -Recurse cmake_install.cmake | ForEach-Object { $c = Get-Content $_.FullName; if ($c -match 'CREATE_LINK') { $c -replace 'file.CREATE_LINK', '#file(CREATE_LINK' | Set-Content $_.FullName } }"
     cmake --build . --config Debug
     cmake --install . --config Debug
     cmake --build .
