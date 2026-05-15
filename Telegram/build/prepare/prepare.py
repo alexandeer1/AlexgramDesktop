@@ -229,7 +229,7 @@ def filterByPlatform(commands):
     result = ''
     dependencies = []
     version = '0'
-    skip = False
+    platformInscope = True
     for command in commands:
         m = re.match(r'^\s*(!?)([a-z0-9_-]+):', command)
         if m and m.group(2) != 'depends' and m.group(2) != 'version':
@@ -247,8 +247,9 @@ def filterByPlatform(commands):
                     inscope = True
                 if mac and 'mac' in scopes:
                     inscope = True
+                platformInscope = inscope
             else:
-                inscope = not skip
+                inscope = platformInscope
 
             if 'release' in scopes:
                 if 'skip-release' in options:
@@ -260,8 +261,12 @@ def filterByPlatform(commands):
                     inscope = False
                 elif inscope:
                     inscope = True
+            if 'skip-release' in scopes:
+                inscope = inscope and ('skip-release' in options)
+            if 'skip-debug' in scopes:
+                inscope = inscope and ('skip-debug' in options)
             for option in options:
-                if option in scopes:
+                if option in scopes and inscope:
                     inscope = True
             skip = inscope if m.group(1) == '!' else not inscope
         elif not skip and not re.match(r'\s*#', command):
