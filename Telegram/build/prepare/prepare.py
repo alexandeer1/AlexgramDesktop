@@ -100,6 +100,7 @@ environment = {
     'THIRDPARTY_DIR': thirdPartyDir,
     'PATH_PREFIX': pathPrefix,
     'CMAKE_GENERATOR': 'Ninja Multi-Config',
+    'SLEEP': 'timeout /t 5' if win else '$SLEEP'
 }
 if (win32):
     environment.update({
@@ -468,7 +469,7 @@ if customRunCommand:
     finish(0)
 
 stage('patches', """
-    git clone https://github.com/desktop-app/patches.git
+    git clone https://github.com/desktop-app/patches.git || ($SLEEP && git clone https://github.com/desktop-app/patches.git)
     cd patches
     git checkout 4519c85c924b9da81f29d4aac045886f896ee479
 """)
@@ -518,7 +519,7 @@ win:
 if not mac or 'build-stackwalk' in options:
     stage('gyp', """
 win:
-    git clone https://github.com/desktop-app/gyp.git
+    git clone https://github.com/desktop-app/gyp.git || ($SLEEP && git clone https://github.com/desktop-app/gyp.git)
     cd gyp
     git checkout 5e2425c47b
 mac:
@@ -530,7 +531,7 @@ mac:
 
 stage('lzma', """
 win:
-    git clone https://github.com/desktop-app/lzma.git
+    git clone https://github.com/desktop-app/lzma.git || ($SLEEP && git clone https://github.com/desktop-app/lzma.git)
     cd lzma\\C\\Util\\LzmaLib
     msbuild -m LzmaLib.sln /property:Configuration=Debug /property:Platform="$X8664"
 release:
@@ -539,7 +540,7 @@ release:
 
 stage('xz', """
 !win:
-    git clone -b v5.4.5 https://github.com/tukaani-project/xz.git
+    git clone -b v5.4.5 https://github.com/tukaani-project/xz.git || ($SLEEP && git clone -b v5.4.5 https://github.com/tukaani-project/xz.git)
     cd xz
     sed -i '' '\\@check_symbol_exists(futimens "sys/types.h;sys/stat.h" HAVE_FUTIMENS)@d' CMakeLists.txt
     CFLAGS="$UNGUARDED" CPPFLAGS="$UNGUARDED" cmake -B build . \\
@@ -550,7 +551,7 @@ stage('xz', """
 """)
 
 stage('zlib', """
-    git clone -b v1.3.1 https://github.com/madler/zlib.git
+    git clone -b v1.3.1 https://github.com/madler/zlib.git || ($SLEEP && git clone -b v1.3.1 https://github.com/madler/zlib.git)
     cd zlib
 win:
     cmake . ^
@@ -571,7 +572,7 @@ mac:
 """)
 
 stage('mozjpeg', """
-    git clone -b v4.1.5 https://github.com/mozilla/mozjpeg.git
+    git clone -b v4.1.5 https://github.com/mozilla/mozjpeg.git || ($SLEEP && git clone -b v4.1.5 https://github.com/mozilla/mozjpeg.git)
     cd mozjpeg
 win:
     cmake . ^
@@ -608,7 +609,7 @@ mac:
 """)
 
 stage('openssl3', """
-    git clone -b openssl-3.2.1 https://github.com/openssl/openssl.git openssl3 || (sleep 5 && git clone -b openssl-3.2.1 https://github.com/openssl/openssl.git openssl3)
+    git clone -b openssl-3.2.1 https://github.com/openssl/openssl.git openssl3 || ($SLEEP && git clone -b openssl-3.2.1 https://github.com/openssl/openssl.git openssl3)
     cd openssl3
 win32:
     perl Configure no-shared no-tests debug-VC-WIN32 /FS
@@ -655,7 +656,7 @@ mac:
 """)
 
 stage('opus', """
-    git clone -b v1.5.2 https://github.com/xiph/opus.git
+    git clone -b v1.5.2 https://github.com/xiph/opus.git || ($SLEEP && git clone -b v1.5.2 https://github.com/xiph/opus.git)
     cd opus
 win_debug:
     cmake -B out . ^
@@ -677,7 +678,7 @@ mac:
 """)
 
 stage('rnnoise', """
-    git clone https://github.com/desktop-app/rnnoise.git
+    git clone https://github.com/desktop-app/rnnoise.git || ($SLEEP && git clone https://github.com/desktop-app/rnnoise.git)
     cd rnnoise
     git checkout d8ea2b0
     mkdir out
@@ -729,7 +730,7 @@ mac:
 
 stage('gas-preprocessor', """
 win:
-    git clone https://github.com/FFmpeg/gas-preprocessor
+    git clone https://github.com/FFmpeg/gas-preprocessor || ($SLEEP && git clone https://github.com/FFmpeg/gas-preprocessor)
     cd gas-preprocessor
     echo @echo off > cpp.bat
     echo cl %%%%%%** >> cpp.bat
@@ -737,7 +738,7 @@ win:
 
 # Somehow in x86 Debug build dav1d crashes on AV1 10bpc videos.
 stage('dav1d', """
-    git clone -b 1.5.3 https://code.videolan.org/videolan/dav1d.git
+    git clone -b 1.5.3 https://code.videolan.org/videolan/dav1d.git || ($SLEEP && git clone -b 1.5.3 https://code.videolan.org/videolan/dav1d.git)
     cd dav1d
 win32:
     SET "TARGET=x86"
@@ -805,7 +806,7 @@ mac:
 """)
 
 stage('openh264', """
-    git clone -b v2.6.0 https://github.com/cisco/openh264.git
+    git clone -b v2.6.0 https://github.com/cisco/openh264.git || ($SLEEP && git clone -b v2.6.0 https://github.com/cisco/openh264.git)
     cd openh264
 win32:
     SET "TARGET=x86"
@@ -863,7 +864,7 @@ mac:
 """)
 
 stage('libavif', """
-    git clone -b v1.3.0 https://github.com/AOMediaCodec/libavif.git
+    git clone -b v1.3.0 https://github.com/AOMediaCodec/libavif.git || ($SLEEP && git clone -b v1.3.0 https://github.com/AOMediaCodec/libavif.git)
     cd libavif
 win:
     cmake . ^
@@ -892,7 +893,7 @@ mac:
 """)
 
 stage('libde265', """
-    git clone -b v1.0.16 https://github.com/strukturag/libde265.git
+    git clone -b v1.0.16 https://github.com/strukturag/libde265.git || ($SLEEP && git clone -b v1.0.16 https://github.com/strukturag/libde265.git)
     cd libde265
 win:
     cmake . ^
@@ -924,7 +925,7 @@ mac:
 """)
 
 stage('libwebp', """
-    git clone -b v1.6.0 https://github.com/webmproject/libwebp.git
+    git clone -b v1.6.0 https://github.com/webmproject/libwebp.git || ($SLEEP && git clone -b v1.6.0 https://github.com/webmproject/libwebp.git)
     cd libwebp
 win:
     nmake /f Makefile.vc CFG=debug-static OBJDIR=out RTLIBCFG=static all
@@ -963,7 +964,7 @@ mac:
 """)
 
 stage('libheif', """
-    git clone -b v1.21.2 https://github.com/strukturag/libheif.git
+    git clone -b v1.21.2 https://github.com/strukturag/libheif.git || ($SLEEP && git clone -b v1.21.2 https://github.com/strukturag/libheif.git)
     cd libheif
 win:
     %THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed.exe -i 's/LIBHEIF_EXPORTS/LIBDE265_STATIC_BUILD/g' libheif/CMakeLists.txt
@@ -1023,7 +1024,7 @@ mac:
 """)
 
 stage('libjxl', """
-    git clone -b v0.11.2 --recursive --shallow-submodules https://github.com/libjxl/libjxl.git
+    git clone -b v0.11.2 --recursive --shallow-submodules https://github.com/libjxl/libjxl.git || ($SLEEP && git clone -b v0.11.2 --recursive --shallow-submodules https://github.com/libjxl/libjxl.git)
     cd libjxl
 """ + setVar("cmake_defines", """
     -DBUILD_SHARED_LIBS=OFF
@@ -1067,7 +1068,7 @@ mac:
 """)
 
 stage('libvpx', """
-    git clone https://github.com/webmproject/libvpx.git
+    git clone https://github.com/webmproject/libvpx.git || ($SLEEP && git clone https://github.com/webmproject/libvpx.git)
 depends:patches/libvpx/*.patch
     cd libvpx
     git checkout v1.14.1
@@ -1132,7 +1133,7 @@ mac:
 """)
 
 stage('liblcms2', """
-    git clone -b lcms2.16 https://github.com/mm2/Little-CMS.git liblcms2
+    git clone -b lcms2.16 https://github.com/mm2/Little-CMS.git liblcms2 || ($SLEEP && git clone -b lcms2.16 https://github.com/mm2/Little-CMS.git liblcms2)
     cd liblcms2
 win:
 depends:python/Scripts/activate.bat
@@ -1169,15 +1170,15 @@ mac:
 
 stage('nv-codec-headers', """
 win:
-    git clone -b n12.1.14.0 https://github.com/FFmpeg/nv-codec-headers.git
+    git clone -b n12.1.14.0 https://github.com/FFmpeg/nv-codec-headers.git || ($SLEEP && git clone -b n12.1.14.0 https://github.com/FFmpeg/nv-codec-headers.git)
 """)
 
 stage('regex', """
-    git clone -b boost-1.83.0 https://github.com/boostorg/regex.git
+    git clone -b boost-1.83.0 https://github.com/boostorg/regex.git || ($SLEEP && git clone -b boost-1.83.0 https://github.com/boostorg/regex.git)
 """)
 
 stage('ffmpeg', """
-    git clone -b n6.1.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    git clone -b n6.1.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg || ($SLEEP && git clone -b n6.1.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg)
     cd ffmpeg
 win:
 depends:patches/ffmpeg.patch
@@ -1357,7 +1358,7 @@ mac:
 """)
 
 stage('openal-soft', """
-    git clone https://github.com/telegramdesktop/openal-soft.git
+    git clone https://github.com/telegramdesktop/openal-soft.git || ($SLEEP && git clone https://github.com/telegramdesktop/openal-soft.git)
     cd openal-soft
 win:
     git checkout 291c0fdbbd
@@ -1445,7 +1446,7 @@ release:
 
 stage('crashpad', """
 mac:
-    git clone https://github.com/desktop-app/crashpad.git
+    git clone https://github.com/desktop-app/crashpad.git || ($SLEEP && git clone https://github.com/desktop-app/crashpad.git)
     cd crashpad
     git checkout 3279fae3f0
     git submodule init
@@ -1507,7 +1508,7 @@ if qt < '6':
     if win:
         stage('tg_angle', """
 win:
-    git clone https://github.com/desktop-app/tg_angle.git
+    git clone https://github.com/desktop-app/tg_angle.git || ($SLEEP && git clone https://github.com/desktop-app/tg_angle.git)
     cd tg_angle
     git checkout e3f59e8d0c
     cmake -B out ^
@@ -1711,7 +1712,7 @@ win:
 """)
 
 stage('tg_owt', """
-    git clone https://github.com/desktop-app/tg_owt.git
+    git clone https://github.com/desktop-app/tg_owt.git || ($SLEEP && git clone https://github.com/desktop-app/tg_owt.git)
     cd tg_owt
     git checkout 89df288dd6ba5b2ec95b3c5eaf1e7e0c3a870fc4
     git submodule update --init --recursive
@@ -1809,7 +1810,7 @@ release:
 """)
 
 stage('ada', """
-    git clone -b v3.2.4 https://github.com/ada-url/ada.git
+    git clone -b v3.2.4 https://github.com/ada-url/ada.git || ($SLEEP && git clone -b v3.2.4 https://github.com/ada-url/ada.git)
     cd ada
 win:
     cmake -B out . ^
