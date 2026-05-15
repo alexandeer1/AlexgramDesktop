@@ -44,7 +44,7 @@ endif()
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Telegram)
 
-if (LINUX AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Telegram/ThirdParty")
+if ((LINUX OR APPLE) AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Telegram/ThirdParty")
     get_filename_component(third_party_loc "Telegram/ThirdParty" REALPATH)
 elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty")
     get_filename_component(third_party_loc "ThirdParty" REALPATH)
