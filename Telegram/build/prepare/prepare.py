@@ -234,28 +234,31 @@ def filterByPlatform(commands):
         m = re.match(r'^\s*(!?)([a-z0-9_-]+):', command)
         if m and m.group(2) != 'depends' and m.group(2) != 'version':
             scopes = m.group(2).split('_')
-            inscope = 'common' in scopes
-            if win and 'win' in scopes:
-                inscope = True
-            if win32 and 'win32' in scopes:
-                inscope = True
-            if win64 and 'win64' in scopes:
-                inscope = True
-            if winarm and 'winarm' in scopes:
-                inscope = True
-            if mac and 'mac' in scopes:
-                inscope = True
-            # if linux and 'linux' in scopes:
-            #     inscope = True
+            isPlatformScope = any(p in scopes for p in ['common', 'win', 'win32', 'win64', 'winarm', 'mac', 'linux'])
+            if isPlatformScope:
+                inscope = 'common' in scopes
+                if win and 'win' in scopes:
+                    inscope = True
+                if win32 and 'win32' in scopes:
+                    inscope = True
+                if win64 and 'win64' in scopes:
+                    inscope = True
+                if winarm and 'winarm' in scopes:
+                    inscope = True
+                if mac and 'mac' in scopes:
+                    inscope = True
+            else:
+                inscope = not skip
+
             if 'release' in scopes:
                 if 'skip-release' in options:
                     inscope = False
-                elif inscope or len(scopes) == 1:
+                elif isPlatformScope or inscope or len(scopes) == 1:
                     inscope = True
             if 'debug' in scopes:
                 if 'skip-debug' in options:
                     inscope = False
-                elif inscope or len(scopes) == 1:
+                elif isPlatformScope or inscope or len(scopes) == 1:
                     inscope = True
             for option in options:
                 if option in scopes:
