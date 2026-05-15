@@ -230,6 +230,7 @@ def filterByPlatform(commands):
     dependencies = []
     version = '0'
     platformInscope = True
+    skip = False
     for command in commands:
         m = re.match(r'^\s*(!?)([a-z0-9_-]+):', command)
         if m and m.group(2) != 'depends' and m.group(2) != 'version':
