@@ -1688,10 +1688,11 @@ win:
         -D LCMS2_INCLUDE_DIR="%LCMS2_DIR%\\include" ^
         -D LCMS2_LIBRARIES="%LCMS2_DIR%\\out\\Release\\src\\liblcms2.a"
 
-    powershell -Command "Get-ChildItem -Recurse cmake_install.cmake | ForEach-Object { $c = Get-Content $_.FullName; if ($c -match 'CREATE_LINK') { $c -replace 'file.CREATE_LINK', '#file(CREATE_LINK' | Set-Content $_.FullName } }"
     cmake --build . --config Debug
+    python -c "import os; [open(p, 'w').write(open(p).read().replace('file(CREATE_LINK', '#file(CREATE_LINK')) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if 'file(CREATE_LINK' in open(p).read()]"
     cmake --install . --config Debug
     cmake --build .
+    python -c "import os; [open(p, 'w').write(open(p).read().replace('file(CREATE_LINK', '#file(CREATE_LINK')) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if 'file(CREATE_LINK' in open(p).read()]"
     cmake --install .
 """)
 
