@@ -253,12 +253,12 @@ def filterByPlatform(commands):
             if 'release' in scopes:
                 if 'skip-release' in options:
                     inscope = False
-                elif isPlatformScope or inscope or len(scopes) == 1:
+                elif isPlatformScope or inscope:
                     inscope = True
             if 'debug' in scopes:
                 if 'skip-debug' in options:
                     inscope = False
-                elif isPlatformScope or inscope or len(scopes) == 1:
+                elif isPlatformScope or inscope:
                     inscope = True
             for option in options:
                 if option in scopes:
