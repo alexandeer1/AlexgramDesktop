@@ -250,7 +250,7 @@ def filterByPlatform(commands):
                     inscope = True
                 if mac and 'mac' in scopes:
                     inscope = True
-                platformInscope = inscope
+                platformInscope = not inscope if m.group(1) == '!' else inscope
             else:
                 inscope = platformInscope
 
@@ -613,7 +613,7 @@ mac:
 """)
 
 stage('openssl3', """
-    git clone -b openssl-3.2.1 https://github.com/openssl/openssl openssl3
+    git clone -b openssl-3.2.1 https://github.com/openssl/openssl.git openssl3 || (sleep 5 && git clone -b openssl-3.2.1 https://github.com/openssl/openssl.git openssl3)
     cd openssl3
 win32:
     perl Configure no-shared no-tests debug-VC-WIN32 /FS
