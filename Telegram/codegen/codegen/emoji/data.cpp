@@ -658,7 +658,9 @@ bool CheckOldInCurrent(
 		} else {
 			AddAlias(bare, BareIdFromInput(inputId));
 		}
-		if (variatedIds.find(bare) != variatedIds.end()) {
+		if (variatedIds.find(bare) != variatedIds.end()
+			&& !real.empty()
+			&& !inputId.empty()) {
 			auto colorReal = real;
 			colorReal.insert(colorReal.begin() + 1, Colors[0]);
 			auto colorInput = inputId;

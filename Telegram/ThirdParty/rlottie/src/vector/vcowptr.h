@@ -37,19 +37,28 @@ class vcow_ptr {
     };
     model* mModel;
 
+    static model* default_model()
+    {
+        static model default_s;
+        return &default_s;
+    }
+
 public:
     using element_type = T;
 
     vcow_ptr()
     {
-        static model default_s;
-        mModel = &default_s;
+        mModel = default_model();
         ++mModel->mRef;
     }
 
     ~vcow_ptr()
     {
-        if (mModel && (--mModel->mRef == 0)) delete mModel;
+        if (mModel && (--mModel->mRef == 0)) {
+            if (mModel != default_model()) {
+                delete mModel;
+            }
+        }
     }
 
     template <class... Args>

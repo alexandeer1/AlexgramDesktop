@@ -44,12 +44,18 @@ endif()
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Telegram)
 
-get_filename_component(third_party_loc "Telegram/ThirdParty" REALPATH)
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty")
+    get_filename_component(third_party_loc "ThirdParty" REALPATH)
+else()
+    get_filename_component(third_party_loc "../ThirdParty" REALPATH)
+endif()
 get_filename_component(submodules_loc "Telegram" REALPATH)
 get_filename_component(cmake_helpers_loc "cmake" REALPATH)
 
 if (NOT DESKTOP_APP_USE_PACKAGED AND WIN32)
-    set(Python3_EXECUTABLE ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/python/Scripts/python.exe)
+    if (EXISTS "${third_party_loc}/python/Scripts/python.exe")
+        set(Python3_EXECUTABLE ${third_party_loc}/python/Scripts/python.exe)
+    endif()
 endif()
 
 include(cmake/variables.cmake)

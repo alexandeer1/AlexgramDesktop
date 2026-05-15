@@ -1300,7 +1300,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 		builder.scope([&] {
 			builder.addDividerText(tr::lng_settings_alexgram_ghost_mode_save_deleted_about());
 			builder.addSkip();
-		}, saveDeletedCb ? (saveDeletedCb->checkedValue() | rpl::map([](bool checked) { return !checked; })) : rpl::single(true));
+		}, saveDeletedCb ? rpl::producer<bool>(saveDeletedCb->checkedValue() | rpl::map([](bool checked) { return !checked; })) : rpl::producer<bool>(rpl::single(true)));
 	}, nullptr, [=](SectionBuilder::ToggledScopePtr wrap) {
 		const auto container = wrap->entity();
 		container->paintRequest() | rpl::on_next([container](QRect) {
