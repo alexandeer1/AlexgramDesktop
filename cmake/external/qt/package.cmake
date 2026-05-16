@@ -41,10 +41,15 @@ if (NOT DESKTOP_APP_USE_PACKAGED)
                 endwhile()
                 # If we ended up in a 'qtbase' folder, the real root is likely one level up.
                 if (qt_loc MATCHES "/qtbase$")
-                    get_filename_component(qt_loc "${qt_loc}" DIRECTORY)
+                    get_filename_component(qt_loc_parent "${qt_loc}" DIRECTORY)
+                    set(qt_loc "${qt_loc_parent}")
                 endif()
-                # Ensure the directory containing Qt6Config.cmake is in the search path.
+                # Crucial: Add the directory containing the actual .cmake files to search paths
                 list(APPEND CMAKE_PREFIX_PATH "${qt_config_dir}")
+                list(APPEND CMAKE_MODULE_PATH "${qt_config_dir}")
+                # Also add the lib/cmake parent to help find other modules
+                get_filename_component(qt_lib_cmake_dir "${qt_config_dir}" DIRECTORY)
+                list(APPEND CMAKE_PREFIX_PATH "${qt_lib_cmake_dir}")
             else()
                 set(qt_loc ${libs_loc}/Qt-${qt_requested})
             endif()
