@@ -1585,8 +1585,8 @@ win:
         -nomake tests ^
         -platform win32-msvc
 
-    jom -j%NUMBER_OF_PROCESSORS%
-    jom -j%NUMBER_OF_PROCESSORS% install
+    jom -j%NUMBER_OF_PROCESSORS% || jom -j1
+    jom install
 """)
 else: # qt > '6'
     branch = 'v$QT' + ('-lts-lgpl' if qt.startswith('6.2.') else '')
