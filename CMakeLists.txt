@@ -42,6 +42,7 @@ elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty")
 else()
     get_filename_component(third_party_loc "../ThirdParty" REALPATH)
 endif()
+message(STATUS "DEBUG: third_party_loc: ${third_party_loc}")
 get_filename_component(submodules_loc "Telegram" REALPATH)
 get_filename_component(cmake_helpers_loc "cmake" REALPATH)
 
