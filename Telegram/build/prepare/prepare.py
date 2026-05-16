@@ -100,7 +100,7 @@ environment = {
     'THIRDPARTY_DIR': thirdPartyDir,
     'PATH_PREFIX': pathPrefix,
     'CMAKE_GENERATOR': 'Ninja Multi-Config',
-    'SLEEP': 'timeout /t 5' if win else '$SLEEP'
+    'SLEEP': 'powershell -command "Start-Sleep -s 5"' if win else 'sleep 5'
 }
 if (win32):
     environment.update({
