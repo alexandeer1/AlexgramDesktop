@@ -29,25 +29,36 @@ if (NOT DESKTOP_APP_USE_PACKAGED)
         elseif (EXISTS "${libs_loc}/Qt-${qt_requested}")
             set(qt_loc ${libs_loc}/Qt-${qt_requested})
         else()
-            # If not found at standard locations, try to find it recursively.
-            file(GLOB_RECURSE qt6_configs "${libs_loc}/*/Qt6Config.cmake")
+            # Search for an installed Qt prefix (Qt-X.Y.Z pattern, not source build tree qt_X.Y.Z).
+            file(GLOB_RECURSE qt6_all_configs "${libs_loc}/*/Qt6Config.cmake")
+            set(qt6_configs "")
+            foreach(_cfg IN LISTS qt6_all_configs)
+                # Exclude cmake files found inside source/build clone directories (qt_*).
+                # Those lack QtFindWrapHelper and other helper modules only present in
+                # installed prefixes. Accept only configs under Qt-* (installed prefix).
+                if (_cfg MATCHES "/[Qq]t-[0-9]")
+                    list(APPEND qt6_configs "${_cfg}")
+                endif()
+            endforeach()
+            if (NOT qt6_configs AND qt6_all_configs)
+                # No installed-prefix config found; fall back to any config found.
+                # This will likely fail for Qt 6.10+ due to missing QtFindWrapHelper,
+                # but is better than no path at all.
+                set(qt6_configs ${qt6_all_configs})
+            endif()
             if (qt6_configs)
                 list(GET qt6_configs 0 first_config)
                 get_filename_component(qt_config_dir "${first_config}" DIRECTORY)
                 set(qt_loc "${qt_config_dir}")
-                # Move up until we find a directory that looks like a Qt root (has 'bin' or 'include')
                 while (NOT EXISTS "${qt_loc}/bin" AND NOT EXISTS "${qt_loc}/include" AND NOT qt_loc STREQUAL libs_loc)
                     get_filename_component(qt_loc "${qt_loc}" DIRECTORY)
                 endwhile()
-                # If we ended up in a 'qtbase' folder, the real root is likely one level up.
                 if (qt_loc MATCHES "/qtbase$")
                     get_filename_component(qt_loc_parent "${qt_loc}" DIRECTORY)
                     set(qt_loc "${qt_loc_parent}")
                 endif()
-                # Crucial: Add the directory containing the actual .cmake files to search paths
                 list(APPEND CMAKE_PREFIX_PATH "${qt_config_dir}")
                 list(APPEND CMAKE_MODULE_PATH "${qt_config_dir}")
-                # Also add the lib/cmake parent to help find other modules
                 get_filename_component(qt_lib_cmake_dir "${qt_config_dir}" DIRECTORY)
                 list(APPEND CMAKE_PREFIX_PATH "${qt_lib_cmake_dir}")
             else()
@@ -55,7 +66,7 @@ if (NOT DESKTOP_APP_USE_PACKAGED)
             endif()
         endif()
 
-        if (qt_requested GREATER 6)
+        if (qt_requested VERSION_GREATER_EQUAL "6")
             set(OPENSSL_FOUND 1)
             set(OPENSSL_INCLUDE_DIR ${libs_loc}/openssl3/include)
             set(LIB_EAY_DEBUG ${libs_loc}/openssl3/out.dbg/libcrypto.lib)
