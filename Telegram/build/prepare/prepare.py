@@ -776,6 +776,7 @@ depends:python/Scripts/activate.bat
     meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=debug -Denable_tools=false -Denable_tests=false %DAV1D_ASM_DISABLE% -Db_vscrt=mtd builddir-debug
     meson compile -C builddir-debug
     meson install -C builddir-debug
+    copy %LIBS_DIR%\\local\\lib\\libdav1d.a %LIBS_DIR%\\local\\lib\\dav1d.lib
     deactivate
 win_release:
 depends:python/Scripts/activate.bat
