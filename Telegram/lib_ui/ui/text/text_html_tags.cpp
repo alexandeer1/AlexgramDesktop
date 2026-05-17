@@ -169,8 +169,8 @@ void AddUnique(
 		const TextWithEntities &text,
 		const EntityInText &entity) {
 	const auto textSize = text.text.size();
-	const auto from = std::clamp(qsizetype(entity.offset()), qsizetype(0), textSize);
-	const auto till = std::clamp(qsizetype(entity.offset() + entity.length()), qsizetype(0), textSize);
+	const auto from = std::clamp(qsizetype(entity.offset()), qsizetype(0), qsizetype(textSize));
+	const auto till = std::clamp(qsizetype(entity.offset() + entity.length()), qsizetype(0), qsizetype(textSize));
 	return (till > from)
 		? QStringView(text.text).mid(from, till - from).toString()
 		: QString();
@@ -1071,7 +1071,7 @@ void AppendText(ParseState &state, QString text) {
 		return;
 	}
 	auto start = 0;
-	for (auto i = qsizetype(0), size = text.size(); i != size;) {
+	for (int i = 0, size = int(text.size()); i != size;) {
 		if (!IsCollapsibleSpace(text[i])) {
 			++i;
 			continue;
