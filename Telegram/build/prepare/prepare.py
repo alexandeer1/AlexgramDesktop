@@ -1077,6 +1077,7 @@ depends:patches/libvpx/*.patch
     git checkout v1.14.1
 win:
     for /r %%i in (..\\patches\\libvpx\\*) do git apply %%i
+    powershell -Command "(gc ..\\patches\\build_libvpx_win.sh) -replace 'make -j\S+', 'make' | Out-File -encoding UTF8 ..\\patches\\build_libvpx_win.sh"
 
     SET PATH=%THIRDPARTY_DIR%\\msys64\\usr\\bin;%PATH%
     SET CHERE_INVOKING=enabled_from_arguments
