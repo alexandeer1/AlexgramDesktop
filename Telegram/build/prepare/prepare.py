@@ -1707,14 +1707,14 @@ win:
         -D LCMS2_INCLUDE_DIR="%LCMS2_DIR%\\include" ^
         -D LCMS2_LIBRARIES="%LCMS2_DIR%\\out\\Release\\src\\liblcms2.a"
 
-!skip-debug:
-    cmake --build . --config Debug
-    python -c "import os, re; [open(p, 'w').write(re.sub(r'(include\([^)]*assemble_sbom\.cmake[^)]*\))', r'#\1', re.sub(r'file\s*\(\s*CREATE_LINK', '#file(CREATE_LINK', open(p).read(), flags=re.I), flags=re.I)) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if re.search(r'file\s*\(\s*CREATE_LINK|include\([^)]*assemble_sbom\.cmake[^)]*\)', open(p).read(), flags=re.I)]"
-    cmake --install . --config Debug
-skip-debug:
+!skip-release:
     cmake --build . --config Release
     python -c "import os, re; [open(p, 'w').write(re.sub(r'(include\([^)]*assemble_sbom\.cmake[^)]*\))', r'#\1', re.sub(r'file\s*\(\s*CREATE_LINK', '#file(CREATE_LINK', open(p).read(), flags=re.I), flags=re.I)) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if re.search(r'file\s*\(\s*CREATE_LINK|include\([^)]*assemble_sbom\.cmake[^)]*\)', open(p).read(), flags=re.I)]"
     cmake --install . --config Release
+skip-release:
+    cmake --build . --config Debug
+    python -c "import os, re; [open(p, 'w').write(re.sub(r'(include\([^)]*assemble_sbom\.cmake[^)]*\))', r'#\1', re.sub(r'file\s*\(\s*CREATE_LINK', '#file(CREATE_LINK', open(p).read(), flags=re.I), flags=re.I)) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if re.search(r'file\s*\(\s*CREATE_LINK|include\([^)]*assemble_sbom\.cmake[^)]*\)', open(p).read(), flags=re.I)]"
+    cmake --install . --config Debug
 """)
 
 stage('tg_owt', """
