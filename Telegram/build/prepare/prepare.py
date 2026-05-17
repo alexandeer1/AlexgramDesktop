@@ -60,7 +60,6 @@ usedPrefix = os.path.realpath(os.path.join(libsDir, 'local'))
 optionsList = [
     'qt6',
     'skip-release',
-    'skip-debug',
     'build-stackwalk',
 ]
 options = []
@@ -100,7 +99,6 @@ environment = {
     'THIRDPARTY_DIR': thirdPartyDir,
     'PATH_PREFIX': pathPrefix,
     'CMAKE_GENERATOR': 'Ninja Multi-Config',
-    'SLEEP': 'powershell -command "Start-Sleep -s 5"' if win else 'sleep 5'
 }
 if (win32):
     environment.update({
@@ -230,46 +228,29 @@ def filterByPlatform(commands):
     result = ''
     dependencies = []
     version = '0'
-    platformInscope = True
     skip = False
     for command in commands:
-        m = re.match(r'^\s*(!?)([a-z0-9_-]+):', command)
+        m = re.match(r'(!?)([a-z0-9_]+):', command)
         if m and m.group(2) != 'depends' and m.group(2) != 'version':
             scopes = m.group(2).split('_')
-            isPlatformScope = any(p in scopes for p in ['common', 'win', 'win32', 'win64', 'winarm', 'mac', 'linux'])
-            if isPlatformScope:
-                inscope = 'common' in scopes
-                if win and 'win' in scopes:
-                    inscope = True
-                if win32 and 'win32' in scopes:
-                    inscope = True
-                if win64 and 'win64' in scopes:
-                    inscope = True
-                if winarm and 'winarm' in scopes:
-                    inscope = True
-                if mac and 'mac' in scopes:
-                    inscope = True
-                platformInscope = not inscope if m.group(1) == '!' else inscope
-            else:
-                inscope = platformInscope
-
+            inscope = 'common' in scopes
+            if win and 'win' in scopes:
+                inscope = True
+            if win32 and 'win32' in scopes:
+                inscope = True
+            if win64 and 'win64' in scopes:
+                inscope = True
+            if winarm and 'winarm' in scopes:
+                inscope = True
+            if mac and 'mac' in scopes:
+                inscope = True
+            # if linux and 'linux' in scopes:
+            #     inscope = True
             if 'release' in scopes:
                 if 'skip-release' in options:
                     inscope = False
-                elif inscope:
-                    inscope = True
-            if 'debug' in scopes:
-                if 'skip-debug' in options:
-                    inscope = False
-                elif inscope:
-                    inscope = True
-            if 'skip-release' in scopes:
-                inscope = inscope and ('skip-release' in options)
-            if 'skip-debug' in scopes:
-                inscope = inscope and ('skip-debug' in options)
-            for option in options:
-                if option in scopes and inscope:
-                    inscope = True
+                elif len(scopes) == 1:
+                    continue
             skip = inscope if m.group(1) == '!' else not inscope
         elif not skip and not re.match(r'\s*#', command):
             if m and m.group(2) == 'version':
@@ -469,9 +450,9 @@ if customRunCommand:
     finish(0)
 
 stage('patches', """
-    git clone https://github.com/desktop-app/patches.git || ($SLEEP && git clone https://github.com/desktop-app/patches.git)
+    git clone https://github.com/desktop-app/patches.git
     cd patches
-    git checkout 4519c85c924b9da81f29d4aac045886f896ee479
+    git checkout 3128a5b5879c450f686f240cc9602ad7f4a054b4
 """)
 
 stage('msys64', """
@@ -484,7 +465,7 @@ win:
     msys64.exe
     del msys64.exe
 
-    bash -c "pacman-key --init; pacman-key --populate msys2; pacman -Sy --noconfirm --needed msys2-keyring; pacman -Syu --noconfirm"
+    bash -c "pacman-key --init; pacman-key --populate; pacman -Syu --noconfirm"
     pacman -Syu --noconfirm ^
         make ^
         mingw-w64-x86_64-diffutils ^
@@ -519,7 +500,7 @@ win:
 if not mac or 'build-stackwalk' in options:
     stage('gyp', """
 win:
-    git clone https://github.com/desktop-app/gyp.git || ($SLEEP && git clone https://github.com/desktop-app/gyp.git)
+    git clone https://github.com/desktop-app/gyp.git
     cd gyp
     git checkout 5e2425c47b
 mac:
@@ -531,7 +512,7 @@ mac:
 
 stage('lzma', """
 win:
-    git clone https://github.com/desktop-app/lzma.git || ($SLEEP && git clone https://github.com/desktop-app/lzma.git)
+    git clone https://github.com/desktop-app/lzma.git
     cd lzma\\C\\Util\\LzmaLib
     msbuild -m LzmaLib.sln /property:Configuration=Debug /property:Platform="$X8664"
 release:
@@ -540,7 +521,7 @@ release:
 
 stage('xz', """
 !win:
-    git clone -b v5.4.5 https://github.com/tukaani-project/xz.git || ($SLEEP && git clone -b v5.4.5 https://github.com/tukaani-project/xz.git)
+    git clone -b v5.4.5 https://github.com/tukaani-project/xz.git
     cd xz
     sed -i '' '\\@check_symbol_exists(futimens "sys/types.h;sys/stat.h" HAVE_FUTIMENS)@d' CMakeLists.txt
     CFLAGS="$UNGUARDED" CPPFLAGS="$UNGUARDED" cmake -B build . \\
@@ -551,7 +532,7 @@ stage('xz', """
 """)
 
 stage('zlib', """
-    git clone -b v1.3.1 https://github.com/madler/zlib.git || ($SLEEP && git clone -b v1.3.1 https://github.com/madler/zlib.git)
+    git clone -b v1.3.1 https://github.com/madler/zlib.git
     cd zlib
 win:
     cmake . ^
@@ -572,7 +553,7 @@ mac:
 """)
 
 stage('mozjpeg', """
-    git clone -b v4.1.5 https://github.com/mozilla/mozjpeg.git || ($SLEEP && git clone -b v4.1.5 https://github.com/mozilla/mozjpeg.git)
+    git clone -b v4.1.5 https://github.com/mozilla/mozjpeg.git
     cd mozjpeg
 win:
     cmake . ^
@@ -609,7 +590,7 @@ mac:
 """)
 
 stage('openssl3', """
-    git clone -b openssl-3.2.1 https://github.com/openssl/openssl.git openssl3 || ($SLEEP && git clone -b openssl-3.2.1 https://github.com/openssl/openssl.git openssl3)
+    git clone -b openssl-3.2.1 https://github.com/openssl/openssl openssl3
     cd openssl3
 win32:
     perl Configure no-shared no-tests debug-VC-WIN32 /FS
@@ -656,17 +637,13 @@ mac:
 """)
 
 stage('opus', """
-    git clone -b v1.5.2 https://github.com/xiph/opus.git || ($SLEEP && git clone -b v1.5.2 https://github.com/xiph/opus.git)
+    git clone -b v1.5.2 https://github.com/xiph/opus.git
     cd opus
-win_debug:
+win:
     cmake -B out . ^
         -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
         -DOPUS_STATIC_RUNTIME=ON
     cmake --build out --config Debug
-win_release:
-    cmake -B out . ^
-        -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
-        -DOPUS_STATIC_RUNTIME=ON
     cmake --build out --config Release
     cmake --install out --config Release
 mac:
@@ -678,7 +655,7 @@ mac:
 """)
 
 stage('rnnoise', """
-    git clone https://github.com/desktop-app/rnnoise.git || ($SLEEP && git clone https://github.com/desktop-app/rnnoise.git)
+    git clone https://github.com/desktop-app/rnnoise.git
     cd rnnoise
     git checkout d8ea2b0
     mkdir out
@@ -730,7 +707,7 @@ mac:
 
 stage('gas-preprocessor', """
 win:
-    git clone https://github.com/FFmpeg/gas-preprocessor || ($SLEEP && git clone https://github.com/FFmpeg/gas-preprocessor)
+    git clone https://github.com/FFmpeg/gas-preprocessor
     cd gas-preprocessor
     echo @echo off > cpp.bat
     echo cl %%%%%%** >> cpp.bat
@@ -738,7 +715,7 @@ win:
 
 # Somehow in x86 Debug build dav1d crashes on AV1 10bpc videos.
 stage('dav1d', """
-    git clone -b 1.5.3 https://code.videolan.org/videolan/dav1d.git || ($SLEEP && git clone -b 1.5.3 https://code.videolan.org/videolan/dav1d.git)
+    git clone -b 1.5.3 https://code.videolan.org/videolan/dav1d.git
     cd dav1d
 win32:
     SET "TARGET=x86"
@@ -765,7 +742,6 @@ win:
     echo cpu = '%TARGET%' >> %FILE%
     echo endian = 'little' >> %FILE%
 
-win:
 depends:python/Scripts/activate.bat
     %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
     meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=debug -Denable_tools=false -Denable_tests=false %DAV1D_ASM_DISABLE% -Db_vscrt=mtd builddir-debug
@@ -804,7 +780,7 @@ mac:
 """)
 
 stage('openh264', """
-    git clone -b v2.6.0 https://github.com/cisco/openh264.git || ($SLEEP && git clone -b v2.6.0 https://github.com/cisco/openh264.git)
+    git clone -b v2.6.0 https://github.com/cisco/openh264.git
     cd openh264
 win32:
     SET "TARGET=x86"
@@ -862,7 +838,7 @@ mac:
 """)
 
 stage('libavif', """
-    git clone -b v1.3.0 https://github.com/AOMediaCodec/libavif.git || ($SLEEP && git clone -b v1.3.0 https://github.com/AOMediaCodec/libavif.git)
+    git clone -b v1.3.0 https://github.com/AOMediaCodec/libavif.git
     cd libavif
 win:
     cmake . ^
@@ -891,7 +867,7 @@ mac:
 """)
 
 stage('libde265', """
-    git clone -b v1.0.16 https://github.com/strukturag/libde265.git || ($SLEEP && git clone -b v1.0.16 https://github.com/strukturag/libde265.git)
+    git clone -b v1.0.16 https://github.com/strukturag/libde265.git
     cd libde265
 win:
     cmake . ^
@@ -923,7 +899,7 @@ mac:
 """)
 
 stage('libwebp', """
-    git clone -b v1.6.0 https://github.com/webmproject/libwebp.git || ($SLEEP && git clone -b v1.6.0 https://github.com/webmproject/libwebp.git)
+    git clone -b v1.6.0 https://github.com/webmproject/libwebp.git
     cd libwebp
 win:
     nmake /f Makefile.vc CFG=debug-static OBJDIR=out RTLIBCFG=static all
@@ -962,7 +938,7 @@ mac:
 """)
 
 stage('libheif', """
-    git clone -b v1.21.2 https://github.com/strukturag/libheif.git || ($SLEEP && git clone -b v1.21.2 https://github.com/strukturag/libheif.git)
+    git clone -b v1.21.2 https://github.com/strukturag/libheif.git
     cd libheif
 win:
     %THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed.exe -i 's/LIBHEIF_EXPORTS/LIBDE265_STATIC_BUILD/g' libheif/CMakeLists.txt
@@ -1022,7 +998,7 @@ mac:
 """)
 
 stage('libjxl', """
-    git clone -b v0.11.2 --recursive --shallow-submodules https://github.com/libjxl/libjxl.git || ($SLEEP && git clone -b v0.11.2 --recursive --shallow-submodules https://github.com/libjxl/libjxl.git)
+    git clone -b v0.11.2 --recursive --shallow-submodules https://github.com/libjxl/libjxl.git
     cd libjxl
 """ + setVar("cmake_defines", """
     -DBUILD_SHARED_LIBS=OFF
@@ -1066,13 +1042,12 @@ mac:
 """)
 
 stage('libvpx', """
-    git clone https://github.com/webmproject/libvpx.git || ($SLEEP && git clone https://github.com/webmproject/libvpx.git)
+    git clone https://github.com/webmproject/libvpx.git
 depends:patches/libvpx/*.patch
     cd libvpx
     git checkout v1.14.1
 win:
     for /r %%i in (..\\patches\\libvpx\\*) do git apply %%i
-    powershell -Command "(gc ..\\patches\\build_libvpx_win.sh) -replace 'make -j\S+', 'make' | Out-File -encoding UTF8 ..\\patches\\build_libvpx_win.sh"
 
     SET PATH=%THIRDPARTY_DIR%\\msys64\\usr\\bin;%PATH%
     SET CHERE_INVOKING=enabled_from_arguments
@@ -1084,10 +1059,7 @@ win64:
     SET "TOOLCHAIN=x86_64-win64-vs17"
 winarm:
     SET "TOOLCHAIN=arm64-win64-vs17"
-win_debug:
-depends:patches/build_libvpx_win.sh
-    bash --login ../patches/build_libvpx_win.sh
-win_release:
+win:
 depends:patches/build_libvpx_win.sh
     bash --login ../patches/build_libvpx_win.sh
 mac:
@@ -1132,7 +1104,7 @@ mac:
 """)
 
 stage('liblcms2', """
-    git clone -b lcms2.16 https://github.com/mm2/Little-CMS.git liblcms2 || ($SLEEP && git clone -b lcms2.16 https://github.com/mm2/Little-CMS.git liblcms2)
+    git clone -b lcms2.16 https://github.com/mm2/Little-CMS.git liblcms2
     cd liblcms2
 win:
 depends:python/Scripts/activate.bat
@@ -1169,15 +1141,15 @@ mac:
 
 stage('nv-codec-headers', """
 win:
-    git clone -b n12.1.14.0 https://github.com/FFmpeg/nv-codec-headers.git || ($SLEEP && git clone -b n12.1.14.0 https://github.com/FFmpeg/nv-codec-headers.git)
+    git clone -b n12.1.14.0 https://github.com/FFmpeg/nv-codec-headers.git
 """)
 
 stage('regex', """
-    git clone -b boost-1.83.0 https://github.com/boostorg/regex.git || ($SLEEP && git clone -b boost-1.83.0 https://github.com/boostorg/regex.git)
+    git clone -b boost-1.83.0 https://github.com/boostorg/regex.git
 """)
 
 stage('ffmpeg', """
-    git clone -b n6.1.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg || ($SLEEP && git clone -b n6.1.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg)
+    git clone -b n6.1.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
 win:
 depends:patches/ffmpeg.patch
@@ -1357,7 +1329,7 @@ mac:
 """)
 
 stage('openal-soft', """
-    git clone https://github.com/telegramdesktop/openal-soft.git || ($SLEEP && git clone https://github.com/telegramdesktop/openal-soft.git)
+    git clone https://github.com/telegramdesktop/openal-soft.git
     cd openal-soft
 win:
     git checkout 291c0fdbbd
@@ -1445,7 +1417,7 @@ release:
 
 stage('crashpad', """
 mac:
-    git clone https://github.com/desktop-app/crashpad.git || ($SLEEP && git clone https://github.com/desktop-app/crashpad.git)
+    git clone https://github.com/desktop-app/crashpad.git
     cd crashpad
     git checkout 3279fae3f0
     git submodule init
@@ -1507,7 +1479,7 @@ if qt < '6':
     if win:
         stage('tg_angle', """
 win:
-    git clone https://github.com/desktop-app/tg_angle.git || ($SLEEP && git clone https://github.com/desktop-app/tg_angle.git)
+    git clone https://github.com/desktop-app/tg_angle.git
     cd tg_angle
     git checkout e3f59e8d0c
     cmake -B out ^
@@ -1535,11 +1507,9 @@ win:
     )
     cd ..
 
-    SET CONFIGURATIONS=-debug-and-release
-skip-release:
     SET CONFIGURATIONS=-debug
-skip-debug:
-    SET CONFIGURATIONS=-release
+release:
+    SET CONFIGURATIONS=-debug-and-release
 win:
     """ + removeDir('"%LIBS_DIR%\\Qt-' + qt + '"') + """
     SET ANGLE_DIR=%LIBS_DIR%\\tg_angle
@@ -1581,16 +1551,14 @@ win:
         -nomake tests ^
         -platform win32-msvc
 
-    jom -j%NUMBER_OF_PROCESSORS% || jom -j1
-    jom install
+    jom -j%NUMBER_OF_PROCESSORS%
+    jom -j%NUMBER_OF_PROCESSORS% install
 mac:
     find ../../patches/qtbase_$QT -type f -print0 | sort -z | xargs -0 git -C qtbase apply
 
-    CONFIGURATIONS=-debug-and-release
-skip-release:
     CONFIGURATIONS=-debug
-skip-debug:
-    CONFIGURATIONS=-release
+release:
+    CONFIGURATIONS=-debug-and-release
 mac:
     ./configure -prefix "$USED_PREFIX/Qt-$QT" \
         $CONFIGURATIONS \
@@ -1622,11 +1590,9 @@ mac:
     find $PWD/../patches/qtbase_$QT -type f -print0 | sort -z | xargs -0 git -C qtbase apply -v
     sed -i.bak 's/tqtc-//' {qtimageformats,qtsvg}/dependencies.yaml
 
-    CONFIGURATIONS=-debug-and-release
-skip-release:
     CONFIGURATIONS=-debug
-skip-debug:
-    CONFIGURATIONS=-release
+release:
+    CONFIGURATIONS=-debug-and-release
 mac:
     ./configure -prefix "$USED_PREFIX/Qt-$QT" \
         $CONFIGURATIONS \
@@ -1643,8 +1609,7 @@ mac:
         -no-feature-brotli \
         -platform macx-clang -- \
         -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
-        -DCMAKE_PREFIX_PATH="$USED_PREFIX" \
-        -DQT_BUILD_SBOM=OFF
+        -DCMAKE_PREFIX_PATH="$USED_PREFIX"
 
     cmake --build .
     cmake --install .
@@ -1653,13 +1618,11 @@ win:
     for /r %%i in (..\\..\\patches\\qtbase_%QT%\\*) do git apply %%i -v
     cd ..
 
-    SET CONFIGURATIONS=-debug-and-release
-skip-release:
     SET CONFIGURATIONS=-debug
-skip-debug:
-    SET CONFIGURATIONS=-release
+release:
+    SET CONFIGURATIONS=-debug-and-release
 win:
-    """ + removeDir('"%LIBS_DIR%\\Qt-' + qt + '"') + """
+    """ + removeDir('"%LIBS_DIR%\\Qt' + qt + '"') + """
     SET MOZJPEG_DIR=%LIBS_DIR%\\mozjpeg
     SET OPENSSL_DIR=%LIBS_DIR%\\openssl3
     SET OPENSSL_LIBS_DIR=%OPENSSL_DIR%\\out
@@ -1681,7 +1644,6 @@ win:
         -platform win32-msvc ^
         -D ZLIB_WINAPI ^
         -- ^
-        -D QT_BUILD_SBOM=OFF ^
         -D OPENSSL_FOUND=1 ^
         -D OPENSSL_INCLUDE_DIR="%OPENSSL_DIR%\\include" ^
         -D LIB_EAY_DEBUG="%OPENSSL_LIBS_DIR%.dbg\\libcrypto.lib" ^
@@ -1706,18 +1668,14 @@ win:
         -D LCMS2_INCLUDE_DIR="%LCMS2_DIR%\\include" ^
         -D LCMS2_LIBRARIES="%LCMS2_DIR%\\out\\Release\\src\\liblcms2.a"
 
-!skip-debug:
     cmake --build . --config Debug
-    python -c "import os, re; [open(p, 'w').write(re.sub(r'(include\([^)]*assemble_sbom\.cmake[^)]*\))', r'#\1', re.sub(r'file\s*\(\s*CREATE_LINK', '#file(CREATE_LINK', open(p).read(), flags=re.I), flags=re.I)) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if re.search(r'file\s*\(\s*CREATE_LINK|include\([^)]*assemble_sbom\.cmake[^)]*\)', open(p).read(), flags=re.I)]"
     cmake --install . --config Debug
-skip-debug:
-    cmake --build . --config Release
-    python -c "import os, re; [open(p, 'w').write(re.sub(r'(include\([^)]*assemble_sbom\.cmake[^)]*\))', r'#\1', re.sub(r'file\s*\(\s*CREATE_LINK', '#file(CREATE_LINK', open(p).read(), flags=re.I), flags=re.I)) for p in [os.path.join(r, n) for r, d, f in os.walk('.') for n in f if n == 'cmake_install.cmake'] if re.search(r'file\s*\(\s*CREATE_LINK|include\([^)]*assemble_sbom\.cmake[^)]*\)', open(p).read(), flags=re.I)]"
-    cmake --install . --config Release
+    cmake --build .
+    cmake --install .
 """)
 
 stage('tg_owt', """
-    git clone https://github.com/desktop-app/tg_owt.git || ($SLEEP && git clone https://github.com/desktop-app/tg_owt.git)
+    git clone https://github.com/desktop-app/tg_owt.git
     cd tg_owt
     git checkout 89df288dd6ba5b2ec95b3c5eaf1e7e0c3a870fc4
     git submodule update --init --recursive
@@ -1815,7 +1773,7 @@ release:
 """)
 
 stage('ada', """
-    git clone -b v3.2.4 https://github.com/ada-url/ada.git || ($SLEEP && git clone -b v3.2.4 https://github.com/ada-url/ada.git)
+    git clone -b v3.2.4 https://github.com/ada-url/ada.git
     cd ada
 win:
     cmake -B out . ^
