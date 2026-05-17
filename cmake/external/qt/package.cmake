@@ -40,12 +40,6 @@ if (NOT DESKTOP_APP_USE_PACKAGED)
                     list(APPEND qt6_configs "${_cfg}")
                 endif()
             endforeach()
-            if (NOT qt6_configs AND qt6_all_configs)
-                # No installed-prefix config found; fall back to any config found.
-                # This will likely fail for Qt 6.10+ due to missing QtFindWrapHelper,
-                # but is better than no path at all.
-                set(qt6_configs ${qt6_all_configs})
-            endif()
             if (qt6_configs)
                 list(GET qt6_configs 0 first_config)
                 get_filename_component(qt_config_dir "${first_config}" DIRECTORY)
