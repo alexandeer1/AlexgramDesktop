@@ -24,6 +24,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "main/main_app_config.h"
 #include "apiwrap.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 
 namespace Data {
 namespace {
@@ -487,6 +489,12 @@ void ChatFilters::received(const QVector<MTPDialogFilter> &list) {
 	auto changed = false;
 	for (const auto &filter : list) {
 		auto parsed = ChatFilter::FromTL(filter, _owner);
+		if (Core::App().settings().localPremium() && parsed.id()) {
+			const auto cached = Core::App().settings().cachedLocalFilterTitle(parsed.id());
+			if (!cached.entities.empty()) {
+				parsed = parsed.withTitle({ cached, parsed.staticTitle() });
+			}
+		}
 		const auto b = begin(_list) + position;
 		const auto e = end(_list);
 		const auto i = ranges::find(b, e, parsed.id(), &ChatFilter::id);
@@ -521,8 +529,16 @@ void ChatFilters::received(const QVector<MTPDialogFilter> &list) {
 void ChatFilters::apply(const MTPUpdate &update) {
 	update.match([&](const MTPDupdateDialogFilter &data) {
 		if (const auto filter = data.vfilter()) {
-			set(ChatFilter::FromTL(*filter, _owner));
+			auto parsed = ChatFilter::FromTL(*filter, _owner);
+			if (Core::App().settings().localPremium() && parsed.id()) {
+				const auto cached = Core::App().settings().cachedLocalFilterTitle(parsed.id());
+				if (!cached.entities.empty()) {
+					parsed = parsed.withTitle({ cached, parsed.staticTitle() });
+				}
+			}
+			set(std::move(parsed));
 		} else {
+			Core::App().settings().clearLocalFilterTitle(data.vid().v);
 			remove(data.vid().v);
 		}
 	}, [&](const MTPDupdateDialogFilters &data) {

@@ -19,6 +19,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/timer_rpl.h"
 #include "base/call_delayed.h"
 #include "apiwrap.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "ui/controls/tabbed_search.h"
 
 namespace Data {
@@ -532,6 +534,7 @@ void EmojiStatuses::set(
 			MTP_long(id.documentId),
 			MTP_int(until));
 	if (peer->isSelf()) {
+		Core::App().settings().setLocalEmojiStatusId(id.documentId);
 		send(MTPaccount_UpdateEmojiStatus(status));
 	} else if (const auto channel = peer->asChannel()) {
 		send(MTPchannels_UpdateEmojiStatus(channel->inputChannel(), status));

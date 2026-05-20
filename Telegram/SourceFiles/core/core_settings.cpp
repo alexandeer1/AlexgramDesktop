@@ -318,6 +318,10 @@ rpl::event_stream<bool> &DialogUnifiedAvatarCornerChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &LocalPremiumChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
 
 std::atomic<int> gCurrentDialogAvatarCornerRadius = 50;
 
@@ -2722,6 +2726,106 @@ rpl::producer<bool> Settings::dialogUnifiedAvatarCornerChanges() {
 void Settings::setDialogUnifiedAvatarCorner(bool value) {
   writePref<bool>("dialog-unified-avatar-corner", value);
   DialogUnifiedAvatarCornerChanges().fire_copy(value);
+}
+
+bool Settings::localPremium() {
+  return readPref<bool>("local-premium", false);
+}
+
+rpl::producer<bool> Settings::localPremiumChanges() {
+  return LocalPremiumChanges().events_starting_with(localPremium());
+}
+
+void Settings::setLocalPremium(bool value) {
+  writePref<bool>("local-premium", value);
+  LocalPremiumChanges().fire_copy(value);
+}
+
+DocumentId Settings::localEmojiStatusId() {
+  return DocumentId(readPref<uint64>("local-emoji-status-id", uint64(0)));
+}
+
+void Settings::setLocalEmojiStatusId(DocumentId id) {
+  writePref<uint64>("local-emoji-status-id", uint64(id));
+}
+
+namespace {
+
+QByteArray SerializeFilterTitles(const QMap<int32, TextWithEntities> &map) {
+	QByteArray result;
+	QDataStream stream(&result, QIODevice::WriteOnly);
+	stream << int32(map.size());
+	for (auto it = map.cbegin(); it != map.cend(); ++it) {
+		stream << it.key();
+		stream << it.value().text;
+		const auto &entities = it.value().entities;
+		stream << int32(entities.size());
+		for (const auto &entity : entities) {
+			stream << int32(entity.type());
+			stream << int32(entity.offset());
+			stream << int32(entity.length());
+			stream << entity.data();
+		}
+	}
+	return result;
+}
+
+QMap<int32, TextWithEntities> DeserializeFilterTitles(const QByteArray &data) {
+	QMap<int32, TextWithEntities> result;
+	QDataStream stream(data);
+	int32 count = 0;
+	stream >> count;
+	if (stream.status() != QDataStream::Ok) return result;
+	for (int32 n = 0; n < count; ++n) {
+		int32 filterId = 0;
+		stream >> filterId;
+		QString text;
+		stream >> text;
+		int32 entityCount = 0;
+		stream >> entityCount;
+		if (stream.status() != QDataStream::Ok) break;
+		EntitiesInText entities;
+		entities.reserve(entityCount);
+		for (int32 e = 0; e < entityCount; ++e) {
+			int32 type = 0, offset = 0, length = 0;
+			QString edata;
+			stream >> type >> offset >> length >> edata;
+			if (stream.status() != QDataStream::Ok) break;
+			entities.push_back(EntityInText(
+				EntityType(type), offset, length, edata));
+		}
+		result[filterId] = { text, entities };
+	}
+	return result;
+}
+
+} // namespace
+
+void Settings::cacheLocalFilterTitle(
+		int32 filterId,
+		const TextWithEntities &title) {
+	const auto existing = readPrefGeneric("local-filter-titles");
+	auto map = existing
+		? DeserializeFilterTitles(*existing)
+		: QMap<int32, TextWithEntities>();
+	map[int32(filterId)] = title;
+	writePrefGeneric("local-filter-titles", SerializeFilterTitles(map));
+}
+
+TextWithEntities Settings::cachedLocalFilterTitle(int32 filterId) {
+	const auto existing = readPrefGeneric("local-filter-titles");
+	if (!existing) return {};
+	const auto map = DeserializeFilterTitles(*existing);
+	const auto it = map.find(int32(filterId));
+	return (it != map.cend()) ? it.value() : TextWithEntities();
+}
+
+void Settings::clearLocalFilterTitle(int32 filterId) {
+	const auto existing = readPrefGeneric("local-filter-titles");
+	if (!existing) return;
+	auto map = DeserializeFilterTitles(*existing);
+	map.remove(int32(filterId));
+	writePrefGeneric("local-filter-titles", SerializeFilterTitles(map));
 }
 
 } // namespace Core

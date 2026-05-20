@@ -8336,4 +8336,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_avatar_corners_preset_rounded" = "Rounded";
 "lng_settings_alexgram_avatar_corners_preset_circle" = "Circle";
 
+"lng_settings_alexgram_local_premium" = "Local Premium";
+"lng_settings_alexgram_local_premium_about" = "Unlock premium features locally. Note: The Telegram server will still block server-side premium actions. This only affects client-side checks.";
+
 // Keys finished

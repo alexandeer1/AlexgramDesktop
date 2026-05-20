@@ -6,6 +6,8 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/data_peer_values.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 
 #include "lang/lang_keys.h"
 #include "data/data_channel.h"
@@ -404,7 +406,11 @@ rpl::producer<bool> PeerPremiumValue(not_null<PeerData*> peer) {
 }
 
 rpl::producer<bool> AmPremiumValue(not_null<Main::Session*> session) {
-	return PeerPremiumValue(session->user());
+	using namespace rpl::mappers;
+	return rpl::combine(
+		PeerPremiumValue(session->user()),
+		Core::App().settings().localPremiumChanges()
+	) | rpl::map(_1 || _2);
 }
 
 TimeId SortByOnlineValue(not_null<UserData*> user, TimeId now) {

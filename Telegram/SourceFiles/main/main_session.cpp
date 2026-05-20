@@ -56,6 +56,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "support/support_helper.h"
 #include "lang/lang_keys.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "ui/text/text_utilities.h"
 #include "ui/layers/generic_box.h"
 #include "styles/style_layers.h"
@@ -361,7 +362,8 @@ rpl::producer<bool> Session::premiumPossibleValue() const {
 	return rpl::combine(
 		std::move(premium),
 		_premiumPossible.value(),
-		_1 || _2);
+		Core::App().settings().localPremiumChanges(),
+		_1 || _2 || _3);
 }
 
 bool Session::premiumCanBuy() const {

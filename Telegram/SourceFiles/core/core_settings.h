@@ -1233,6 +1233,17 @@ public:
 	[[nodiscard]] rpl::producer<bool> dialogUnifiedAvatarCornerChanges();
 	void setDialogUnifiedAvatarCorner(bool value);
 
+	[[nodiscard]] bool localPremium();
+	[[nodiscard]] rpl::producer<bool> localPremiumChanges();
+	void setLocalPremium(bool value);
+
+	[[nodiscard]] DocumentId localEmojiStatusId();
+	void setLocalEmojiStatusId(DocumentId id);
+
+	void cacheLocalFilterTitle(int32 filterId, const TextWithEntities &title);
+	[[nodiscard]] TextWithEntities cachedLocalFilterTitle(int32 filterId);
+	void clearLocalFilterTitle(int32 filterId);
+
 
 	[[nodiscard]] static bool ThirdColumnByDefault();
 	[[nodiscard]] static float64 DefaultDialogsWidthRatio();

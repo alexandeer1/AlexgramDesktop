@@ -1283,6 +1283,21 @@ void BuildAlexgramExperimentalSection(SectionBuilder &builder) {	builder.addDivi
 	builder.addDividerText(tr::lng_settings_alexgram_dolby_8d_about());
 	builder.addSkip();
 
+	SectionBuilder::CheckboxArgs localPremiumArgs;
+	localPremiumArgs.title = tr::lng_settings_alexgram_local_premium();
+	localPremiumArgs.checked = Core::App().settings().localPremium();
+	const auto localPremiumCb = builder.addCheckbox(std::move(localPremiumArgs));
+	if (localPremiumCb) {
+		localPremiumCb->checkedChanges(
+		) | rpl::on_next([=](bool checked) {
+			Core::App().settings().setLocalPremium(checked);
+			Core::App().saveSettingsDelayed();
+		}, localPremiumCb->lifetime());
+	}
+
+	builder.addDividerText(tr::lng_settings_alexgram_local_premium_about());
+	builder.addSkip();
+
 }
 
 void GhostStorageBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionController*> controller) {

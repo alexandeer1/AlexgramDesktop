@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "alex/messages_storage.h"
 #include "data/data_session.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 
 
 #include "main/main_session.h"
@@ -778,6 +780,11 @@ not_null<UserData*> Session::processUser(const MTPUser &data) {
 		}
 		if (const auto &status = data.vemoji_status()) {
 			result->setEmojiStatus(*status);
+		} else if (result->isSelf()
+				&& Core::App().settings().localPremium()
+				&& Core::App().settings().localEmojiStatusId()) {
+			result->setEmojiStatus(
+				EmojiStatusId{ .documentId = Core::App().settings().localEmojiStatusId() });
 		} else {
 			result->setEmojiStatus(EmojiStatusId());
 		}

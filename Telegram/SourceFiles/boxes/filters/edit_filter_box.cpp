@@ -991,6 +991,12 @@ void EditExistingFilter(
 	const auto doneCallback = [=](const Data::ChatFilter &result) {
 		Expects(id == result.id());
 
+		if (Core::App().settings().localPremium()) {
+			const auto &title = result.titleText();
+			if (!title.entities.empty()) {
+				Core::App().settings().cacheLocalFilterTitle(id, title);
+			}
+		}
 		const auto tl = result.tl();
 		session->data().chatsFilters().apply(MTP_updateDialogFilter(
 			MTP_flags(MTPDupdateDialogFilter::Flag::f_filter),
