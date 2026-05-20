@@ -944,7 +944,7 @@ void PeerListRow::paintUserpic(
 	}
 	paintUserpicOverlay(p, st, x, y, outerWidth);
 
-	if (Core::App().settings().showOnlineStatus()) {
+	if (Core::App().settings().showOnlineStatus() && !special()) {
 		if (const auto user = peer()->asUser()) {
 			if (!user->isBot() && Data::IsUserOnline(user, base::unixtime::now())) {
 				auto hq = PainterHighQualityEnabler(p);

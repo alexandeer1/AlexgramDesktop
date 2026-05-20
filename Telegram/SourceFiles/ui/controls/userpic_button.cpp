@@ -587,6 +587,13 @@ void UserpicButton::setupPeerViewers() {
 			startNewPhotoShowing();
 		}
 	}, _sourceLifetime);
+
+	Core::App().settings().dialogAvatarCornerRadiusChanges(
+	) | rpl::on_next([=] {
+		_userpicUniqueKey = {};
+		prepareUserpicPixmap();
+		update();
+	}, _sourceLifetime);
 }
 
 void UserpicButton::paintEvent(QPaintEvent *e) {

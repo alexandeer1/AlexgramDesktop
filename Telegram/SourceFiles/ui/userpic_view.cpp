@@ -26,14 +26,23 @@ void ValidateUserpicCache(
 		const QImage *cloud,
 		const EmptyUserpic *empty,
 		int size,
-		PeerUserpicShape shape) {
+		PeerUserpicShape shape,
+		int customRadius,
+		bool unifiedCorner) {
 	Expects(cloud != nullptr || empty != nullptr);
+
+	const auto applyCustom = (customRadius >= 0)
+		&& ((shape == PeerUserpicShape::Circle)
+			|| (shape == PeerUserpicShape::Forum && unifiedCorner));
+
+	const auto effectiveRadius = applyCustom ? customRadius : -1;
 
 	const auto full = QSize(size, size);
 	const auto version = style::PaletteVersion();
 	const auto shapeValue = static_cast<uint32>(shape) & 3;
 	const auto regenerate = (view.cached.size() != QSize(size, size))
 		|| (view.shape != shapeValue)
+		|| (view.customRadius != effectiveRadius)
 		|| (cloud && !view.empty.null())
 		|| (empty && empty != view.empty.get())
 		|| (empty && view.paletteVersion != version);
@@ -43,23 +52,35 @@ void ValidateUserpicCache(
 	view.empty = empty;
 	view.shape = shapeValue;
 	view.paletteVersion = version;
+	view.customRadius = effectiveRadius;
+
+	const auto applyRoundOrCircle = [&](QImage image) -> QImage {
+		if (!applyCustom) {
+			if (shape == PeerUserpicShape::Monoforum) {
+				return Ui::ApplyMonoforumShape(std::move(image));
+			} else if (shape == PeerUserpicShape::Forum) {
+				return Images::Round(
+					std::move(image),
+					Images::CornersMask(size
+						* Ui::ForumUserpicRadiusMultiplier()
+						/ style::DevicePixelRatio()));
+			}
+			return Images::Circle(std::move(image));
+		}
+		if (customRadius >= size / 2 / style::DevicePixelRatio()) {
+			return Images::Circle(std::move(image));
+		}
+		return Images::Round(
+			std::move(image),
+			Images::CornersMask(customRadius));
+	};
 
 	if (cloud) {
 		view.cached = cloud->scaled(
 			full,
 			Qt::IgnoreAspectRatio,
 			Qt::SmoothTransformation);
-		if (shape == PeerUserpicShape::Monoforum) {
-			view.cached = Ui::ApplyMonoforumShape(std::move(view.cached));
-		} else if (shape == PeerUserpicShape::Forum) {
-			view.cached = Images::Round(
-				std::move(view.cached),
-				Images::CornersMask(size
-					* Ui::ForumUserpicRadiusMultiplier()
-					/ style::DevicePixelRatio()));
-		} else {
-			view.cached = Images::Circle(std::move(view.cached));
-		}
+		view.cached = applyRoundOrCircle(std::move(view.cached));
 	} else {
 		if (view.cached.size() != full) {
 			view.cached = QImage(full, QImage::Format_ARGB32_Premultiplied);
@@ -67,18 +88,24 @@ void ValidateUserpicCache(
 		view.cached.fill(Qt::transparent);
 
 		auto p = QPainter(&view.cached);
-		if (shape == PeerUserpicShape::Monoforum) {
-			empty->paintMonoforum(p, 0, 0, size, size);
-		} else if (shape == PeerUserpicShape::Forum) {
-			empty->paintRounded(
-				p,
-				0,
-				0,
-				size,
-				size,
-				size * Ui::ForumUserpicRadiusMultiplier());
-		} else {
+		if (!applyCustom) {
+			if (shape == PeerUserpicShape::Monoforum) {
+				empty->paintMonoforum(p, 0, 0, size, size);
+			} else if (shape == PeerUserpicShape::Forum) {
+				empty->paintRounded(
+					p,
+					0,
+					0,
+					size,
+					size,
+					size * Ui::ForumUserpicRadiusMultiplier());
+			} else {
+				empty->paintCircle(p, 0, 0, size, size);
+			}
+		} else if (customRadius >= size / 2 / style::DevicePixelRatio()) {
 			empty->paintCircle(p, 0, 0, size, size);
+		} else {
+			empty->paintRounded(p, 0, 0, size, size, customRadius);
 		}
 	}
 }

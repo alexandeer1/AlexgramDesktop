@@ -1100,6 +1100,11 @@ void TopBar::setupUserpicButton(
 				| Data::PeerUpdate::Flag::FullInfo) | rpl::to_empty
 	) | rpl::on_next(invalidate, lifetime());
 
+	Core::App().settings().dialogAvatarCornerRadiusChanges(
+	) | rpl::on_next([=] {
+		invalidate();
+	}, lifetime());
+
 	if (const auto broadcast = _peer->monoforumBroadcast()) {
 		_peer->session().changes().peerFlagsValue(
 			broadcast,
@@ -1814,11 +1819,22 @@ void TopBar::paintUserpic(QPainter &p, const QRect &geometry) {
 				_monoforumMask);
 			q.end();
 		} else {
+			const auto customRadius = Core::App().settings().dialogAvatarCornerRadius();
+			const auto halfSize = fullSize / 2;
+			const auto radiusArg = [&]() -> std::optional<int> {
+				if (customRadius >= halfSize) {
+					return std::nullopt;
+				} else if (customRadius <= 0) {
+					return 0;
+				} else {
+					return customRadius * scaled / (halfSize * 2);
+				}
+			}();
 			image = PeerData::GenerateUserpicImage(
 				_peer,
 				_userpicView,
 				scaled,
-				std::nullopt);
+				radiusArg);
 		}
 		_cachedUserpic = std::move(image);
 		_cachedUserpic.setDevicePixelRatio(style::DevicePixelRatio());

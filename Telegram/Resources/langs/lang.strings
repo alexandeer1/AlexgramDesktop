@@ -8324,4 +8324,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_show_translated_icon" = "Show Icon for Translated Messages";
 "lng_settings_alexgram_show_translated_icon_about" = "Show a translate icon next to the timestamp for messages that have been translated.";
 
+"lng_settings_alexgram_avatar_corners" = "Avatar Corners";
+"lng_settings_alexgram_avatar_corners_sharp" = "Sharp";
+"lng_settings_alexgram_avatar_corners_round" = "Round";
+"lng_settings_alexgram_avatar_corners_unified" = "Unified corner radius";
+"lng_settings_alexgram_avatar_corners_unified_about" = "Topic groups will use the same avatar shape as chat messages.";
+"lng_settings_alexgram_avatar_corners_reset" = "Reset";
+"lng_settings_alexgram_avatar_corners_preset_sharp" = "Sharp";
+"lng_settings_alexgram_avatar_corners_preset_rounded" = "Rounded";
+"lng_settings_alexgram_avatar_corners_preset_circle" = "Circle";
+
 // Keys finished

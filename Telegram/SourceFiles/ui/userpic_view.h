@@ -34,6 +34,7 @@ struct PeerUserpicView {
 	base::weak_ptr<const EmptyUserpic> empty;
 	uint32 paletteVersion : 30 = 0;
 	uint32 shape : 2 = 0;
+	int customRadius = -1;
 };
 
 [[nodiscard]] bool PeerUserpicLoading(const PeerUserpicView &view);
@@ -43,6 +44,8 @@ void ValidateUserpicCache(
 	const QImage *cloud,
 	const EmptyUserpic *empty,
 	int size,
-	PeerUserpicShape shape);
+	PeerUserpicShape shape,
+	int customRadius = -1,
+	bool unifiedCorner = false);
 
 } // namespace Ui

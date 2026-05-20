@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/event_filter.h"
 #include "base/qt_signal_producer.h"
+#include "core/core_settings_simple.h"
 #include "lang/lang_keys.h"
 #include "ui/effects/round_checkbox.h"
 #include "ui/effects/outline_segments.h"
@@ -557,6 +558,8 @@ void List::paint(
 				{ outerAdd, outerAdd, outerAdd, outerAdd });
 			gradient.setStart(userpic.topRight());
 			gradient.setFinalStop(userpic.bottomLeft());
+			const auto customRadius = Core::CurrentDialogAvatarCornerRadius();
+			const auto photoSize = photo;
 			if (!fullUnreadCount) {
 				if (smallHasVideoStream) {
 					p.setPen(QPen(st::attentionButtonFg->c, line));
@@ -564,14 +567,32 @@ void List::paint(
 					p.setPen(QPen(gradient, line));
 				}
 				p.setBrush(Qt::NoBrush);
-				p.drawEllipse(outer);
+				if (customRadius >= photoSize / 2) {
+					p.drawEllipse(outer);
+				} else if (customRadius <= 0) {
+					p.drawRect(outer);
+				} else {
+					const auto r = customRadius * (outer.width() / photoSize);
+					p.drawRoundedRect(outer, r, r);
+				}
 			} else {
 				validateSegments(itemFull, gradient, line, true);
-				Ui::PaintOutlineSegments(
-					p,
-					outer,
-					itemFull->segments,
-					layout.segmentsSpinProgress);
+				if (customRadius >= photoSize / 2) {
+					Ui::PaintOutlineSegments(
+						p,
+						outer,
+						itemFull->segments,
+						layout.segmentsSpinProgress);
+				} else {
+					const auto r = (customRadius <= 0)
+						? 0.
+						: customRadius * (outer.width() / photoSize);
+					Ui::PaintOutlineSegments(
+						p,
+						outer,
+						r,
+						itemFull->segments);
+				}
 			}
 		}
 		p.setOpacity(1.);
@@ -623,11 +644,24 @@ void List::paint(
 				st::dialogsUnreadBgMuted->b,
 				lineRead,
 				false);
-			Ui::PaintOutlineSegments(
-				p,
-				rect,
-				itemFull->segments,
-				layout.segmentsSpinProgress);
+			const auto customRadius2 = Core::CurrentDialogAvatarCornerRadius();
+			const auto photoSize2 = photo;
+			if (customRadius2 >= photoSize2 / 2) {
+				Ui::PaintOutlineSegments(
+					p,
+					rect,
+					itemFull->segments,
+					layout.segmentsSpinProgress);
+			} else {
+				const auto r2 = (customRadius2 <= 0)
+					? 0.
+					: customRadius2 * (rect.width() / photoSize2);
+				Ui::PaintOutlineSegments(
+					p,
+					rect,
+					r2,
+					itemFull->segments);
+			}
 		}
 
 		// Userpic.

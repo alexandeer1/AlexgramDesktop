@@ -478,7 +478,9 @@ void PeerData::paintUserpic(
 		cloud,
 		cloud ? nullptr : ensureEmptyUserpic().get(),
 		size * ratio,
-		context.shape);
+		context.shape,
+		Core::App().settings().dialogAvatarCornerRadius(),
+		Core::App().settings().dialogUnifiedAvatarCorner());
 	p.drawImage(QRect(context.position, QSize(size, size)), view.cached);
 
 	if (Core::App().settings().showOnlineStatus() && size == st::msgPhotoSize) {

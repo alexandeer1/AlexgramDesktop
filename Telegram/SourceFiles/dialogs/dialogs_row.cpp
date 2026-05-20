@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "core/core_settings_simple.h"
 #include "data/data_chat.h"
 #include "data/data_folder.h"
 #include "data/data_forum.h"
@@ -403,7 +404,26 @@ void Row::PaintCornerBadgeFrame(not_null<CornerBadgeUserpic *> data,
           context.st->photoSize * Ui::ForumUserpicRadiusMultiplier();
       Ui::PaintOutlineSegments(q, outline, radius, segments);
     } else {
-      Ui::PaintOutlineSegments(q, outline, segments);
+      const auto customRadius = Core::CurrentDialogAvatarCornerRadius();
+      if (customRadius >= context.st->photoSize / 2) {
+        Ui::PaintOutlineSegments(q, outline, segments);
+      } else if (customRadius <= 0) {
+        const auto halfLine = st::dialogsStoriesFull.lineTwice / 4.;
+        const auto squareOutline = outline.marginsRemoved(
+            {halfLine, halfLine, halfLine, halfLine});
+        for (const auto &seg : segments) {
+          if (seg.width > 0) {
+            q.setPen(QPen(seg.brush, seg.width));
+            q.setBrush(Qt::NoBrush);
+            q.drawRect(squareOutline);
+            break;
+          }
+        }
+      } else {
+        const auto scaledRadius = customRadius
+            * (outline.width() / float64(context.st->photoSize));
+        Ui::PaintOutlineSegments(q, outline, scaledRadius, segments);
+      }
     }
 
     if (data->storiesHasVideoStream) {
@@ -539,8 +559,10 @@ void Row::paintUserpic(Painter &p, not_null<Entry *> entry, PeerData *peer,
         QImage(frameSize, QImage::Format_ARGB32_Premultiplied);
     _cornerBadgeUserpic->frame.setDevicePixelRatio(ratio);
   }
+  const auto cornerRadius = Core::CurrentDialogAvatarCornerRadius();
   auto key = peer ? peer->userpicUniqueKey(userpicView()) : InMemoryKey();
   key.first += peer ? peer->messagesTTL() : 0;
+  key.second ^= uint64(cornerRadius) << 32;
   const auto frameIndex = videoUserpic ? videoUserpic->frameIndex() : -1;
   const auto paletteVersionReal = style::PaletteVersion();
   const auto paletteVersion = (paletteVersionReal & ((1 << 17) - 1));

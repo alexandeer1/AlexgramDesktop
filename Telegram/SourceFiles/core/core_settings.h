@@ -1221,6 +1221,13 @@ public:
 	[[nodiscard]] rpl::producer<bool> ghostDeletedShowIconChanges();
 	void setGhostDeletedShowIcon(bool value);
 
+	[[nodiscard]] int dialogAvatarCornerRadius();
+	[[nodiscard]] rpl::producer<int> dialogAvatarCornerRadiusChanges();
+	void setDialogAvatarCornerRadius(int value);
+
+	[[nodiscard]] bool dialogUnifiedAvatarCorner();
+	[[nodiscard]] rpl::producer<bool> dialogUnifiedAvatarCornerChanges();
+	void setDialogUnifiedAvatarCorner(bool value);
 
 
 	[[nodiscard]] static bool ThirdColumnByDefault();

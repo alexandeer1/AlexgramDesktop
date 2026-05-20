@@ -42,6 +42,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/multi_select.h"
 #include "ui/boxes/choose_language_box.h"
+#include "ui/widgets/continuous_sliders.h"
+#include "ui/image/image_prepare.h"
+#include "base/unixtime.h"
 
 namespace Settings {
 
@@ -399,6 +402,264 @@ void BuildAlexgramTranslatorSection(SectionBuilder &builder) {
 
 void BuildAlexgramChatsSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addSkip();
+
+	if (const auto container = builder.container()) {
+		const auto kDefault = 50;
+		const auto kMax = 50;
+		const auto currentRadius = Core::App().settings().dialogAvatarCornerRadius();
+
+		const auto radiusValue = std::make_shared<rpl::variable<int>>(currentRadius);
+
+		const auto applyRadius = [=](int radius) {
+			*radiusValue = radius;
+			Core::App().settings().setDialogAvatarCornerRadius(radius);
+			Core::App().reprocessAlexSettings();
+		};
+
+		const auto headerRow = container->add(
+			object_ptr<Ui::RpWidget>(container),
+			QMargins(st::settingsCheckboxPadding.left(), st::settingsCheckboxPadding.top(), st::settingsCheckboxPadding.right(), 0));
+		headerRow->setFixedHeight(st::normalFont->height + st::normalFont->height / 2);
+
+		headerRow->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(headerRow);
+			p.setFont(st::boxTitleFont);
+			p.setPen(st::windowActiveTextFg);
+			const auto title = tr::lng_settings_alexgram_avatar_corners(tr::now);
+			const auto radius = radiusValue->current();
+			const auto badge = QString::number(radius);
+			p.drawText(0, st::boxTitleFont->ascent, title);
+			const auto titleW = st::boxTitleFont->width(title);
+			const auto badgeHPad = st::lineWidth * 4;
+			const auto badgeRect = QRect(
+				titleW + badgeHPad,
+				0,
+				st::normalFont->width(badge) + badgeHPad * 2,
+				st::boxTitleFont->height);
+			p.setRenderHint(QPainter::Antialiasing);
+			p.setBrush(anim::with_alpha(st::windowActiveTextFg->c, 0.25));
+			p.setPen(Qt::NoPen);
+			p.drawRoundedRect(badgeRect, badgeRect.height() / 3, badgeRect.height() / 3);
+			p.setPen(st::windowActiveTextFg);
+			p.setFont(st::normalFont);
+			p.drawText(badgeRect, Qt::AlignCenter, badge);
+
+			const auto resetLabel = tr::lng_settings_alexgram_avatar_corners_reset(tr::now);
+			const auto resetW = st::normalFont->width(resetLabel);
+			const auto isDefault = (radius == kDefault);
+			p.setFont(st::normalFont);
+			p.setPen(isDefault
+				? anim::with_alpha(st::windowSubTextFg->c, 0.4)
+				: st::windowActiveTextFg->c);
+			p.drawText(headerRow->width() - resetW, st::normalFont->ascent + (st::boxTitleFont->height - st::normalFont->height) / 2, resetLabel);
+		}, headerRow->lifetime());
+
+		radiusValue->value() | rpl::on_next([=](int) {
+			headerRow->update();
+		}, headerRow->lifetime());
+
+		headerRow->setCursor(Qt::PointingHandCursor);
+		headerRow->events() | rpl::filter([](not_null<QEvent*> e) {
+			return e->type() == QEvent::MouseButtonRelease;
+		}) | rpl::on_next([=](not_null<QEvent*> e) {
+			const auto me = static_cast<QMouseEvent*>(e.get());
+			const auto resetLabel = tr::lng_settings_alexgram_avatar_corners_reset(tr::now);
+			const auto resetW = st::normalFont->width(resetLabel);
+			if (me->pos().x() >= headerRow->width() - resetW - st::lineWidth * 2) {
+				applyRadius(kDefault);
+				Core::App().saveSettingsDelayed();
+			}
+		}, headerRow->lifetime());
+
+		const auto labelsRow = container->add(
+			object_ptr<Ui::RpWidget>(container),
+			QMargins(st::settingsCheckboxPadding.left(), st::lineWidth * 2, st::settingsCheckboxPadding.right(), 0));
+		labelsRow->setFixedHeight(st::normalFont->height);
+		labelsRow->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(labelsRow);
+			p.setFont(st::normalFont);
+			p.setPen(st::windowSubTextFg);
+			p.drawText(0, st::normalFont->ascent, tr::lng_settings_alexgram_avatar_corners_sharp(tr::now));
+			const auto roundLabel = tr::lng_settings_alexgram_avatar_corners_round(tr::now);
+			p.drawText(labelsRow->width() - st::normalFont->width(roundLabel), st::normalFont->ascent, roundLabel);
+		}, labelsRow->lifetime());
+
+		const auto slider = container->add(
+			object_ptr<Ui::MediaSlider>(container, st::settingsScale),
+			st::settingsBigScalePadding);
+		const auto sliderIsMoving = std::make_shared<bool>(false);
+		slider->setFixedHeight(st::settingsScale.seekSize.height());
+		slider->setAlwaysDisplayMarker(true);
+		slider->setDirection(Ui::ContinuousSlider::Direction::Horizontal);
+		slider->setValue(currentRadius / float64(kMax));
+		slider->setChangeProgressCallback([=](float64 value) {
+			*sliderIsMoving = true;
+			const auto radius = int(base::SafeRound(value * kMax));
+			applyRadius(radius);
+			*sliderIsMoving = false;
+		});
+		slider->setChangeFinishedCallback([=](float64 value) {
+			*sliderIsMoving = true;
+			const auto radius = int(base::SafeRound(value * kMax));
+			applyRadius(radius);
+			Core::App().saveSettingsDelayed();
+			*sliderIsMoving = false;
+		});
+
+		radiusValue->value() | rpl::on_next([=](int r) {
+			if (!*sliderIsMoving) {
+				slider->setValue(r / float64(kMax));
+			}
+		}, slider->lifetime());
+
+		const auto previewWidget = container->add(
+			object_ptr<Ui::RpWidget>(container),
+			QMargins(st::settingsCheckboxPadding.left(), st::lineWidth * 4, st::settingsCheckboxPadding.right(), st::lineWidth * 4));
+		const auto previewH = st::settingsButton.height + st::lineWidth * 8;
+		previewWidget->setFixedHeight(previewH);
+
+		previewWidget->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(previewWidget);
+			p.setRenderHint(QPainter::Antialiasing);
+
+			const auto w = previewWidget->width();
+			const auto h = previewWidget->height();
+			const auto bgRadius = st::boxRadius;
+			p.setPen(Qt::NoPen);
+			p.setBrush(anim::with_alpha(st::windowBgOver->c, 0.6));
+			p.drawRoundedRect(QRect(0, 0, w, h), bgRadius, bgRadius);
+
+			const auto pad = st::lineWidth * 4;
+			const auto avatarSize = h - pad * 2;
+			const auto radius = radiusValue->current();
+			const auto avatarRect = QRect(pad, pad, avatarSize, avatarSize);
+
+			p.setBrush(anim::with_alpha(st::windowActiveTextFg->c, 0.35));
+			if (radius >= avatarSize / 2) {
+				p.drawEllipse(avatarRect);
+			} else {
+				p.drawRoundedRect(avatarRect, radius, radius);
+			}
+
+			const auto onlineDotSize = st::lineWidth * 4;
+			const auto onlineRect = QRect(
+				avatarRect.right() - onlineDotSize + st::lineWidth,
+				avatarRect.bottom() - onlineDotSize + st::lineWidth,
+				onlineDotSize,
+				onlineDotSize);
+			p.setBrush(st::windowActiveTextFg);
+			p.drawEllipse(onlineRect);
+
+			const auto textX = pad + avatarSize + pad;
+			const auto lineH = st::normalFont->height;
+			const auto textW = w - textX - pad;
+
+			const auto drawLine = [&](int top, float64 widthFrac, float64 opacity) {
+				p.setOpacity(opacity);
+				p.setBrush(anim::with_alpha(st::windowFg->c, 0.3));
+				p.drawRoundedRect(QRect(textX, top, int(textW * widthFrac), lineH - st::lineWidth * 2), 3, 3);
+				p.setOpacity(1.0);
+			};
+
+			const auto totalLines = 3;
+			const auto spacingY = (h - pad * 2 - lineH * totalLines) / (totalLines + 1);
+			drawLine(pad + spacingY, 0.65, 1.0);
+			drawLine(pad + spacingY + lineH + spacingY, 0.50, 0.8);
+			drawLine(pad + spacingY * 2 + lineH * 2 + spacingY, 0.40, 0.7);
+
+			const auto timeW = st::normalFont->width(u"12:34"_q);
+			p.setFont(st::normalFont);
+			p.setPen(anim::with_alpha(st::windowSubTextFg->c, 0.9));
+			p.drawText(w - pad - timeW, pad + spacingY + lineH - st::lineWidth * 2, u"12:34"_q);
+		}, previewWidget->lifetime());
+
+		radiusValue->value() | rpl::on_next([=](int) {
+			previewWidget->update();
+		}, previewWidget->lifetime());
+
+		const auto presetsRow = container->add(
+			object_ptr<Ui::RpWidget>(container),
+			QMargins(st::settingsCheckboxPadding.left(), st::lineWidth * 3, st::settingsCheckboxPadding.right(), st::lineWidth * 2));
+		const auto presetBtnH = st::normalFont->height + st::lineWidth * 6;
+		presetsRow->setFixedHeight(presetBtnH);
+
+		struct Preset { QString label; int value; };
+		const auto presets = std::vector<Preset>{
+			{ tr::lng_settings_alexgram_avatar_corners_preset_sharp(tr::now), 0 },
+			{ tr::lng_settings_alexgram_avatar_corners_preset_rounded(tr::now), 15 },
+			{ tr::lng_settings_alexgram_avatar_corners_preset_circle(tr::now), 50 },
+		};
+
+		presetsRow->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(presetsRow);
+			p.setRenderHint(QPainter::Antialiasing);
+			const auto w = presetsRow->width();
+			const auto h = presetsRow->height();
+			const auto gap = st::lineWidth * 3;
+			const auto btnW = (w - gap * 2) / 3;
+			const auto currentR = radiusValue->current();
+
+			for (auto i = 0; i < int(presets.size()); ++i) {
+				const auto &pr = presets[i];
+				const auto bx = i * (btnW + gap);
+				const auto rect = QRect(bx, 0, btnW, h);
+				const auto active = (currentR == pr.value);
+
+				if (active) {
+					p.setBrush(anim::with_alpha(st::windowActiveTextFg->c, 0.18));
+					p.setPen(QPen(st::windowActiveTextFg->c, st::lineWidth));
+				} else {
+					p.setBrush(anim::with_alpha(st::windowBgOver->c, 0.8));
+					p.setPen(QPen(anim::with_alpha(st::windowSubTextFg->c, 0.4), st::lineWidth));
+				}
+				p.drawRoundedRect(rect, st::lineWidth * 3, st::lineWidth * 3);
+
+				p.setFont(st::normalFont);
+				p.setPen(active ? st::windowActiveTextFg : st::windowSubTextFg);
+				p.drawText(rect, Qt::AlignCenter, pr.label);
+			}
+		}, presetsRow->lifetime());
+
+		radiusValue->value() | rpl::on_next([=](int) {
+			presetsRow->update();
+		}, presetsRow->lifetime());
+
+		presetsRow->setCursor(Qt::PointingHandCursor);
+		presetsRow->events() | rpl::filter([](not_null<QEvent*> e) {
+			return e->type() == QEvent::MouseButtonRelease;
+		}) | rpl::on_next([=](not_null<QEvent*> e) {
+			const auto me = static_cast<QMouseEvent*>(e.get());
+			const auto w = presetsRow->width();
+			const auto gap = st::lineWidth * 3;
+			const auto btnW = (w - gap * 2) / 3;
+			const auto x = me->pos().x();
+			for (auto i = 0; i < int(presets.size()); ++i) {
+				const auto bx = i * (btnW + gap);
+				if (x >= bx && x < bx + btnW) {
+					applyRadius(presets[i].value);
+					Core::App().saveSettingsDelayed();
+					break;
+				}
+			}
+		}, presetsRow->lifetime());
+
+		builder.addSkip(st::settingsCheckboxesSkip / 2);
+
+		SectionBuilder::CheckboxArgs unifiedArgs;
+		unifiedArgs.title = tr::lng_settings_alexgram_avatar_corners_unified();
+		unifiedArgs.checked = Core::App().settings().dialogUnifiedAvatarCorner();
+		const auto unifiedCb = builder.addCheckbox(std::move(unifiedArgs));
+		if (unifiedCb) {
+			unifiedCb->checkedChanges() | rpl::on_next([=](bool checked) {
+				Core::App().settings().setDialogUnifiedAvatarCorner(checked);
+				Core::App().saveSettingsDelayed();
+				Core::App().reprocessAlexSettings();
+			}, unifiedCb->lifetime());
+		}
+
+		builder.addDividerText(tr::lng_settings_alexgram_avatar_corners_unified_about());
+		builder.addSkip();
+	}
 
 	SectionBuilder::CheckboxArgs linkPreviewArgs;
 	linkPreviewArgs.title = tr::lng_settings_alexgram_disable_link_preview();

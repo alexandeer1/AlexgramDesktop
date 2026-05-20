@@ -107,3 +107,5 @@ out_linux/CMakeFiles/3.28.3/CompilerIdCXX/CMakeCXXCompilerId.cpp
 /ada/
 /protobuf/
 install_docker.sh
+run_build.bat
+run_release_build.bat

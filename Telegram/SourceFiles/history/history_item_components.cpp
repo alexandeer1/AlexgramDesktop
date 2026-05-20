@@ -270,7 +270,9 @@ bool HiddenSenderInfo::paintCustomUserpic(
 		image.isNull() ? nullptr : &image,
 		image.isNull() ? &emptyUserpic : nullptr,
 		size * style::DevicePixelRatio(),
-		Ui::PeerUserpicShape::Circle);
+		Ui::PeerUserpicShape::Circle,
+		Core::App().settings().dialogAvatarCornerRadius(),
+		false);
 	p.drawImage(QRect(x, y, size, size), view.cached);
 	return valid;
 }

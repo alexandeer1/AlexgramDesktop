@@ -7,7 +7,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/effects/outline_segments.h"
 
+#include "ui/painter.h"
+
 namespace Ui {
+
+constexpr auto kPi = 3.14159265358979323846;
 
 void PaintOutlineSegments(
 		QPainter &p,
@@ -78,12 +82,48 @@ void PaintOutlineSegments(
 
 	p.setBrush(Qt::NoBrush);
 	const auto count = std::min(int(segments.size()), kOutlineSegmentsMax);
-	if (count == 1 || true) {
+	if (count == 1) {
 		p.setPen(QPen(segments.back().brush, segments.back().width));
-		p.drawRoundedRect(rect, radius, radius);
+		if (radius <= 0.) {
+			p.drawRect(rect);
+		} else {
+			p.drawRoundedRect(rect, radius, radius);
+		}
 		return;
 	}
+
+	const auto straightW = rect.width() - 2. * radius;
+	const auto straightH = rect.height() - 2. * radius;
+	const auto cornerArc = kPi * radius;
+	const auto perimeter = 2. * (straightW + straightH) + 2. * cornerArc;
+
+	const auto gapFraction = 0.03;
+	const auto totalGap = gapFraction * perimeter * count;
+	const auto segmentTotal = perimeter - totalGap;
+	const auto segLen = segmentTotal / count;
+	const auto gapLen = totalGap / count;
+
+	QPainterPath path;
+	path.addRoundedRect(rect, radius, radius);
+
+	auto hq = PainterHighQualityEnabler(p);
+	for (auto i = 0; i != count; ++i) {
+		const auto &seg = segments[count - 1 - i];
+		if (!seg.width) {
+			continue;
+		}
+		const auto offset = i * (segLen + gapLen);
+		auto pen = QPen(seg.brush, seg.width, Qt::SolidLine, Qt::RoundCap);
+		pen.setDashPattern({
+			segLen / seg.width,
+			(perimeter - segLen) / seg.width,
+		});
+		pen.setDashOffset(offset / seg.width);
+		p.setPen(pen);
+		p.drawPath(path);
+	}
 }
+
 
 QLinearGradient UnreadStoryOutlineGradient(
 		QRectF rect,

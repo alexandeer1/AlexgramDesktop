@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "core/core_settings.h"
 
+#include <atomic>
+
 #include "base/platform/base_platform_info.h"
 #include "calls/group/calls_group_common.h"
 #include "history/view/history_view_quick_action.h"
@@ -304,6 +306,17 @@ rpl::event_stream<bool> &GhostReadOnInteractChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<int> &DialogAvatarCornerRadiusChanges() {
+  static rpl::event_stream<int> stream;
+  return stream;
+}
+rpl::event_stream<bool> &DialogUnifiedAvatarCornerChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+
+std::atomic<int> gCurrentDialogAvatarCornerRadius = 50;
+
 } // namespace
 
 
@@ -2658,6 +2671,41 @@ QString Settings::translatorLlmKey() {
 
 void Settings::setTranslatorLlmKey(const QString &value) {
 	writePref<QString>("translator-llm-key", value);
+}
+
+int Settings::dialogAvatarCornerRadius() {
+  const auto value = readPref<int>("dialog-avatar-corner-radius", 50);
+  gCurrentDialogAvatarCornerRadius.store(value, std::memory_order_relaxed);
+  return value;
+}
+
+rpl::producer<int> Settings::dialogAvatarCornerRadiusChanges() {
+  return DialogAvatarCornerRadiusChanges().events_starting_with(
+      dialogAvatarCornerRadius());
+}
+
+void Settings::setDialogAvatarCornerRadius(int value) {
+  writePref<int>("dialog-avatar-corner-radius", value);
+  gCurrentDialogAvatarCornerRadius.store(value, std::memory_order_relaxed);
+  DialogAvatarCornerRadiusChanges().fire_copy(value);
+}
+
+int CurrentDialogAvatarCornerRadius() {
+  return gCurrentDialogAvatarCornerRadius.load(std::memory_order_relaxed);
+}
+
+bool Settings::dialogUnifiedAvatarCorner() {
+  return readPref<bool>("dialog-unified-avatar-corner", false);
+}
+
+rpl::producer<bool> Settings::dialogUnifiedAvatarCornerChanges() {
+  return DialogUnifiedAvatarCornerChanges().events_starting_with(
+      dialogUnifiedAvatarCorner());
+}
+
+void Settings::setDialogUnifiedAvatarCorner(bool value) {
+  writePref<bool>("dialog-unified-avatar-corner", value);
+  DialogUnifiedAvatarCornerChanges().fire_copy(value);
 }
 
 } // namespace Core
