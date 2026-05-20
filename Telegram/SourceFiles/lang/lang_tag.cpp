@@ -15,6 +15,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtCore/QLocale>
 
+bool AlexDisableNumberRounding();
+
 namespace Lang {
 namespace {
 
@@ -918,6 +920,13 @@ int NonZeroPartToInt(QString value) {
 }
 
 ShortenedCount FormatCountToShort(int64 number, bool onlyK) {
+	if (::AlexDisableNumberRounding()) {
+		return ShortenedCount{
+			.number = number,
+			.string = FormatCountDecimal(number),
+			.shortened = false,
+		};
+	}
 	auto result = ShortenedCount{ number };
 	const auto abs = std::abs(number);
 	const auto shorten = [&](int64 divider, char multiplier) {

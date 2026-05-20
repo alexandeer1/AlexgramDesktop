@@ -19,6 +19,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/empty_userpic.h"
 #include "ui/painter.h"
 #include "styles/style_widgets.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 
 namespace Ui {
 
@@ -64,18 +66,38 @@ QImage VideoUserpicPlayer::frame(QSize size, not_null<PeerData*> peer) {
 		if (_monoforumMask.isNull()) {
 			_monoforumMask = Ui::MonoforumShapeMask(request.resize);
 		}
-	} else if (peer->isForum()) {
-		const auto radius = int(
-			size.width() * Ui::ForumUserpicRadiusMultiplier());
-		if (_roundingCorners[0].width() != radius * ratio) {
-			_roundingCorners = Images::CornersMask(radius);
-		}
-		request.rounding = Images::CornersMaskRef(_roundingCorners);
 	} else {
-		if (_ellipseMask.size() != request.outer) {
-			_ellipseMask = Images::EllipseMask(size);
+		const auto customRadius = Core::App().settings().dialogAvatarCornerRadius();
+		const auto unifiedCorner = Core::App().settings().dialogUnifiedAvatarCorner();
+		const auto applyCustom = (customRadius >= 0)
+			&& (!peer->isForum() || unifiedCorner);
+
+		if (applyCustom) {
+			const auto halfSize = size.width() / 2;
+			if (customRadius >= halfSize) {
+				if (_ellipseMask.size() != request.outer) {
+					_ellipseMask = Images::EllipseMask(size);
+				}
+				request.mask = _ellipseMask;
+			} else if (customRadius > 0) {
+				if (_roundingCorners[0].width() != customRadius * ratio) {
+					_roundingCorners = Images::CornersMask(customRadius);
+				}
+				request.rounding = Images::CornersMaskRef(_roundingCorners);
+			}
+		} else if (peer->isForum()) {
+			const auto radius = int(
+				size.width() * Ui::ForumUserpicRadiusMultiplier());
+			if (_roundingCorners[0].width() != radius * ratio) {
+				_roundingCorners = Images::CornersMask(radius);
+			}
+			request.rounding = Images::CornersMaskRef(_roundingCorners);
+		} else {
+			if (_ellipseMask.size() != request.outer) {
+				_ellipseMask = Images::EllipseMask(size);
+			}
+			request.mask = _ellipseMask;
 		}
-		request.mask = _ellipseMask;
 	}
 
 	auto result = _streamed->frame(request);

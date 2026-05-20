@@ -8300,6 +8300,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_ghost_mode_deleted_opacity" = "Deleted Message Opacity";
 "lng_settings_alexgram_ghost_mode_deleted_show_icon" = "Show Icon Instead of \"Deleted\"";
 "lng_settings_alexgram_ghost_mode_deleted_show_icon_about" = "Show a small icon next to the timestamp for deleted messages instead of the \"Deleted\" text tag.";
+"lng_settings_alexgram_ghost_mode_deleted_icon_color" = "Custom Icon Color";
+"lng_settings_alexgram_ghost_mode_deleted_icon_color_about" = "Choose a custom color for the deleted message icon. Overrides the default theme color.";
 "lng_settings_alexgram_ghost_manage_storage" = "Manage Deleted Messages Storage";
 "lng_settings_alexgram_ghost_manage_storage_about" = "View and manage locally stored deleted messages. Database size: {size}";
 "lng_settings_alexgram_ghost_storage_report" = "Storage Report";

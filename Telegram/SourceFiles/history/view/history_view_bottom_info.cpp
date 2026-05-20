@@ -493,6 +493,10 @@ void BottomInfo::layoutDateText() {
 		afterAuthorWidth += st::historyEditedIconEmoji.icon.width()
 			+ st::msgDateFont->width(u" "_q);
 	}
+	const auto deletedIconColorRaw = showDeletedIcon
+		? Core::App().settings().ghostDeletedIconColor()
+		: 0;
+	const auto useCustomDeletedColor = (deletedIconColorRaw != 0);
 	if (showDeletedIcon) {
 		afterAuthorWidth += st::historyDeletedIconEmoji.icon.width()
 			+ st::msgDateFont->width(u" "_q);
@@ -529,10 +533,25 @@ void BottomInfo::layoutDateText() {
 			.textColor = false,
 		})).append("  ");
 	}
+	const auto appendDeletedIcon = [&] {
+		if (!useCustomDeletedColor) {
+			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+			return;
+		}
+		const auto &icon = st::historyDeletedIconEmoji.icon;
+		const auto color = QColor::fromRgba(
+			static_cast<QRgb>(deletedIconColorRaw));
+		auto img = icon.instance(color);
+		marked.append(helper.image({
+			.image = std::move(img),
+			.margin = st::historyDeletedIconEmoji.padding,
+			.textColor = false,
+		})).append(u" "_q);
+	};
 	if (_data.flags & Data::Flag::Sponsored) {
 	} else if (_data.flags & Data::Flag::Imported) {
 		if (showDeletedIcon) {
-			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+			appendDeletedIcon();
 		}
 		if (showTranslatedIcon) {
 			marked.append(st::historyTranslatedIconEmoji).append(u" "_q);
@@ -543,7 +562,7 @@ void BottomInfo::layoutDateText() {
 		marked.append(date).append(u" "_q).append(tr::lng_imported(tr::now));
 	} else if (name.isEmpty()) {
 		if (showDeletedIcon) {
-			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+			appendDeletedIcon();
 		}
 		if (showTranslatedIcon) {
 			marked.append(st::historyTranslatedIconEmoji).append(u" "_q);
@@ -555,7 +574,7 @@ void BottomInfo::layoutDateText() {
 	} else {
 		marked.append(name).append(prefix);
 		if (showDeletedIcon) {
-			marked.append(st::historyDeletedIconEmoji).append(u" "_q);
+			appendDeletedIcon();
 		}
 		if (showTranslatedIcon) {
 			marked.append(st::historyTranslatedIconEmoji).append(u" "_q);

@@ -13,14 +13,20 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/settings_common_session.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/wrap/slide_wrap.h"
+#include "ui/widgets/buttons.h"
 #include "ui/widgets/checkbox.h"
+#include "ui/widgets/color_editor.h"
 #include "ui/widgets/labels.h"
 #include "ui/ui_utility.h"
+#include "ui/painter.h"
+#include "ui/effects/outline_segments.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "lang/lang_keys.h"
-#include "styles/style_menu_icons.h"
+#include "styles/style_chat_helpers.h"
+#include "styles/style_chat.h"
 #include "styles/style_settings.h"
+#include "styles/style_menu_icons.h"
 #include "styles/style_widgets.h"
 #include "window/window_session_controller.h"
 #include "main/main_session.h"
@@ -169,6 +175,7 @@ void BuildAlexgramGeneralSection(SectionBuilder &builder) {	builder.addDivider()
 		checkbox->checkedChanges() | rpl::on_next([=](bool checked) {
 			Core::App().settings().setDisableNumberRounding(checked);
 			Core::App().saveSettingsDelayed();
+			Core::App().reprocessAlexSettings();
 		}, checkbox->lifetime());
 	}
 	builder.addDividerText(tr::lng_settings_disable_number_rounding_about());
@@ -515,62 +522,183 @@ void BuildAlexgramChatsSection(SectionBuilder &builder) {	builder.addDivider();
 		const auto previewWidget = container->add(
 			object_ptr<Ui::RpWidget>(container),
 			QMargins(st::settingsCheckboxPadding.left(), st::lineWidth * 4, st::settingsCheckboxPadding.right(), st::lineWidth * 4));
-		const auto previewH = st::settingsButton.height + st::lineWidth * 8;
+		const auto previewH = st::settingsButton.height * 4 + st::lineWidth * 4;
 		previewWidget->setFixedHeight(previewH);
 
 		previewWidget->paintRequest() | rpl::on_next([=](QRect) {
 			Painter p(previewWidget);
 			p.setRenderHint(QPainter::Antialiasing);
+			p.setRenderHint(QPainter::SmoothPixmapTransform);
 
 			const auto w = previewWidget->width();
 			const auto h = previewWidget->height();
-			const auto bgRadius = st::boxRadius;
-			p.setPen(Qt::NoPen);
-			p.setBrush(anim::with_alpha(st::windowBgOver->c, 0.6));
-			p.drawRoundedRect(QRect(0, 0, w, h), bgRadius, bgRadius);
 
-			const auto pad = st::lineWidth * 4;
-			const auto avatarSize = h - pad * 2;
-			const auto radius = radiusValue->current();
-			const auto avatarRect = QRect(pad, pad, avatarSize, avatarSize);
-
-			p.setBrush(anim::with_alpha(st::windowActiveTextFg->c, 0.35));
-			if (radius >= avatarSize / 2) {
-				p.drawEllipse(avatarRect);
-			} else {
-				p.drawRoundedRect(avatarRect, radius, radius);
+			// Frosted card background
+			{
+				auto bg = anim::with_alpha(st::windowBgOver->c, 0.55);
+				p.setPen(Qt::NoPen);
+				p.setBrush(bg);
+				p.drawRoundedRect(QRectF(0, 0, w, h), st::boxRadius, st::boxRadius);
+				// subtle inner border
+				p.setBrush(Qt::NoBrush);
+				p.setPen(QPen(anim::with_alpha(st::windowFg->c, 0.06), st::lineWidth));
+				p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), st::boxRadius, st::boxRadius);
 			}
 
-			const auto onlineDotSize = st::lineWidth * 4;
-			const auto onlineRect = QRect(
-				avatarRect.right() - onlineDotSize + st::lineWidth,
-				avatarRect.bottom() - onlineDotSize + st::lineWidth,
-				onlineDotSize,
-				onlineDotSize);
-			p.setBrush(st::windowActiveTextFg);
-			p.drawEllipse(onlineRect);
+			const auto radius = radiusValue->current();
+			const auto rowCount = 3;
+			const auto rowH = h / rowCount;
+			const auto pad = st::lineWidth * 5;
+			const auto avatarSize = rowH - pad * 2;
+			const auto halfAv = avatarSize / 2;
+			const auto cornerR = (radius <= 0)
+				? 0
+				: (radius >= 50)
+				? halfAv
+				: radius * halfAv / 50;
 
-			const auto textX = pad + avatarSize + pad;
-			const auto lineH = st::normalFont->height;
-			const auto textW = w - textX - pad;
-
-			const auto drawLine = [&](int top, float64 widthFrac, float64 opacity) {
-				p.setOpacity(opacity);
-				p.setBrush(anim::with_alpha(st::windowFg->c, 0.3));
-				p.drawRoundedRect(QRect(textX, top, int(textW * widthFrac), lineH - st::lineWidth * 2), 3, 3);
-				p.setOpacity(1.0);
+			// row data: gradient colors, has-story, story-fraction, has-online, has-badge
+			struct RowData {
+				QColor c1, c2;
+				bool hasStory;
+				float64 storyRead; // 0 = all unread, 1 = all read
+				bool hasOnline;
+				int badge;
+				QString time;
+				float64 nameW;
+				float64 msgW;
+			};
+			const RowData rows[rowCount] = {
+				{ QColor(0,200,180), QColor(30,120,255), true,  0.35, false, 0,  u"12:34"_q, 0.60, 0.80 },
+				{ QColor(160,60,220), QColor(255,80,140), false, 0.,   true,  0,  u"11:59"_q, 0.45, 0.65 },
+				{ QColor(255,140,0),  QColor(230,60,60),  false, 0.,   false, 0,  u"Mon"_q,   0.50, 0.50 },
 			};
 
-			const auto totalLines = 3;
-			const auto spacingY = (h - pad * 2 - lineH * totalLines) / (totalLines + 1);
-			drawLine(pad + spacingY, 0.65, 1.0);
-			drawLine(pad + spacingY + lineH + spacingY, 0.50, 0.8);
-			drawLine(pad + spacingY * 2 + lineH * 2 + spacingY, 0.40, 0.7);
+			for (auto row = 0; row < rowCount; ++row) {
+				const auto &rd = rows[row];
+				const auto rowY = row * rowH;
+				const auto avatarX = pad;
+				const auto avatarY = rowY + pad;
+				const auto avRect = QRectF(avatarX, avatarY, avatarSize, avatarSize);
 
-			const auto timeW = st::normalFont->width(u"12:34"_q);
-			p.setFont(st::normalFont);
-			p.setPen(anim::with_alpha(st::windowSubTextFg->c, 0.9));
-			p.drawText(w - pad - timeW, pad + spacingY + lineH - st::lineWidth * 2, u"12:34"_q);
+				// Divider (except first row)
+				if (row > 0) {
+					p.setPen(QPen(anim::with_alpha(st::windowFg->c, 0.06), st::lineWidth));
+					p.drawLine(pad + avatarSize + pad, rowY, w - pad, rowY);
+				}
+
+				// Story ring (first row only)
+				if (rd.hasStory) {
+					const auto ringW = st::lineWidth * 2.0;
+					const auto ringAdd = ringW + st::lineWidth * 1.5;
+					const auto ringRect = avRect.marginsAdded(
+						QMarginsF(ringAdd, ringAdd, ringAdd, ringAdd));
+					const auto ringR = cornerR + ringAdd;
+
+					// unread gradient segment
+					auto gradient = QLinearGradient(ringRect.topRight(), ringRect.bottomLeft());
+					gradient.setColorAt(0, QColor(50, 220, 170));
+					gradient.setColorAt(1, QColor(30, 120, 255));
+
+					const auto unreadFrac = 1. - rd.storyRead;
+					const auto readFrac   = rd.storyRead;
+
+					std::vector<Ui::OutlineSegment> segs;
+					if (unreadFrac > 0.01) {
+						segs.push_back({ QBrush(gradient), ringW });
+					}
+					if (readFrac > 0.01) {
+						segs.push_back({ QBrush(anim::with_alpha(st::windowFg->c, 0.25)), ringW });
+					}
+					if (!segs.empty()) {
+						auto hq = PainterHighQualityEnabler(p);
+						if (cornerR >= halfAv) {
+							Ui::PaintOutlineSegments(p, ringRect, segs);
+						} else {
+							Ui::PaintOutlineSegments(p, ringRect, ringR, segs);
+						}
+					}
+				}
+
+				// Avatar gradient fill
+				{
+					auto grad = QLinearGradient(avRect.topLeft(), avRect.bottomRight());
+					grad.setColorAt(0, rd.c1);
+					grad.setColorAt(1, rd.c2);
+					p.setPen(Qt::NoPen);
+					p.setBrush(QBrush(grad));
+					auto hq = PainterHighQualityEnabler(p);
+					if (cornerR >= halfAv) {
+						p.drawEllipse(avRect);
+					} else if (cornerR <= 0) {
+						p.drawRect(avRect);
+					} else {
+						p.drawRoundedRect(avRect, cornerR, cornerR);
+					}
+				}
+
+				// Online dot
+				if (rd.hasOnline) {
+					const auto dotR = st::lineWidth * 3;
+					const auto dotRect = QRectF(
+						avRect.right() - dotR * 2 + st::lineWidth,
+						avRect.bottom() - dotR * 2 + st::lineWidth,
+						dotR * 2, dotR * 2);
+					// White border
+					p.setBrush(st::windowBgOver);
+					p.setPen(Qt::NoPen);
+					p.drawEllipse(dotRect.marginsAdded(QMarginsF(1.5, 1.5, 1.5, 1.5)));
+					// Green dot
+					p.setBrush(QColor(68, 213, 120));
+					p.drawEllipse(dotRect);
+				}
+
+				// Text area
+				const auto textX = pad + avatarSize + pad;
+				const auto textW = w - textX - pad;
+				const auto lineH = st::normalFont->height;
+				const auto nameY = avatarY + lineH * 0.1;
+				const auto msgY  = nameY + lineH + st::lineWidth * 2;
+
+				// Name line
+				p.setOpacity(0.85);
+				p.setBrush(st::windowFg);
+				p.setPen(Qt::NoPen);
+				p.drawRoundedRect(QRectF(textX, nameY, textW * rd.nameW, lineH - 2), 3, 3);
+
+				// Message line
+				p.setOpacity(0.45);
+				p.setBrush(st::windowSubTextFg);
+				p.drawRoundedRect(QRectF(textX, msgY, textW * rd.msgW, lineH - 3), 3, 3);
+				p.setOpacity(1.0);
+
+				// Time
+				const auto timeW = st::normalFont->width(rd.time);
+				p.setFont(st::normalFont);
+				p.setPen(anim::with_alpha(st::windowSubTextFg->c, 0.75));
+				p.drawText(
+					w - pad - timeW,
+					int(nameY) + st::normalFont->ascent,
+					rd.time);
+
+				// Unread badge
+				if (rd.badge > 0) {
+					const auto badgeStr = QString::number(rd.badge);
+					const auto badgeFont = st::normalFont;
+					const auto badgeTW = badgeFont->width(badgeStr);
+					const auto badgeH = lineH;
+					const auto badgeW = std::max(badgeH, badgeTW + st::lineWidth * 4);
+					const auto badgeX = w - pad - badgeW;
+					const auto badgeY = int(msgY);
+					auto bgBadge = QColor(30, 120, 255);
+					p.setBrush(bgBadge);
+					p.setPen(Qt::NoPen);
+					p.drawRoundedRect(QRectF(badgeX, badgeY, badgeW, badgeH), badgeH / 2., badgeH / 2.);
+					p.setFont(badgeFont);
+					p.setPen(Qt::white);
+					p.drawText(QRect(badgeX, badgeY, badgeW, badgeH), Qt::AlignCenter, badgeStr);
+				}
+			}
 		}, previewWidget->lifetime());
 
 		radiusValue->value() | rpl::on_next([=](int) {
@@ -1166,14 +1294,15 @@ void GhostStorageBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionCont
 
 	auto container = box->addRow(object_ptr<Ui::VerticalLayout>(box));
 
-	const auto addCategory = [&](const QString &label, const Alex::StorageStats::Entry &entry, int type) {
+	const auto addCategory = [&](const QString &label, const Alex::StorageStats::Entry &entry, int type, const style::icon *icon) {
 		if (entry.count == 0) return;
 
 		auto text = label + u" ("_q + QString::number(entry.count) + u", "_q + Ui::FormatSizeText(entry.size) + u")"_q;
-		auto button = container->add(object_ptr<Ui::SettingsButton>(
+		auto button = AddButtonWithIcon(
 			container,
 			rpl::single(text),
-			st::settingsButton));
+			st::settingsButton,
+			{ icon });
 
 		button->setClickedCallback([=] {
 			Alex::Database::clearStorage(userId, type);
@@ -1182,13 +1311,13 @@ void GhostStorageBox(not_null<Ui::GenericBox*> box, not_null<Window::SessionCont
 		});
 	};
 
-	addCategory(tr::lng_settings_alexgram_ghost_storage_text(tr::now), stats.text, 0);
-	addCategory(tr::lng_settings_alexgram_ghost_storage_photos(tr::now), stats.photo, 1);
-	addCategory(tr::lng_settings_alexgram_ghost_storage_videos(tr::now), stats.video, 2);
-	addCategory(tr::lng_settings_alexgram_ghost_storage_audio(tr::now), stats.audio, 3);
-	addCategory(tr::lng_settings_alexgram_ghost_storage_files(tr::now), stats.document, 4);
-	addCategory(tr::lng_settings_alexgram_ghost_storage_other(tr::now), stats.other, 5);
-	addCategory(tr::lng_settings_alexgram_ghost_save_edited(tr::now), stats.edits, -1);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_text(tr::now), stats.text, 0, &st::menuIconChatBubble);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_photos(tr::now), stats.photo, 1, &st::menuIconPhoto);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_videos(tr::now), stats.video, 2, &st::menuIconVideoChat);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_audio(tr::now), stats.audio, 3, &st::menuIconFile);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_files(tr::now), stats.document, 4, &st::menuIconFile);
+	addCategory(tr::lng_settings_alexgram_ghost_storage_other(tr::now), stats.other, 5, &st::menuIconShowAll);
+	addCategory(tr::lng_settings_alexgram_ghost_save_edited(tr::now), stats.edits, -1, &st::menuIconEdit);
 
 	if (stats.total.count == 0 && stats.edits.count == 0) {
 		container->add(object_ptr<Ui::FlatLabel>(container, u"No saved data found locally."_q, st::defaultFlatLabel), st::boxRowPadding);
@@ -1262,7 +1391,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 			builder.add([&](const WidgetContext &ctx) {
 				auto result = object_ptr<Ui::FlatLabel>(ctx.container, tr::lng_settings_alexgram_ghost_mode_no_read_about(), st::boxDividerLabel);
 				result->setOpacity(0.7f);
-				return SectionBuilder::WidgetToAdd{ std::move(result), { st::settingsCheckboxesSkip, 0, st::settingsCheckboxesSkip, st::settingsCheckboxesSkip / 2 } };
+				return SectionBuilder::WidgetToAdd{ std::move(result), st::settingsCheckboxAboutPadding };
 			});
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
 
@@ -1285,7 +1414,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 			builder.add([&](const WidgetContext &ctx) {
 				auto result = object_ptr<Ui::FlatLabel>(ctx.container, tr::lng_settings_alexgram_ghost_mode_no_read_stories_about(), st::boxDividerLabel);
 				result->setOpacity(0.7f);
-				return SectionBuilder::WidgetToAdd{ std::move(result), { st::settingsCheckboxesSkip, 0, st::settingsCheckboxesSkip, st::settingsCheckboxesSkip / 2 } };
+				return SectionBuilder::WidgetToAdd{ std::move(result), st::settingsCheckboxAboutPadding };
 			});
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
 
@@ -1308,7 +1437,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 			builder.add([&](const WidgetContext &ctx) {
 				auto result = object_ptr<Ui::FlatLabel>(ctx.container, tr::lng_settings_alexgram_ghost_mode_no_online_about(), st::boxDividerLabel);
 				result->setOpacity(0.7f);
-				return SectionBuilder::WidgetToAdd{ std::move(result), { st::settingsCheckboxesSkip, 0, st::settingsCheckboxesSkip, st::settingsCheckboxesSkip / 2 } };
+				return SectionBuilder::WidgetToAdd{ std::move(result), st::settingsCheckboxAboutPadding };
 			});
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
 
@@ -1331,7 +1460,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 			builder.add([&](const WidgetContext &ctx) {
 				auto result = object_ptr<Ui::FlatLabel>(ctx.container, tr::lng_settings_alexgram_ghost_mode_no_typing_about(), st::boxDividerLabel);
 				result->setOpacity(0.7f);
-				return SectionBuilder::WidgetToAdd{ std::move(result), { st::settingsCheckboxesSkip, 0, st::settingsCheckboxesSkip, st::settingsCheckboxesSkip / 2 } };
+				return SectionBuilder::WidgetToAdd{ std::move(result), st::settingsCheckboxAboutPadding };
 			});
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
 
@@ -1357,7 +1486,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 			builder.add([&](const WidgetContext &ctx) {
 				auto result = object_ptr<Ui::FlatLabel>(ctx.container, tr::lng_settings_alexgram_ghost_mode_go_offline_about(), st::boxDividerLabel);
 				result->setOpacity(0.7f);
-				return SectionBuilder::WidgetToAdd{ std::move(result), { st::settingsCheckboxesSkip, 0, st::settingsCheckboxesSkip, st::settingsCheckboxesSkip / 2 } };
+				return SectionBuilder::WidgetToAdd{ std::move(result), st::settingsCheckboxAboutPadding };
 			});
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
 		}, Core::App().settings().ghostModeEnabledChanges(), [=](SectionBuilder::ToggledScopePtr wrap) {
@@ -1451,7 +1580,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 				result->setTextColorOverride(st::windowSubTextFg->c);
 				return SectionBuilder::WidgetToAdd{
 					std::move(result),
-					{ st::settingsCheckboxesSkip * 2, 0, st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip / 2 }
+					st::settingsCheckboxAboutPadding
 				};
 			});
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
@@ -1476,9 +1605,108 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 				result->setTextColorOverride(st::windowSubTextFg->c);
 				return SectionBuilder::WidgetToAdd{
 					std::move(result),
-					{ st::settingsCheckboxesSkip * 2, 0, st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip / 2 }
+					st::settingsCheckboxAboutPadding
 				};
 			});
+			builder.addSkip(st::settingsCheckboxesSkip / 2);
+
+			const auto colorWrap = builder.container()->add(
+				object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+					builder.container(),
+					object_ptr<Ui::VerticalLayout>(builder.container())
+				)
+			);
+			const auto colorInner = colorWrap->entity();
+
+			static auto transparentSettingsButton = st::defaultSettingsButton;
+			transparentSettingsButton.textBg = st::transparent;
+
+			auto windowController = builder.controller();
+			const auto getCurrentColor = [] {
+				const auto c = Core::App().settings().ghostDeletedIconColor();
+				return (c == 0) ? st::historyOutIconFg->c : QColor::fromRgba(static_cast<QRgb>(c));
+			};
+
+			auto colorBtn = colorInner->add(
+				object_ptr<Ui::SettingsButton>(
+					colorInner,
+					tr::lng_settings_alexgram_ghost_mode_deleted_icon_color(),
+					transparentSettingsButton
+				)
+			);
+			colorBtn->setColorOverride(st::windowFg->c);
+			colorBtn->setPaddingOverride(style::margins(37, 8, 22, 8));
+
+			auto colorVar = colorBtn->lifetime().make_state<rpl::variable<QColor>>(getCurrentColor());
+
+			auto rightLabel = Ui::CreateChild<Ui::FlatLabel>(
+				colorBtn,
+				colorVar->value() | rpl::map([](const QColor &c) {
+					return c.name().toUpper();
+				}),
+				st::defaultSettingsRightLabel
+			);
+			colorVar->value() | rpl::on_next([=](const QColor &c) {
+				rightLabel->setTextColorOverride(c);
+			}, rightLabel->lifetime());
+
+			colorBtn->sizeValue() | rpl::on_next([=](const QSize &s) {
+				rightLabel->moveToRight(st::defaultSettingsButton.padding.right(), (s.height() - rightLabel->height()) / 2, s.width());
+			}, rightLabel->lifetime());
+
+			colorBtn->addClickHandler([=] {
+				const auto currentColor = colorVar->current();
+
+				auto box = Box([=](not_null<Ui::GenericBox*> box) {
+					const auto editor = box->addRow(object_ptr<ColorEditor>(
+						box,
+						ColorEditor::Mode::HSL,
+						currentColor));
+
+					const auto save = crl::guard(editor, [=] {
+						Core::App().settings().setGhostDeletedIconColor(
+							editor->color().rgba());
+						Core::App().saveSettingsDelayed();
+						Core::App().reprocessAlexSettings();
+						*colorVar = editor->color();
+						box->closeBox();
+					});
+					const auto reset = [=] {
+						Core::App().settings().setGhostDeletedIconColor(0);
+						Core::App().saveSettingsDelayed();
+						Core::App().reprocessAlexSettings();
+						*colorVar = st::historyOutIconFg->c;
+						box->closeBox();
+					};
+
+					editor->submitRequests(
+					) | rpl::on_next(save, editor->lifetime());
+
+					box->setFocusCallback([=] {
+						editor->setInnerFocus();
+					});
+					box->addButton(tr::lng_settings_save(), save);
+					box->addButton(tr::lng_chat_intro_reset(), reset);
+					box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+					box->setTitle(tr::lng_settings_alexgram_ghost_mode_deleted_icon_color());
+					box->setWidth(editor->width());
+				});
+				windowController->show(std::move(box));
+			});
+
+			colorInner->add(
+				object_ptr<Ui::FlatLabel>(
+					colorInner,
+					tr::lng_settings_alexgram_ghost_mode_deleted_icon_color_about(),
+					st::defaultFlatLabel
+				),
+				QMargins(37, 0, 22, st::settingsCheckboxesSkip / 2)
+			)->setTextColorOverride(st::windowSubTextFg->c);
+
+			colorWrap->toggleOn(
+				Core::App().settings().ghostDeletedShowIconChanges()
+			);
+
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
 
 			SectionBuilder::CheckboxArgs translucentArgs;
@@ -1502,7 +1730,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 					result->setTextColorOverride(st::windowActiveTextFg->c);
 					return SectionBuilder::WidgetToAdd{
 						std::move(result),
-						{ st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip / 2, st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip / 2 }
+						{ st::settingsCheckboxAboutPadding.left(), st::settingsCheckboxesSkip / 2, st::settingsCheckboxAboutPadding.right(), st::settingsCheckboxesSkip / 2 }
 					};
 				});
 
@@ -1531,7 +1759,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 				result->setTextColorOverride(st::windowSubTextFg->c);
 				return SectionBuilder::WidgetToAdd{
 					std::move(result),
-					{ st::settingsCheckboxesSkip * 2, 0, st::settingsCheckboxesSkip * 2, st::settingsCheckboxesSkip / 2 }
+					st::settingsCheckboxAboutPadding
 				};
 			});
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
@@ -1539,6 +1767,7 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 			const uint64 ghostUserId = builder.session()->userId().bare;
 
 			SectionBuilder::ButtonArgs storageArgs;
+			storageArgs.st = nullptr; // use default settings button style for proper alignment
 			storageArgs.title = tr::lng_settings_alexgram_ghost_manage_storage();
 			rpl::producer<Alex::StorageStats> statsProducer = Alex::Database::storageStatsValue(ghostUserId);
 			storageArgs.label = std::move(statsProducer)

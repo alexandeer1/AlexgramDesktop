@@ -168,6 +168,7 @@ settingsCheckbox: Checkbox(defaultBoxCheckbox) {
 	textPosition: point(15px, 1px);
 }
 settingsCheckboxPadding: margins(22px, 10px, 10px, 10px);
+settingsCheckboxAboutPadding: margins(22px, 0px, 12px, 6px);
 settingsLink: boxLinkButton;
 settingsCheckboxesSkip: 12px;
 

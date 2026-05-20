@@ -1221,6 +1221,10 @@ public:
 	[[nodiscard]] rpl::producer<bool> ghostDeletedShowIconChanges();
 	void setGhostDeletedShowIcon(bool value);
 
+	[[nodiscard]] int ghostDeletedIconColor();
+	[[nodiscard]] rpl::producer<int> ghostDeletedIconColorChanges();
+	void setGhostDeletedIconColor(int value);
+
 	[[nodiscard]] int dialogAvatarCornerRadius();
 	[[nodiscard]] rpl::producer<int> dialogAvatarCornerRadiusChanges();
 	void setDialogAvatarCornerRadius(int value);

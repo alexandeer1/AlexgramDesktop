@@ -286,6 +286,10 @@ rpl::event_stream<bool> &GhostDeletedShowIconChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<int> &GhostDeletedIconColorChanges() {
+  static rpl::event_stream<int> stream;
+  return stream;
+}
 rpl::event_stream<bool> &GhostDontReadStoriesChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
@@ -2646,6 +2650,18 @@ rpl::producer<bool> Settings::ghostDeletedShowIconChanges() {
 void Settings::setGhostDeletedShowIcon(bool value) {
   writePref<bool>("ghost-deleted-show-icon", value);
   GhostDeletedShowIconChanges().fire_copy(value);
+}
+
+int Settings::ghostDeletedIconColor() {
+  return readPref<int>("ghost-deleted-icon-color", 0);
+}
+rpl::producer<int> Settings::ghostDeletedIconColorChanges() {
+  return GhostDeletedIconColorChanges().events_starting_with(
+      ghostDeletedIconColor());
+}
+void Settings::setGhostDeletedIconColor(int value) {
+  writePref<int>("ghost-deleted-icon-color", value);
+  GhostDeletedIconColorChanges().fire_copy(value);
 }
 
 auto Settings::translatorProvider() -> TranslatorProvider {

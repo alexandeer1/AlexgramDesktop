@@ -763,18 +763,38 @@ void UserpicButton::paintUserpicFrame(Painter &p, QPoint photoPosition) {
 		const auto ratio = style::DevicePixelRatio();
 		request.outer = request.resize = size * ratio;
 		if (_shape == PeerUserpicShape::Monoforum) {
-		} else if (useForumShape()) {
-			const auto radius = int(_st.photoSize
-				* Ui::ForumUserpicRadiusMultiplier());
-			if (_roundingCorners[0].width() != radius * ratio) {
-				_roundingCorners = Images::CornersMask(radius);
-			}
-			request.rounding = Images::CornersMaskRef(_roundingCorners);
 		} else {
-			if (_ellipseMask.size() != request.outer) {
-				_ellipseMask = Images::EllipseMask(size);
+			const auto customRadius = Core::App().settings().dialogAvatarCornerRadius();
+			const auto unifiedCorner = Core::App().settings().dialogUnifiedAvatarCorner();
+			const auto applyCustom = (customRadius >= 0)
+				&& (!useForumShape() || unifiedCorner);
+
+			if (applyCustom) {
+				const auto halfSize = _st.photoSize / 2;
+				if (customRadius >= halfSize) {
+					if (_ellipseMask.size() != request.outer) {
+						_ellipseMask = Images::EllipseMask(size);
+					}
+					request.mask = _ellipseMask;
+				} else if (customRadius > 0) {
+					if (_roundingCorners[0].width() != customRadius * ratio) {
+						_roundingCorners = Images::CornersMask(customRadius);
+					}
+					request.rounding = Images::CornersMaskRef(_roundingCorners);
+				}
+			} else if (useForumShape()) {
+				const auto radius = int(_st.photoSize
+					* Ui::ForumUserpicRadiusMultiplier());
+				if (_roundingCorners[0].width() != radius * ratio) {
+					_roundingCorners = Images::CornersMask(radius);
+				}
+				request.rounding = Images::CornersMaskRef(_roundingCorners);
+			} else {
+				if (_ellipseMask.size() != request.outer) {
+					_ellipseMask = Images::EllipseMask(size);
+				}
+				request.mask = _ellipseMask;
 			}
-			request.mask = _ellipseMask;
 		}
 		auto frame = _streamed->frame(request);
 

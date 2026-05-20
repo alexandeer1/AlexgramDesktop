@@ -1995,3 +1995,8 @@ void Restart() {
 }
 
 } // namespace Core
+
+bool AlexDisableNumberRounding() {
+	return Core::IsAppLaunched() && Core::App().settings().disableNumberRounding();
+}
+
