@@ -1351,6 +1351,11 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 				- (_bottomInfo.height() - st::msgDateFont->height));
 		}
 		auto textSelection = context.selection;
+		if (const auto translation = item->translation()) {
+			if (translation->requested) {
+				textSelection = FullSelection;
+			}
+		}
 		auto highlightRange = context.highlight.range;
 		const auto mediaHeight = mediaDisplayed ? media->height() : 0;
 		const auto paintMedia = [&](int top) {
@@ -1405,6 +1410,11 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 			auto copy = context;
 			copy.selection = textSelection;
 			copy.highlight.range = highlightRange;
+			if (const auto translation = data()->translation()) {
+				if (translation->requested) {
+					copy.highlight.range = { 0, 0xFFFF };
+				}
+			}
 			paintText(p, trect, copy);
 		}
 		if (drawOnlyText) {

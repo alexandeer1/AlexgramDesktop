@@ -27,6 +27,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_components.h"
 #include "history/history_item_text.h"
 #include "history/view/history_view_schedule_box.h"
+#include "history/view/history_view_translate_bar.h"
+#include "history/view/history_view_translate_tracker.h"
 #include "history/view/media/history_view_media.h"
 #include "history/view/media/menu/history_view_poll_menu.h"
 #include "history/view/media/history_view_save_document_action.h"
@@ -101,6 +103,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_session_controller.h"
 #include "lang/lang_keys.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "main/main_app_config.h"
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
@@ -1496,11 +1499,19 @@ void FillContextMenuItems(
 						: used
 						? tr::lng_translate_show_original(tr::now)
 						: tr::lng_context_translate(tr::now);
-					result->addAction(label, [=] {
-						if (const auto item = owner->message(itemId)) {
-							list->toggleTranslation(item);
-						}
-					}, &st::menuIconTranslate)->setEnabled(!requested);
+					if (!requested && !used) {
+						result->addAction(label, [=] {
+							if (const auto item = owner->message(itemId)) {
+								list->toggleTranslation(item);
+							}
+						}, &st::menuIconTranslate);
+					} else {
+						result->addAction(label, [=] {
+							if (const auto item = owner->message(itemId)) {
+								list->toggleTranslation(item);
+							}
+						}, &st::menuIconTranslate)->setEnabled(!requested);
+					}
 				}
 			}
 		}
@@ -1667,11 +1678,19 @@ void FillContextMenuItems(
 					: used
 					? tr::lng_translate_show_original(tr::now)
 					: tr::lng_context_translate(tr::now);
-				result->addAction(label, [=] {
-					if (const auto item = owner->message(itemId)) {
-						list->toggleTranslation(item);
-					}
-				}, &st::menuIconTranslate)->setEnabled(!requested);
+				if (!requested && !used) {
+					result->addAction(label, [=] {
+						if (const auto item = owner->message(itemId)) {
+							list->toggleTranslation(item);
+						}
+					}, &st::menuIconTranslate);
+				} else {
+					result->addAction(label, [=] {
+						if (const auto item = owner->message(itemId)) {
+							list->toggleTranslation(item);
+						}
+					}, &st::menuIconTranslate)->setEnabled(!requested);
+				}
 			}
 		}
 	}

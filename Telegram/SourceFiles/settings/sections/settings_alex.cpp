@@ -278,7 +278,6 @@ void ChooseTranslatorProviderBox(not_null<Ui::GenericBox*> box, not_null<Window:
 	add(Core::Settings::TranslatorProvider::Yandex, u"Yandex Translate"_q);
 	add(Core::Settings::TranslatorProvider::Tencent, u"Tencent TranSmart"_q);
 	add(Core::Settings::TranslatorProvider::Caiyun, u"Caiyun / Lingo Translator"_q);
-	add(Core::Settings::TranslatorProvider::ChatGpt, u"OpenAI / LLM Translator"_q);
 
 	group->setChangedCallback([=](Core::Settings::TranslatorProvider value) {
 		Core::App().settings().setTranslatorProvider(value);
@@ -347,6 +346,31 @@ void BuildAlexgramTranslatorSection(SectionBuilder &builder) {
 	builder.addSkip();
 
 	builder.addButton({
+		.title = tr::lng_translate_menu_to(),
+		.icon = { &st::menuIconTranslate },
+		.label = Core::App().settings().translateToValue() | rpl::map([](LanguageId id) {
+			return Ui::LanguageName(id);
+		}),
+		.onClick = [=] {
+			builder.controller()->show(Box(
+				Ui::ChooseLanguageBox,
+				tr::lng_translate_menu_to(),
+				[=](std::vector<LanguageId> selected) {
+					if (!selected.empty()) {
+						Core::App().settings().setTranslateTo(selected.front());
+						Core::App().saveSettingsDelayed();
+					}
+				},
+				std::vector<LanguageId>{ Core::App().settings().translateTo() },
+				false, // multiselect
+				nullptr));
+		},
+	});
+
+	builder.addDividerText(rpl::single(u"Select the language you want messages to be translated into."_q));
+	builder.addSkip();
+
+	builder.addButton({
 		.title = rpl::single(u"Do Not Translate"_q),
 		.icon = { &st::menuIconBlock },
 		.label = Core::App().settings().skipTranslationLanguagesValue() | rpl::map([](const std::vector<LanguageId> &skip) {
@@ -368,46 +392,6 @@ void BuildAlexgramTranslatorSection(SectionBuilder &builder) {
 
 	builder.addDividerText(rpl::single(u"Languages that will not be offered for translation."_q));
 	builder.addSkip();
-
-	if (Core::App().settings().translatorProvider() == Core::Settings::TranslatorProvider::ChatGpt) {
-		builder.addDivider();
-		builder.addSkip();
-
-		builder.add([=](const WidgetContext &ctx) {
-			auto result = object_ptr<Ui::InputField>(
-				ctx.container,
-				st::defaultInputField,
-				rpl::single(u"LLM API URL"_q),
-				Core::App().settings().translatorLlmUrl());
-			result->setPlaceholder(rpl::single(u"https://api.openai.com/v1/chat/completions"_q));
-			
-			result->changes() | rpl::on_next([=, field = result.data()] {
-				Core::App().settings().setTranslatorLlmUrl(field->getLastText());
-				Core::App().saveSettingsDelayed();
-			}, result->lifetime());
-			
-			return SectionBuilder::WidgetToAdd{ .widget = std::move(result), .margin = st::settingsCheckboxPadding };
-		});
-
-		builder.add([=](const WidgetContext &ctx) {
-			auto result = object_ptr<Ui::InputField>(
-				ctx.container,
-				st::defaultInputField,
-				rpl::single(u"LLM API Key"_q),
-				Core::App().settings().translatorLlmKey());
-			result->setPlaceholder(rpl::single(u"sk-..."_q));
-			
-			result->changes() | rpl::on_next([=, field = result.data()] {
-				Core::App().settings().setTranslatorLlmKey(field->getLastText());
-				Core::App().saveSettingsDelayed();
-			}, result->lifetime());
-			
-			return SectionBuilder::WidgetToAdd{ .widget = std::move(result), .margin = st::settingsCheckboxPadding };
-		});
-		
-		builder.addDividerText(rpl::single(u"Enter your LLM API details. Standard OpenAI-compatible format is expected."_q));
-		builder.addSkip();
-	}
 }
 
 void BuildAlexgramChatsSection(SectionBuilder &builder) {	builder.addDivider();

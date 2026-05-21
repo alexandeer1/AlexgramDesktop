@@ -3105,9 +3105,11 @@ bool HistoryItem::translationShowRequiresRequest(LanguageId to, bool manual) {
 			if (!translation->failed && translation->text.empty() && !translation->manual) {
 				Assert(!translation->used);
 				RemoveComponents(HistoryMessageTranslation::Bit());
+				_history->owner().requestItemRepaint(this);
 			} else if (!translation->manual || manual) {
 				translationToggle(translation, false);
 				translation->manual = false;
+				_history->owner().requestItemRepaint(this);
 			}
 		}
 		return false;
@@ -3126,6 +3128,7 @@ bool HistoryItem::translationShowRequiresRequest(LanguageId to, bool manual) {
 		translation->failed = false;
 		translation->text = {};
 		translation->manual = manual;
+		_history->owner().requestItemRepaint(this);
 		return true;
 	} else {
 		AddComponents(HistoryMessageTranslation::Bit());
@@ -3133,6 +3136,7 @@ bool HistoryItem::translationShowRequiresRequest(LanguageId to, bool manual) {
 		added->to = to;
 		added->requested = true;
 		added->manual = manual;
+		_history->owner().requestItemRepaint(this);
 		return true;
 	}
 }
@@ -3173,12 +3177,14 @@ void HistoryItem::translationDone(LanguageId to, Ui::TranslateProviderResult &&r
 	if (const auto translation = Get<HistoryMessageTranslation>()) {
 		if (translation->to == to && translation->text.empty()) {
 			translation->requested = false;
+			_history->owner().requestItemRepaint(this);
 			set(translation);
 		}
 	} else {
 		AddComponents(HistoryMessageTranslation::Bit());
 		const auto added = Get<HistoryMessageTranslation>();
 		added->to = to;
+		_history->owner().requestItemRepaint(this);
 		set(added);
 	}
 }

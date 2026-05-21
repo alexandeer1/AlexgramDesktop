@@ -55,6 +55,10 @@ rpl::producer<bool> TranslateTracker::trackingLanguage() const {
 	return _trackingLanguage.value();
 }
 
+void TranslateTracker::updateProvider() {
+	_provider = Ui::CreateTranslateProvider(&_history->session());
+}
+
 void TranslateTracker::setup() {
 	const auto peer = _history->peer;
 	peer->updateFull();

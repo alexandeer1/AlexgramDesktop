@@ -38,6 +38,7 @@ public:
 	[[nodiscard]] Ui::TranslateProvider *provider() const {
 		return _provider.get();
 	}
+	void updateProvider();
 
 
 private:
@@ -65,7 +66,7 @@ private:
 	void switchTranslation(not_null<HistoryItem*> item, LanguageId id);
 
 	const not_null<History*> _history;
-	const std::unique_ptr<Ui::TranslateProvider> _provider;
+	std::unique_ptr<Ui::TranslateProvider> _provider;
 	rpl::variable<bool> _trackingLanguage = false;
 	base::flat_map<FullMsgId, ItemForRecognize> _itemsForRecognize;
 	uint64 _generation = 0;

@@ -308,6 +308,7 @@ public:
 
 	[[nodiscard]] Main::Session &session() const;
 	[[nodiscard]] not_null<Window::SessionController*> controller() const;
+	[[nodiscard]] TranslateTracker *translateTracker() const { return _translateTracker.get(); }
 	[[nodiscard]] not_null<ListDelegate*> delegate() const;
 
 	// Set the correct scroll position after being resized.
