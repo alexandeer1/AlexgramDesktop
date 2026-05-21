@@ -8339,4 +8339,18 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_local_premium" = "Local Premium";
 "lng_settings_alexgram_local_premium_about" = "Unlock premium features locally. Note: The Telegram server will still block server-side premium actions. This only affects client-side checks.";
 
+"lng_settings_alexgram_live_wallpaper" = "Live Video Wallpaper";
+"lng_settings_alexgram_live_wallpaper_about" = "Set an image or video file as the background wallpaper for your chats. Supports JPG, PNG, and MP4.";
+"lng_settings_alexgram_live_wallpaper_enable" = "Enable Live Wallpaper";
+"lng_settings_alexgram_live_wallpaper_enable_about" = "Enable a custom image or video as the chat background wallpaper.";
+"lng_settings_alexgram_live_wallpaper_choose" = "Choose Wallpaper File";
+"lng_settings_alexgram_live_wallpaper_choose_about" = "Select an image (JPG, PNG) or video (MP4) file to use as wallpaper.";
+"lng_settings_alexgram_live_wallpaper_no_file" = "No file selected";
+"lng_settings_alexgram_live_wallpaper_blur" = "Blur Intensity";
+"lng_settings_alexgram_live_wallpaper_blur_none" = "None";
+"lng_settings_alexgram_live_wallpaper_blur_max" = "Max";
+"lng_settings_alexgram_live_wallpaper_blur_about" = "Adjust the blur applied over the wallpaper to keep chat content readable.";
+"lng_settings_alexgram_live_wallpaper_reset" = "Reset";
+"lng_settings_alexgram_live_wallpaper_clear" = "Clear Wallpaper";
+
 // Keys finished

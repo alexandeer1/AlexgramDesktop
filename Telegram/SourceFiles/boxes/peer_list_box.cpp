@@ -385,8 +385,13 @@ void PeerListController::search(const QString &query) {
 
 void PeerListController::peerListSearchAddRow(not_null<PeerData*> peer) {
 	if (auto row = delegate()->peerListFindRow(peer->id.value)) {
-		Assert(row->id() == row->peer()->id.value);
-		delegate()->peerListAppendFoundRow(row);
+		if (!row->special()) {
+			Assert(row->id() == row->peer()->id.value);
+			delegate()->peerListAppendFoundRow(row);
+		} else if (auto newRow = createSearchRow(peer)) {
+			Assert(newRow->id() == newRow->peer()->id.value);
+			delegate()->peerListAppendSearchRow(std::move(newRow));
+		}
 	} else if (auto row = createSearchRow(peer)) {
 		Assert(row->id() == row->peer()->id.value);
 		delegate()->peerListAppendSearchRow(std::move(row));

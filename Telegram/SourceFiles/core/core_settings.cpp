@@ -322,6 +322,18 @@ rpl::event_stream<bool> &LocalPremiumChanges() {
   static rpl::event_stream<bool> stream;
   return stream;
 }
+rpl::event_stream<bool> &LiveWallpaperEnabledChanges() {
+  static rpl::event_stream<bool> stream;
+  return stream;
+}
+rpl::event_stream<QString> &LiveWallpaperPathChanges() {
+  static rpl::event_stream<QString> stream;
+  return stream;
+}
+rpl::event_stream<int> &LiveWallpaperBlurChanges() {
+  static rpl::event_stream<int> stream;
+  return stream;
+}
 
 std::atomic<int> gCurrentDialogAvatarCornerRadius = 50;
 
@@ -2739,6 +2751,45 @@ rpl::producer<bool> Settings::localPremiumChanges() {
 void Settings::setLocalPremium(bool value) {
   writePref<bool>("local-premium", value);
   LocalPremiumChanges().fire_copy(value);
+}
+
+bool Settings::liveWallpaperEnabled() {
+  return readPref<bool>("live-wallpaper-enabled", false);
+}
+
+rpl::producer<bool> Settings::liveWallpaperEnabledChanges() {
+  return LiveWallpaperEnabledChanges().events_starting_with(liveWallpaperEnabled());
+}
+
+void Settings::setLiveWallpaperEnabled(bool value) {
+  writePref<bool>("live-wallpaper-enabled", value);
+  LiveWallpaperEnabledChanges().fire_copy(value);
+}
+
+QString Settings::liveWallpaperPath() {
+  return readPref<QString>("live-wallpaper-path", QString());
+}
+
+rpl::producer<QString> Settings::liveWallpaperPathChanges() {
+  return LiveWallpaperPathChanges().events_starting_with(liveWallpaperPath());
+}
+
+void Settings::setLiveWallpaperPath(const QString &value) {
+  writePref<QString>("live-wallpaper-path", value);
+  LiveWallpaperPathChanges().fire_copy(value);
+}
+
+int Settings::liveWallpaperBlur() {
+  return readPref<int>("live-wallpaper-blur", 0);
+}
+
+rpl::producer<int> Settings::liveWallpaperBlurChanges() {
+  return LiveWallpaperBlurChanges().events_starting_with(liveWallpaperBlur());
+}
+
+void Settings::setLiveWallpaperBlur(int value) {
+  writePref<int>("live-wallpaper-blur", value);
+  LiveWallpaperBlurChanges().fire_copy(value);
 }
 
 DocumentId Settings::localEmojiStatusId() {

@@ -421,8 +421,7 @@ void Message::refreshRightBadge() {
 			};
 		} else if (item->author()->isMegagroup()) {
 			if (const auto msgsigned = item->Get<HistoryMessageSigned>()) {
-				if (!msgsigned->viaBusinessBot) {
-					Assert(msgsigned->isAnonymousRank);
+				if (!msgsigned->viaBusinessBot && msgsigned->isAnonymousRank) {
 					return { msgsigned->author, BadgeRole::User, false };
 				}
 			}

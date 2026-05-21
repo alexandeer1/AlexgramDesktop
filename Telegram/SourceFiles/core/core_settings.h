@@ -1233,6 +1233,18 @@ public:
 	[[nodiscard]] rpl::producer<bool> dialogUnifiedAvatarCornerChanges();
 	void setDialogUnifiedAvatarCorner(bool value);
 
+	[[nodiscard]] bool liveWallpaperEnabled();
+	[[nodiscard]] rpl::producer<bool> liveWallpaperEnabledChanges();
+	void setLiveWallpaperEnabled(bool value);
+
+	[[nodiscard]] QString liveWallpaperPath();
+	[[nodiscard]] rpl::producer<QString> liveWallpaperPathChanges();
+	void setLiveWallpaperPath(const QString &value);
+
+	[[nodiscard]] int liveWallpaperBlur();
+	[[nodiscard]] rpl::producer<int> liveWallpaperBlurChanges();
+	void setLiveWallpaperBlur(int value);
+
 	[[nodiscard]] bool localPremium();
 	[[nodiscard]] rpl::producer<bool> localPremiumChanges();
 	void setLocalPremium(bool value);

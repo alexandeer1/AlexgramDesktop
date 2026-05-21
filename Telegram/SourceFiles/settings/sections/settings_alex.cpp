@@ -51,6 +51,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/continuous_sliders.h"
 #include "ui/image/image_prepare.h"
 #include "base/unixtime.h"
+#include "core/file_utilities.h"
+#include "ui/effects/animations.h"
+
 
 namespace Settings {
 
@@ -1140,9 +1143,362 @@ void BuildAlexgramChatsSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addDividerText(tr::lng_settings_alexgram_ask_before_calling_about());
 	builder.addSkip();
 
+	builder.addDivider();
+	builder.addSkip();
+
+	if (const auto container = builder.container()) {
+		const auto pathValue = std::make_shared<rpl::variable<QString>>(
+			Core::App().settings().liveWallpaperPath());
+		const auto blurValue = std::make_shared<rpl::variable<int>>(
+			Core::App().settings().liveWallpaperBlur());
+		const auto enabledValue = std::make_shared<rpl::variable<bool>>(
+			Core::App().settings().liveWallpaperEnabled());
+
+		const auto kBlurMax = 100;
+
+		// --- GOD LEVEL LIVE VIDEO WALLPAPER ---
+		
+		SectionBuilder::CheckboxArgs liveWallpaperArgs;
+		liveWallpaperArgs.title = tr::lng_settings_alexgram_live_wallpaper();
+		liveWallpaperArgs.checked = Core::App().settings().liveWallpaperEnabled();
+		const auto enableWallpaperCb = builder.addCheckbox(std::move(liveWallpaperArgs));
+		
+		if (enableWallpaperCb) {
+			enableWallpaperCb->checkedChanges(
+			) | rpl::on_next([=](bool checked) {
+				*enabledValue = checked;
+				Core::App().settings().setLiveWallpaperEnabled(checked);
+				Core::App().saveSettingsDelayed();
+				Core::App().reprocessAlexSettings();
+			}, enableWallpaperCb->lifetime());
+		}
+
+		// Content SlideWrap
+		const auto contentWrap = container->add(
+			object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+				container,
+				object_ptr<Ui::VerticalLayout>(container)));
+		contentWrap->toggleOn(enableWallpaperCb ? enableWallpaperCb->checkedValue() : rpl::single(false));
+		const auto content = contentWrap->entity();
+
+		const auto wrapper = content->add(
+			object_ptr<Ui::VerticalLayout>(content),
+			QMargins(st::settingsCheckboxPadding.left(), 0, st::settingsCheckboxPadding.right(), st::lineWidth * 4));
+
+		wrapper->paintRequest() | rpl::on_next([=](QRect clip) {
+			Painter p(wrapper);
+			p.setRenderHint(QPainter::Antialiasing);
+			const auto r = wrapper->rect();
+			
+			auto bg = QLinearGradient(r.topLeft(), r.bottomRight());
+			bg.setColorAt(0, anim::with_alpha(QColor(30, 35, 45), 0.8));
+			bg.setColorAt(1, anim::with_alpha(QColor(20, 22, 30), 0.8));
+			p.setPen(Qt::NoPen);
+			p.setBrush(bg);
+			p.drawRoundedRect(r, st::boxRadius * 2, st::boxRadius * 2);
+
+			auto border = QLinearGradient(r.topLeft(), r.bottomRight());
+			border.setColorAt(0, QColor(0, 255, 200, 150));
+			border.setColorAt(0.5, QColor(0, 150, 255, 150));
+			border.setColorAt(1, QColor(200, 0, 255, 150));
+			
+			p.setBrush(Qt::NoBrush);
+			p.setPen(QPen(QBrush(border), 1.5));
+			p.drawRoundedRect(QRectF(r).adjusted(0.75, 0.75, -0.75, -0.75), st::boxRadius * 2, st::boxRadius * 2);
+		}, wrapper->lifetime());
+
+		// 2. Beautiful Preview
+		const auto previewWidget = wrapper->add(
+			object_ptr<Ui::RpWidget>(wrapper),
+			QMargins(st::lineWidth * 4, st::lineWidth * 4, st::lineWidth * 4, st::lineWidth * 2));
+		const auto previewH = st::settingsButton.height * 3.2; // Increased from 2.8
+		previewWidget->setFixedHeight(previewH);
+
+		previewWidget->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(previewWidget);
+			p.setRenderHint(QPainter::Antialiasing);
+			p.setRenderHint(QPainter::SmoothPixmapTransform);
+			const auto w = previewWidget->width();
+			const auto h = previewWidget->height();
+			const auto path = pathValue->current();
+			const auto blur = blurValue->current();
+
+			if (!path.isEmpty()) {
+				const auto isVideo = path.endsWith(u".mp4"_q, Qt::CaseInsensitive)
+					|| path.endsWith(u".mov"_q, Qt::CaseInsensitive)
+					|| path.endsWith(u".avi"_q, Qt::CaseInsensitive);
+
+				// Draw large pill background
+				p.setPen(Qt::NoPen);
+				p.setBrush(anim::with_alpha(QColor(10, 15, 25), 0.6));
+				p.drawRoundedRect(QRectF(0, 0, w, h), st::boxRadius * 1.5, st::boxRadius * 1.5);
+
+				auto glowGrad = QRadialGradient(w / 2., h / 2., h * 0.8);
+				glowGrad.setColorAt(0, isVideo
+					? anim::with_alpha(QColor(100, 200, 255), 0.3)
+					: anim::with_alpha(QColor(255, 210, 90), 0.3));
+				glowGrad.setColorAt(1, Qt::transparent);
+				p.setPen(Qt::NoPen);
+				p.setBrush(QBrush(glowGrad));
+				p.drawRoundedRect(QRectF(0, 0, w, h), st::boxRadius * 1.5, st::boxRadius * 1.5);
+
+				const auto iconY = h * 0.25;
+				p.setFont(st::boxTitleFont);
+				p.setPen(Qt::white);
+				const auto label = isVideo ? u"Video Wallpaper Active"_q : u"Image Wallpaper Active"_q;
+				p.drawText(QRect(0, iconY, w, st::boxTitleFont->height), Qt::AlignCenter, label);
+
+				const auto pad = st::lineWidth * 12; // Increased padding from bottom
+				const auto textY = h - pad - st::normalFont->height;
+				
+				// Filename on the left
+				p.setFont(st::normalFont);
+				p.setPen(anim::with_alpha(Qt::white, 0.7));
+				const auto fileName = QFileInfo(path).fileName();
+				const auto nameW = w - pad * 3 - (blur > 0 ? st::normalFont->width(u"Blur: 100%"_q) : 0);
+				const auto nameStr = st::normalFont->elided(fileName, nameW);
+				p.drawText(QRect(pad, textY, nameW, st::normalFont->height), nameStr);
+
+				// Blur text on the right
+				if (blur > 0) {
+					const auto blurStr = u"Blur: %1%"_q.arg(blur);
+					const auto blurW = st::normalFont->width(blurStr);
+					p.drawText(QRect(w - pad - blurW, textY, blurW, st::normalFont->height), blurStr);
+				}
+			} else {
+				// Draw large pill background
+				p.setPen(Qt::NoPen);
+				p.setBrush(anim::with_alpha(QColor(10, 15, 25), 0.6));
+				p.drawRoundedRect(QRectF(0, 0, w, h), st::boxRadius * 1.5, st::boxRadius * 1.5);
+
+				p.setFont(st::boxTitleFont);
+				p.setPen(anim::with_alpha(Qt::white, 0.85));
+				const auto txt = u"No File Selected"_q;
+				p.drawText(QRect(0, 0, w, h), Qt::AlignCenter, txt);
+				p.setFont(st::normalFont);
+				p.setPen(anim::with_alpha(Qt::white, 0.55));
+				p.drawText(QRect(0, h / 2 + st::lineWidth * 4, w, st::normalFont->height), Qt::AlignCenter, u"Choose a file below to preview"_q);
+			}
+		}, previewWidget->lifetime());
+
+		pathValue->value() | rpl::on_next([=](const QString &) { previewWidget->update(); }, previewWidget->lifetime());
+		blurValue->value() | rpl::on_next([=](int) { previewWidget->update(); }, previewWidget->lifetime());
+
+		// 3. Actions (Choose File / Clear Pill Buttons)
+		const auto actionsRow = wrapper->add(
+			object_ptr<Ui::RpWidget>(wrapper),
+			QMargins(st::lineWidth * 4, 0, st::lineWidth * 4, st::lineWidth * 2));
+		actionsRow->setFixedHeight(st::settingsButton.height * 0.9);
+		actionsRow->setCursor(Qt::PointingHandCursor);
+
+		struct ActionState {
+			float64 hover1 = 0.;
+			float64 hover2 = 0.;
+		};
+		const auto actionState = std::make_shared<ActionState>();
+		const auto hoverAnim1 = std::make_shared<Ui::Animations::Simple>();
+		const auto hoverAnim2 = std::make_shared<Ui::Animations::Simple>();
+
+		actionsRow->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(actionsRow);
+			p.setRenderHint(QPainter::Antialiasing);
+			const auto w = actionsRow->width();
+			const auto h = actionsRow->height();
+			const auto gap = st::lineWidth * 3;
+			const auto btnW = (w - gap) / 2;
+
+			// Button 1: Choose File
+			auto bg1 = anim::color(anim::with_alpha(QColor(30, 144, 255), 0.15), anim::with_alpha(QColor(30, 144, 255), 0.25), actionState->hover1);
+			p.setBrush(bg1);
+			p.setPen(Qt::NoPen);
+			p.drawRoundedRect(QRectF(0, 0, btnW, h), h / 2., h / 2.);
+			p.setFont(st::semiboldFont);
+			p.setPen(QColor(60, 170, 255));
+			p.drawText(QRect(0, 0, btnW, h), Qt::AlignCenter, u"Choose File"_q);
+
+			// Button 2: Clear
+			auto bg2 = anim::color(anim::with_alpha(QColor(255, 60, 80), 0.1), anim::with_alpha(QColor(255, 60, 80), 0.2), actionState->hover2);
+			p.setBrush(bg2);
+			p.setPen(Qt::NoPen);
+			p.drawRoundedRect(QRectF(btnW + gap, 0, btnW, h), h / 2., h / 2.);
+			p.setPen(QColor(255, 90, 110));
+			p.drawText(QRect(btnW + gap, 0, btnW, h), Qt::AlignCenter, u"Clear"_q);
+		}, actionsRow->lifetime());
+
+		actionsRow->events() | rpl::filter([=](not_null<QEvent*> e) {
+			return e->type() == QEvent::MouseMove || e->type() == QEvent::Leave || e->type() == QEvent::MouseButtonRelease;
+		}) | rpl::on_next([=](not_null<QEvent*> e) {
+			const auto w = actionsRow->width();
+			const auto gap = st::lineWidth * 3;
+			const auto btnW = (w - gap) / 2;
+
+			if (e->type() == QEvent::Leave) {
+				hoverAnim1->start([=] { actionState->hover1 = hoverAnim1->value(0.); actionsRow->update(); }, actionState->hover1, 0., st::slideDuration);
+				hoverAnim2->start([=] { actionState->hover2 = hoverAnim2->value(0.); actionsRow->update(); }, actionState->hover2, 0., st::slideDuration);
+				return;
+			}
+
+			const auto me = static_cast<QMouseEvent*>(e.get());
+			const auto x = me->pos().x();
+			const auto over1 = (x < btnW);
+			const auto over2 = (x > btnW + gap);
+
+			if (e->type() == QEvent::MouseMove) {
+				const auto target1 = over1 ? 1. : 0.;
+				if (actionState->hover1 != target1 && !hoverAnim1->animating()) {
+					hoverAnim1->start([=] { actionState->hover1 = hoverAnim1->value(target1); actionsRow->update(); }, actionState->hover1, target1, st::slideDuration);
+				}
+				const auto target2 = over2 ? 1. : 0.;
+				if (actionState->hover2 != target2 && !hoverAnim2->animating()) {
+					hoverAnim2->start([=] { actionState->hover2 = hoverAnim2->value(target2); actionsRow->update(); }, actionState->hover2, target2, st::slideDuration);
+				}
+			} else if (e->type() == QEvent::MouseButtonRelease) {
+				if (over1) {
+					const auto filter = u"Image or Video (*.jpg *.jpeg *.png *.mp4 *.mov *.avi);;"_q + FileDialog::AllFilesFilter();
+					FileDialog::GetOpenPath(Core::App().getFileDialogParent(), tr::lng_settings_alexgram_live_wallpaper_choose(tr::now), filter, [=](const FileDialog::OpenResult &result) {
+						if (!result.paths.isEmpty()) {
+							const auto path = result.paths.front();
+							*pathValue = path;
+							Core::App().settings().setLiveWallpaperPath(path);
+							Core::App().saveSettingsDelayed();
+							Core::App().reprocessAlexSettings();
+						}
+					});
+				} else if (over2) {
+					*pathValue = QString();
+					Core::App().settings().setLiveWallpaperPath(QString());
+					Core::App().saveSettingsDelayed();
+					Core::App().reprocessAlexSettings();
+				}
+			}
+		}, actionsRow->lifetime());
+		actionsRow->setAttribute(Qt::WA_Hover);
+
+		// 4. Blur Slider (Custom God Level Slider)
+		const auto blurRow = wrapper->add(
+			object_ptr<Ui::RpWidget>(wrapper),
+			QMargins(st::lineWidth * 4, st::lineWidth * 2, st::lineWidth * 4, st::lineWidth * 16)); // Increased bottom margin
+		blurRow->setFixedHeight(st::settingsButton.height * 1.4);
+
+		struct SliderState {
+			bool sliding = false;
+			float64 hover = 0.;
+		};
+		const auto sliderState = std::make_shared<SliderState>();
+		const auto sliderHoverAnim = std::make_shared<Ui::Animations::Simple>();
+
+		blurRow->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(blurRow);
+			p.setRenderHint(QPainter::Antialiasing);
+			const auto w = blurRow->width();
+			const auto h = blurRow->height();
+
+			p.setFont(st::normalFont);
+			p.setPen(st::windowSubTextFg);
+			p.drawText(0, st::normalFont->ascent + st::lineWidth * 2, u"Background Blur"_q);
+
+			const auto valStr = QString::number(blurValue->current()) + u"%"_q;
+			p.setPen(st::windowActiveTextFg);
+			p.setFont(st::semiboldFont);
+			p.drawText(w - st::semiboldFont->width(valStr), st::normalFont->ascent + st::lineWidth * 2, valStr);
+
+			const auto sliderH = st::lineWidth * 4;
+			const auto sliderY = h - sliderH - st::lineWidth * 6; // Move up from the bottom edge
+			const auto sliderW = w;
+
+			// Track
+			p.setBrush(anim::with_alpha(st::windowFg->c, 0.1));
+			p.setPen(Qt::NoPen);
+			p.drawRoundedRect(QRectF(0, sliderY, sliderW, sliderH), sliderH / 2., sliderH / 2.);
+
+			// Fill
+			const auto progress = blurValue->current() / float64(kBlurMax);
+			auto fillGrad = QLinearGradient(0, 0, sliderW, 0);
+			fillGrad.setColorAt(0, QColor(0, 200, 255));
+			fillGrad.setColorAt(1, QColor(200, 0, 255));
+			p.setBrush(QBrush(fillGrad));
+			p.drawRoundedRect(QRectF(0, sliderY, sliderW * progress, sliderH), sliderH / 2., sliderH / 2.);
+
+			// Thumb
+			const auto thumbR = st::lineWidth * 6 + sliderState->hover * st::lineWidth * 2;
+			const auto thumbX = sliderW * progress;
+			const auto thumbY = sliderY + sliderH / 2.;
+			p.setBrush(Qt::white);
+			// Glow
+			p.setPen(Qt::NoPen);
+			auto thumbGlow = QRadialGradient(thumbX, thumbY, thumbR * 2);
+			thumbGlow.setColorAt(0, anim::with_alpha(QColor(200, 0, 255), 0.4));
+			thumbGlow.setColorAt(1, Qt::transparent);
+			p.setBrush(QBrush(thumbGlow));
+			p.drawEllipse(QRectF(thumbX - thumbR * 2, thumbY - thumbR * 2, thumbR * 4, thumbR * 4));
+
+			p.setBrush(Qt::white);
+			p.setPen(QPen(anim::with_alpha(Qt::black, 0.1), st::lineWidth));
+			p.drawEllipse(QRectF(thumbX - thumbR, thumbY - thumbR, thumbR * 2, thumbR * 2));
+		}, blurRow->lifetime());
+
+		blurRow->events() | rpl::filter([=](not_null<QEvent*> e) {
+			return e->type() == QEvent::MouseMove || e->type() == QEvent::MouseButtonPress || e->type() == QEvent::MouseButtonRelease || e->type() == QEvent::Leave;
+		}) | rpl::on_next([=](not_null<QEvent*> e) {
+			const auto w = blurRow->width();
+			const auto h = blurRow->height();
+			const auto sliderH = st::lineWidth * 4;
+			const auto sliderY = h - sliderH;
+
+			if (e->type() == QEvent::Leave) {
+				if (!sliderState->sliding && sliderState->hover > 0.) {
+					sliderHoverAnim->start([=] { sliderState->hover = sliderHoverAnim->value(0.); blurRow->update(); }, sliderState->hover, 0., st::slideDuration);
+				}
+				return;
+			}
+
+			const auto me = static_cast<QMouseEvent*>(e.get());
+			const auto x = std::clamp(me->pos().x(), 0, w);
+			const auto y = me->pos().y();
+			const auto overSlider = (y >= sliderY - st::lineWidth * 6 && y <= sliderY + sliderH + st::lineWidth * 6);
+
+			if (e->type() == QEvent::MouseButtonPress) {
+				if (overSlider) {
+					sliderState->sliding = true;
+					const auto blur = int(base::SafeRound((x / float64(w)) * kBlurMax));
+					*blurValue = blur;
+					Core::App().settings().setLiveWallpaperBlur(blur);
+					Core::App().saveSettingsDelayed();
+					Core::App().reprocessAlexSettings();
+				}
+			} else if (e->type() == QEvent::MouseMove) {
+				const auto target = (overSlider || sliderState->sliding) ? 1. : 0.;
+				if (sliderState->hover != target && !sliderHoverAnim->animating()) {
+					sliderHoverAnim->start([=] { sliderState->hover = sliderHoverAnim->value(target); blurRow->update(); }, sliderState->hover, target, st::slideDuration);
+				}
+				if (sliderState->sliding) {
+					const auto blur = int(base::SafeRound((x / float64(w)) * kBlurMax));
+					if (blurValue->current() != blur) {
+						*blurValue = blur;
+						Core::App().settings().setLiveWallpaperBlur(blur);
+						Core::App().saveSettingsDelayed();
+						Core::App().reprocessAlexSettings();
+					}
+				}
+			} else if (e->type() == QEvent::MouseButtonRelease) {
+				sliderState->sliding = false;
+				if (!overSlider) {
+					sliderHoverAnim->start([=] { sliderState->hover = sliderHoverAnim->value(0.); blurRow->update(); }, sliderState->hover, 0., st::slideDuration);
+				}
+			}
+		}, blurRow->lifetime());
+		blurRow->setAttribute(Qt::WA_Hover);
+		
+		blurValue->value() | rpl::on_next([=](int) { blurRow->update(); }, blurRow->lifetime());
+		
+		builder.addSkip();
+
+	}
+
 }
 
 void BuildAlexgramExperimentalSection(SectionBuilder &builder) {	builder.addDivider();
+
 	builder.addSkip();
 
 	SectionBuilder::CheckboxArgs unlimitedPinnedArgs;

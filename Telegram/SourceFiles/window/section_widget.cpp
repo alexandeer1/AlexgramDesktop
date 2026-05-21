@@ -33,6 +33,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_slide_animation.h"
 #include "window/window_session_controller.h"
 #include "window/themes/window_theme.h"
+#include "core/application.h"
+#include "core/core_settings.h"
+
+#include "media/streaming/media_streaming_instance.h"
+#include "media/streaming/media_streaming_document.h"
+#include "media/streaming/media_streaming_loader_local.h"
 
 #include "styles/style_polls.h"
 
@@ -42,6 +48,21 @@ namespace Window {
 namespace {
 
 constexpr auto kReactionRestrictionToastDuration = 5 * crl::time(1000);
+
+struct CachedWallpaper {
+	QString path;
+	QImage image;
+	QPixmap blurred;
+	int blurLevel = -1;
+	QSize lastFill;
+	std::shared_ptr<Media::Streaming::Document> streamingDocument;
+	std::unique_ptr<Media::Streaming::Instance> streamingInstance;
+	std::vector<QPointer<QWidget>> repaintWidgets;
+};
+inline CachedWallpaper &GetGlobalWallpaperCache() {
+	static CachedWallpaper cache;
+	return cache;
+}
 
 [[nodiscard]] rpl::producer<QString> PeerThemeTokenValue(
 		not_null<PeerData*> peer) {
@@ -382,6 +403,10 @@ void SectionWidget::PaintBackground(
 		clip = clip.translated(0, -fromy);
 	}
 	const auto fill = QSize(widget->width(), fillHeight);
+	auto &cacheWidget = GetGlobalWallpaperCache();
+	if (std::find(cacheWidget.repaintWidgets.begin(), cacheWidget.repaintWidgets.end(), widget.get()) == cacheWidget.repaintWidgets.end()) {
+		cacheWidget.repaintWidgets.push_back(widget.get());
+	}
 	PaintBackground(p, theme, fill, clip, paused);
 }
 
@@ -391,6 +416,152 @@ void SectionWidget::PaintBackground(
 		QSize fill,
 		QRect clip,
 		bool paused) {
+	if (Core::App().settings().liveWallpaperEnabled()) {
+		const auto path = Core::App().settings().liveWallpaperPath();
+		if (!path.isEmpty()) {
+			auto &cache = GetGlobalWallpaperCache();
+			const auto blur = Core::App().settings().liveWallpaperBlur();
+
+			if (cache.path != path) {
+				cache.path = path;
+				cache.image = QImage();
+				cache.blurred = QPixmap();
+				cache.blurLevel = -1;
+				cache.lastFill = QSize();
+				cache.streamingDocument.reset();
+				cache.streamingInstance.reset();
+
+				const auto lower = path.toLower();
+				const auto isVideo = lower.endsWith(u".mp4"_q)
+					|| lower.endsWith(u".mov"_q)
+					|| lower.endsWith(u".avi"_q)
+					|| lower.endsWith(u".mkv"_q)
+					|| lower.endsWith(u".webm"_q);
+
+				if (!isVideo) {
+					cache.image = QImage(path);
+				} else {
+					cache.streamingDocument = std::make_shared<Media::Streaming::Document>(
+						Media::Streaming::MakeFileLoader(path)
+					);
+					cache.streamingInstance = std::make_unique<Media::Streaming::Instance>(
+						cache.streamingDocument,
+						nullptr
+					);
+					cache.streamingInstance->lockPlayer();
+					
+					cache.streamingInstance->player().updates(
+					) | rpl::on_next_error([=](Media::Streaming::Update &&update) {
+						v::match(update.data, [&](const Media::Streaming::UpdateVideo &) {
+							auto &cacheWidgets = GetGlobalWallpaperCache().repaintWidgets;
+							for (auto it = cacheWidgets.begin(); it != cacheWidgets.end(); ) {
+								if (*it) {
+									(*it)->update();
+									++it;
+								} else {
+									it = cacheWidgets.erase(it);
+								}
+							}
+						}, [](auto &&) {});
+					}, [=](Media::Streaming::Error &&) {
+						auto &cacheWidgets = GetGlobalWallpaperCache().repaintWidgets;
+						for (auto it = cacheWidgets.begin(); it != cacheWidgets.end(); ) {
+							if (*it) {
+								(*it)->update();
+								++it;
+							} else {
+								it = cacheWidgets.erase(it);
+							}
+						}
+					}, cache.streamingInstance->lifetime());
+					
+					auto options = Media::Streaming::PlaybackOptions();
+					options.mode = Media::Streaming::Mode::Video; // Muted video only!
+					options.loop = true;
+					cache.streamingInstance->play(options);
+				}
+			}
+
+			if (cache.streamingInstance) {
+				if (cache.streamingInstance->failed()) {
+					QImage err(fill, QImage::Format_RGB32);
+					err.fill(QColor(100, 0, 0));
+					QPainter p2(&err);
+					p2.setPen(Qt::white);
+					p2.setFont(QFont(u"Arial"_q, 18, QFont::Bold));
+					p2.drawText(err.rect(), Qt::AlignCenter, u"Error decoding video:\n"_q + path);
+					cache.image = err;
+					cache.blurLevel = -1;
+				} else if (cache.streamingInstance->ready()) {
+					auto request = Media::Streaming::FrameRequest();
+					request.resize = fill;
+					request.outer = fill;
+					auto frame = cache.streamingInstance->frame(request);
+					if (!frame.isNull()) {
+						// The frame is returned as ARGB32 premultiplied.
+						cache.image = frame;
+						cache.blurLevel = -1; // force rebuild blur
+						cache.streamingInstance->markFrameShown();
+					}
+				}
+				
+				if (!cache.streamingInstance->failed() && cache.image.isNull()) {
+					QImage loading(fill, QImage::Format_RGB32);
+					loading.fill(Qt::black);
+					QPainter p2(&loading);
+					p2.setPen(Qt::white);
+					p2.setFont(QFont(u"Arial"_q, 16));
+					p2.drawText(loading.rect(), Qt::AlignCenter, u"Loading video wallpaper..."_q);
+					cache.image = loading;
+					cache.blurLevel = -1;
+				}
+			}
+
+			if (!cache.image.isNull()) {
+				const auto needRebuildBlur = (cache.blurLevel != blur)
+					|| (cache.lastFill != fill)
+					|| cache.blurred.isNull();
+
+				if (needRebuildBlur) {
+					cache.blurLevel = blur;
+					cache.lastFill = fill;
+
+					auto scaled = cache.image.scaled(
+						fill,
+						Qt::KeepAspectRatioByExpanding,
+						Qt::SmoothTransformation);
+
+					if (fill.width() < scaled.width()) {
+						const auto x = (scaled.width() - fill.width()) / 2;
+						scaled = scaled.copy(x, 0, fill.width(), fill.height());
+					} else if (fill.height() < scaled.height()) {
+						const auto y = (scaled.height() - fill.height()) / 2;
+						scaled = scaled.copy(0, y, fill.width(), fill.height());
+					}
+
+					if (blur > 0) {
+						const auto blurRadius = 1 + (blur * 40 / 100);
+						const auto downscale = std::max(1, blurRadius / 3);
+						const auto small = scaled.scaled(
+							fill / downscale,
+							Qt::IgnoreAspectRatio,
+							Qt::SmoothTransformation);
+						scaled = small.scaled(
+							fill,
+							Qt::IgnoreAspectRatio,
+							Qt::SmoothTransformation);
+					}
+
+					cache.blurred = QPixmap::fromImage(scaled);
+				}
+
+				p.setRenderHint(QPainter::SmoothPixmapTransform);
+				p.drawPixmap(QRect(QPoint(), fill), cache.blurred, cache.blurred.rect());
+				return; // Early return to avoid drawing standard background!
+			}
+		}
+	}
+
 	const auto &background = theme->background();
 	if (background.colorForFill) {
 		p.fillRect(clip, *background.colorForFill);
@@ -513,6 +684,7 @@ void SectionWidget::PaintBackground(
 			prepared.size());
 		p.drawImage(rects.to, prepared, rects.from);
 	}
+
 }
 
 void SectionWidget::paintEvent(QPaintEvent *e) {
