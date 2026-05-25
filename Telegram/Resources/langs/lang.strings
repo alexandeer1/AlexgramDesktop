@@ -8353,4 +8353,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_alexgram_live_wallpaper_reset" = "Reset";
 "lng_settings_alexgram_live_wallpaper_clear" = "Clear Wallpaper";
 
+"lng_settings_alexgram_video_downloader" = "Video Downloader";
+"lng_settings_alexgram_video_downloader_about" = "Download videos from YouTube, TikTok, Twitter, and thousands of other sites directly to your device. Tools are downloaded automatically on first use.";
+
 // Keys finished

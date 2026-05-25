@@ -1694,6 +1694,12 @@ PRIVATE
     alex/alex_mapper.h
     alex/messages_storage.cpp
     alex/messages_storage.h
+    alex/video_downloader_manager.cpp
+    alex/video_downloader_manager.h
+    alex/video_downloader_engine.cpp
+    alex/video_downloader_engine.h
+    alex/video_downloader_window.cpp
+    alex/video_downloader_window.h
     alex/libs/sqlite/sqlite3.c
     settings/sections/settings_alex.cpp
     settings/sections/settings_alex.h

@@ -110,3 +110,6 @@ install_docker.sh
 run_build.bat
 run_release_build.bat
 build_out.txt
+test.py
+test_json.py
+test_map.cpp

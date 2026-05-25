@@ -34,6 +34,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <rpl/filter.h>
 #include <rpl/range.h>
 #include "api/api_updates.h"
+#include "alex/video_downloader_manager.h"
+#include "alex/video_downloader_engine.h"
+#include "alex/video_downloader_window.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/widgets/discrete_sliders.h"
 #include "alex/alex_database.h"
@@ -164,6 +167,15 @@ void BuildAlexgramMainSection(SectionBuilder &builder) {	builder.addDivider();
 	ghostModeArgs.icon = { &st::menuIconStealth };
 	builder.addSectionButton(std::move(ghostModeArgs));
 
+	builder.addButton({
+		.title = tr::lng_settings_alexgram_video_downloader(),
+		.icon = { &st::menuIconDownload },
+		.onClick = [=] {
+			Alex::VideoDownloaderWindow::Show();
+		},
+	});
+
+	builder.addDividerText(tr::lng_settings_alexgram_video_downloader_about());
 	builder.addSkip();
 }
 
