@@ -10,8 +10,10 @@
 
 namespace Webview::WebKitGTK::Library {
 
-ResolveResult Resolve(const Platform &platform) {
-	const auto lib = (platform != Platform::X11
+ResolveResult Resolve(const Platform &platform, WindowMode mode) {
+	const auto allowGtk4 = (platform != Platform::X11)
+		|| (mode == WindowMode::External);
+	const auto lib = (allowGtk4
 			? base::Platform::LoadLibrary("libwebkitgtk-6.0.so.4", RTLD_NODELETE)
 			: nullptr)
 		?: base::Platform::LoadLibrary("libwebkit2gtk-4.1.so.0", RTLD_NODELETE)
@@ -21,8 +23,11 @@ ResolveResult Resolve(const Platform &platform) {
 		&& LOAD_LIBRARY_SYMBOL(lib, gtk_widget_get_type)
 		&& (LOAD_LIBRARY_SYMBOL(lib, gtk_window_set_child)
 			|| (LOAD_LIBRARY_SYMBOL(lib, gtk_container_get_type)
-				&& LOAD_LIBRARY_SYMBOL(lib, gtk_container_add)))
+			&& LOAD_LIBRARY_SYMBOL(lib, gtk_container_add)))
 		&& LOAD_LIBRARY_SYMBOL(lib, gtk_window_new)
+		&& LOAD_LIBRARY_SYMBOL(lib, gtk_window_set_title)
+		&& LOAD_LIBRARY_SYMBOL(lib, gtk_window_set_decorated)
+		&& LOAD_LIBRARY_SYMBOL(lib, gtk_window_set_default_size)
 		&& LOAD_LIBRARY_SYMBOL(lib, gtk_scrolled_window_new)
 		&& (LOAD_LIBRARY_SYMBOL(lib, gtk_window_destroy)
 			|| LOAD_LIBRARY_SYMBOL(lib, gtk_widget_destroy))
@@ -84,14 +89,54 @@ ResolveResult Resolve(const Platform &platform) {
 	if (!result) {
 		return ResolveResult::NoLibrary;
 	}
+	LOAD_LIBRARY_SYMBOL(lib, gtk_widget_set_app_paintable);
 	LOAD_LIBRARY_SYMBOL(lib, gtk_widget_show_all);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_widget_get_window);
 	LOAD_LIBRARY_SYMBOL(lib, gtk_widget_get_screen);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_widget_set_visual);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_widget_get_scale_factor);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_display_is_composited);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_screen_is_composited);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_screen_get_rgba_visual);
 	LOAD_LIBRARY_SYMBOL(lib, webkit_javascript_result_get_js_value);
 	LOAD_LIBRARY_SYMBOL(lib, webkit_website_data_manager_new);
 	LOAD_LIBRARY_SYMBOL(lib, webkit_web_context_new_with_website_data_manager);
 	LOAD_LIBRARY_SYMBOL(lib, gtk_gesture_click_new);
 	LOAD_LIBRARY_SYMBOL(lib, gtk_event_controller_key_new);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_event_controller_get_type);
 	LOAD_LIBRARY_SYMBOL(lib, gtk_widget_add_controller);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_window_begin_move_drag);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_window_begin_resize_drag);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_window_fullscreen);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_window_unfullscreen);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_native_get_surface);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_native_get_type);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_toplevel_get_type);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_x11_display_get_type);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_x11_screen_get_type);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_x11_surface_get_type);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_x11_window_get_type);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_wayland_toplevel_get_type);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_wayland_window_get_type);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_x11_surface_get_xid);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_x11_window_get_xid);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_window_set_shadow_width);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_toplevel_begin_move);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_toplevel_begin_resize);
+	LOAD_LIBRARY_SYMBOL(lib, gdk_toplevel_size_set_shadow_width);
+	LOAD_LIBRARY_SYMBOL(lib, gtk_scrolled_window_set_shadow_type);
+	if (gtk_native_get_surface) {
+		LOAD_LIBRARY_SYMBOL(lib, gdk_wayland_toplevel_export_handle);
+		LOAD_LIBRARY_SYMBOL(lib, gdk_wayland_toplevel_drop_exported_handle);
+		LOAD_LIBRARY_SYMBOL(lib, gdk_wayland_toplevel_unexport_handle);
+		LOAD_LIBRARY_SYMBOL(lib, gdk_surface_get_width);
+		LOAD_LIBRARY_SYMBOL(lib, gdk_surface_get_height);
+	} else if (gtk_widget_get_window) {
+		LOAD_LIBRARY_SYMBOL(lib, gdk_wayland_window_export_handle);
+		LOAD_LIBRARY_SYMBOL(lib, gdk_wayland_window_unexport_handle);
+		LOAD_LIBRARY_SYMBOL(lib, gdk_wayland_window_announce_csd);
+		LOAD_LIBRARY_SYMBOL(lib, gtk_window_get_size);
+	}
 	if (LOAD_LIBRARY_SYMBOL(lib, gdk_set_allowed_backends)) {
 		switch (platform) {
 		case Platform::Wayland:

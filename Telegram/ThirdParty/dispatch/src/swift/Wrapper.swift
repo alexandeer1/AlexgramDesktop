@@ -183,8 +183,12 @@ extension DispatchSource : DispatchSourceMachSend,
 #endif
 
 #if !os(Linux) && !os(Android) && !os(Windows)
-extension DispatchSource : DispatchSourceProcess,
-	DispatchSourceFileSystemObject {
+extension DispatchSource : DispatchSourceProcess {
+}
+#endif
+
+#if !os(Linux) && !os(Android) && !os(Windows) && !os(FreeBSD) && !os(OpenBSD)
+extension DispatchSource : DispatchSourceFileSystemObject {
 }
 #endif
 
@@ -303,7 +307,7 @@ public protocol DispatchSourceTimer : DispatchSourceProtocol {
 	func scheduleRepeating(wallDeadline: DispatchWallTime, interval: Double, leeway: DispatchTimeInterval)
 }
 
-#if !os(Linux) && !os(Android) && !os(Windows)
+#if !os(Linux) && !os(Android) && !os(Windows) && !os(OpenBSD)
 public protocol DispatchSourceFileSystemObject : DispatchSourceProtocol {
 	var handle: Int32 { get }
 

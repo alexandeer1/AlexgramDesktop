@@ -26,11 +26,10 @@ style::font WithFlags(
 		return font->monospace();
 	}
 	auto result = font;
-	if ((flags & TextBlockFlag::Bold) || (fontFlags & Flag::Bold)) {
+	if ((flags & TextBlockFlag::Bold)
+		|| (flags & TextBlockFlag::Semibold)
+		|| (fontFlags & Flag::Bold)) {
 		result = result->bold();
-	} else if ((flags & TextBlockFlag::Semibold)
-		|| (fontFlags & Flag::Semibold)) {
-		result = result->semibold();
 	}
 	if ((flags & TextBlockFlag::Italic) || (fontFlags & Flag::Italic)) {
 		result = result->italic();
@@ -43,8 +42,10 @@ style::font WithFlags(
 		|| (fontFlags & Flag::StrikeOut)) {
 		result = result->strikeout();
 	}
-	if (flags & TextBlockFlag::Tilde) { // Tilde fix in OpenSans.
-		result = result->semibold();
+	if ((flags & TextBlockFlag::Subscript)
+		|| (flags & TextBlockFlag::Superscript)
+		|| (fontFlags & Flag::SubOrSuper)) {
+		result = result->suborsuper();
 	}
 	return result;
 }
@@ -60,9 +61,10 @@ Qt::LayoutDirection UnpackParagraphDirection(bool ltr, bool rtl) {
 AbstractBlock::AbstractBlock(TextBlockType type, BlockDescriptor descriptor)
 : _position(descriptor.position)
 , _type(static_cast<uint16>(type))
+, _colorIndex(descriptor.colorIndex)
+, _bgIndex(descriptor.bgIndex)
 , _flags(descriptor.flags)
-, _linkIndex(descriptor.linkIndex)
-, _colorIndex(descriptor.colorIndex) {
+, _linkIndex(descriptor.linkIndex) {
 }
 
 uint16 AbstractBlock::position() const {
@@ -94,6 +96,10 @@ uint16 AbstractBlock::linkIndex() const {
 
 uint16 AbstractBlock::colorIndex() const {
 	return _colorIndex;
+}
+
+uint16 AbstractBlock::bgIndex() const {
+	return _bgIndex;
 }
 
 void AbstractBlock::setLinkIndex(uint16 index) {
@@ -267,6 +273,17 @@ int CountBlockHeight(
 		const style::TextStyle *st) {
 	return (block->type() == TextBlockType::Skip)
 		? static_cast<const SkipBlock*>(block)->height()
+		: (block->type() == TextBlockType::CustomEmoji)
+		? [&] {
+			const auto custom = static_cast<const CustomEmojiBlock*>(block)
+				->custom();
+			if (const auto metrics = custom->vertical(*st)) {
+				return metrics->height();
+			}
+			return st->lineHeight
+				? st->lineHeight
+				: st->font->height;
+		}()
 		: st->lineHeight
 		? st->lineHeight
 		: st->font->height;

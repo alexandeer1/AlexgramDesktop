@@ -6,6 +6,7 @@
 //
 #pragma once
 
+#include "ui/platform/ui_platform_utility.h"
 #include "webview/webview_common.h"
 
 #include <memory>
@@ -16,6 +17,9 @@
 #include <rpl/never.h>
 #include <rpl/producer.h>
 
+#include <QtCore/QMargins>
+#include <QtCore/QRect>
+#include <QtCore/QSize>
 #include <QtGui/QColor>
 
 // Inspired by https://github.com/webview/webview.
@@ -35,6 +39,12 @@ struct NavigationHistoryState {
 	friend inline constexpr bool operator==(
 		NavigationHistoryState,
 		NavigationHistoryState) = default;
+};
+
+struct PopupAnchor {
+	std::optional<QRect> geometry;
+	std::optional<QSize> outerSize;
+	Ui::Platform::ForeignParent transientParent;
 };
 
 class ZoomController {
@@ -65,8 +75,18 @@ public:
 	}
 
 	virtual void setOpaqueBg(QColor opaqueBg) = 0;
+	virtual void resize(int width, int height) {
+	}
+	virtual void setFullscreen(bool fullscreen) {
+	}
 
 	[[nodiscard]] virtual QWidget *widget() = 0;
+	[[nodiscard]] virtual void *winId() {
+		return nullptr;
+	}
+	[[nodiscard]] virtual PopupAnchor popupAnchor() {
+		return {};
+	}
 
 	virtual void refreshNavigationHistoryState() = 0;
 	[[nodiscard]] virtual auto navigationHistoryState()
@@ -77,7 +97,6 @@ public:
 	}
 
 };
-
 enum class DialogType {
 	Alert,
 	Confirm,
@@ -86,6 +105,8 @@ enum class DialogType {
 
 struct DialogArgs {
 	QWidget *parent = nullptr;
+	std::optional<QRect> anchorGeometry;
+	Ui::Platform::ForeignParent transientParent;
 	DialogType type = DialogType::Alert;
 	std::string value;
 	std::string text;
@@ -96,6 +117,8 @@ struct DialogResult {
 	std::string text;
 	bool accepted = false;
 };
+using AsyncDialogHandler = std::function<
+	bool(DialogArgs, std::function<void(DialogResult)>)>;
 
 struct DataResponse {
 	std::unique_ptr<DataStream> stream;
@@ -122,13 +145,20 @@ struct Config {
 	std::function<void(std::string)> messageHandler;
 	std::function<bool(std::string,bool)> navigationStartHandler;
 	std::function<void(bool)> navigationDoneHandler;
+	std::function<void()> externalWindowCloseHandler;
 	std::function<DialogResult(DialogArgs)> dialogHandler;
+	AsyncDialogHandler asyncDialogHandler;
 	std::function<DataResult(DataRequest)> dataRequestHandler;
 	std::string dataProtocolOverride;
 	std::string userDataPath;
 	std::string userDataToken;
 	bool debug = false;
 	bool safe = false;
+	WindowMode mode = WindowMode::Embedded;
+	WindowStyle windowStyle = WindowStyle::Default;
+	QMargins windowMargins;
+	QSize initialSize;
+	std::string shellMessageToken;
 };
 
 struct Available {

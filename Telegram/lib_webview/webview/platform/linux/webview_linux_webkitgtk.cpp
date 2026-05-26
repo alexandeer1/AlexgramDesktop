@@ -18,6 +18,9 @@
 #include "base/event_filter.h"
 #include "ui/gl/gl_detection.h"
 
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonObject>
 #include <QtCore/QUrl>
 #include <QtNetwork/QTcpSocket>
 #include <QtGui/QDesktopServices>
@@ -26,6 +29,10 @@
 #include <QtGui/QtEvents>
 #include <QtWidgets/QWidget>
 
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <vector>
 #ifdef DESKTOP_APP_WEBVIEW_WAYLAND_COMPOSITOR
 #include <QtQuickWidgets/QQuickWidget>
 #endif // DESKTOP_APP_WEBVIEW_WAYLAND_COMPOSITOR
@@ -52,6 +59,12 @@ constexpr auto kMasterObjectPath
 constexpr auto kHelperObjectPath
 	= "/org/desktop_app/GtkIntegration/Webview/Helper";
 constexpr auto kDataHost = "127.0.0.1";
+constexpr auto kExternalShellFallbackBackground = "#eeeeee";
+constexpr auto kMaxScriptMessageBytes = 1024 * 1024;
+constexpr auto kExternalMessageType = "tdesktop_external_bot_webapp";
+constexpr auto kExternalShellSource = "shell";
+constexpr auto kMaxPopupAnchorDimension = 32768;
+constexpr auto kMaxWaylandPopupAnchorHandleBytes = 4096;
 
 #ifdef DESKTOP_APP_WEBVIEW_WAYLAND_COMPOSITOR
 void (* const SetGraphicsApi)(QSGRendererInterface::GraphicsApi) =
@@ -75,16 +88,397 @@ inline std::string SocketPathToDBusAddress(const std::string &socketPath) {
 	return "unix:path=" + socketPath;
 }
 
+enum class ShellControlAction {
+	None,
+	BeginMove,
+	BeginResize,
+};
+
+enum class ShellControlParseStatus {
+	NotShellControl,
+	Invalid,
+	Valid,
+};
+
+struct ShellControlMessage {
+	ShellControlParseStatus status
+		= ShellControlParseStatus::NotShellControl;
+	ShellControlAction action = ShellControlAction::None;
+	QJsonObject arguments;
+};
+
+[[nodiscard]] std::optional<double> JsonNumber(
+		const QJsonObject &arguments,
+		const char *key) {
+	const auto value = arguments.value(QString::fromLatin1(key));
+	return value.isDouble()
+		? std::make_optional(value.toDouble())
+		: std::nullopt;
+}
+
+[[nodiscard]] std::string JavascriptMessageText(void *message) {
+	const auto value = jsc_value_to_string(
+		!webkit_javascript_result_get_js_value
+			? reinterpret_cast<JSCValue*>(message)
+			: webkit_javascript_result_get_js_value(
+				reinterpret_cast<WebKitJavascriptResult*>(message)));
+	const auto guard = gsl::finally([&] {
+		g_free(value);
+	});
+	return std::string(value);
+}
+
+[[nodiscard]] ShellControlAction ShellControlActionFromCommand(
+		const QString &command) {
+	if (command == "shell_begin_move") {
+		return ShellControlAction::BeginMove;
+	} else if (command == "shell_begin_resize") {
+		return ShellControlAction::BeginResize;
+	}
+	return ShellControlAction::None;
+}
+
+[[nodiscard]] bool IsExternalShellOrigin(const QString &origin) {
+	const auto url = QUrl(origin);
+	return url.isValid()
+		&& url.scheme() == "https"
+		&& url.host() == "web.telegram.org"
+		&& url.port(443) == 443
+		&& url.userInfo().isEmpty()
+		&& url.path().isEmpty()
+		&& url.query().isEmpty()
+		&& url.fragment().isEmpty();
+}
+
+[[nodiscard]] ShellControlMessage ParseShellControlMessage(
+		const std::string &message,
+		const std::string &shellMessageToken) {
+	const auto document = QJsonDocument::fromJson(
+		QByteArray::fromRawData(message.data(), int(message.size())));
+	if (document.isArray()) {
+		const auto list = document.array();
+		const auto action = ShellControlActionFromCommand(
+			list.at(0).toString());
+		return (action != ShellControlAction::None)
+			? ShellControlMessage{
+				.status = ShellControlParseStatus::Invalid,
+				.action = action,
+			}
+			: ShellControlMessage();
+	}
+	if (!document.isObject()) {
+		return {};
+	}
+
+	const auto object = document.object();
+	const auto action = ShellControlActionFromCommand(
+		object.value("eventType").toString());
+	if (action == ShellControlAction::None) {
+		return {};
+	}
+	const auto eventData = object.value("eventData");
+	if (object.value("type").toString() != kExternalMessageType
+		|| object.value("source").toString() != kExternalShellSource
+		|| object.value("token").toString().toStdString()
+			!= shellMessageToken
+		|| !IsExternalShellOrigin(object.value("origin").toString())
+		|| (!eventData.isUndefined() && !eventData.isObject())) {
+		return ShellControlMessage{
+			.status = ShellControlParseStatus::Invalid,
+			.action = action,
+		};
+	}
+
+	return ShellControlMessage{
+		.status = ShellControlParseStatus::Valid,
+		.action = action,
+		.arguments = eventData.isObject()
+			? eventData.toObject()
+			: QJsonObject(),
+	};
+}
+
+[[nodiscard]] int ShellControlButton(const QJsonObject &arguments) {
+	if (const auto button = JsonNumber(arguments, "gdkButton")) {
+		return static_cast<int>(*button);
+	} else if (const auto button = JsonNumber(arguments, "button")) {
+		const auto value = static_cast<int>(*button);
+		return (value >= 0 && value <= 2) ? (value + 1) : value;
+	}
+	return 1;
+}
+
+[[nodiscard]] guint32 ShellControlTimestamp(const QJsonObject &arguments) {
+	if (const auto timestamp = JsonNumber(arguments, "timestamp")) {
+		return static_cast<guint32>(*timestamp);
+	} else if (const auto timestamp = JsonNumber(arguments, "timeStamp")) {
+		return static_cast<guint32>(*timestamp);
+	} else if (const auto timestamp = JsonNumber(arguments, "time")) {
+		return static_cast<guint32>(*timestamp);
+	}
+	return 0;
+}
+
+[[nodiscard]] std::pair<double, double> ShellControlSurfacePosition(
+		const QJsonObject &arguments) {
+	const auto x = JsonNumber(arguments, "x").value_or(
+		JsonNumber(arguments, "clientX").value_or(0.));
+	const auto y = JsonNumber(arguments, "y").value_or(
+		JsonNumber(arguments, "clientY").value_or(0.));
+	return { x, y };
+}
+
+[[nodiscard]] std::optional<std::pair<int, int>> ShellControlRootPosition(
+		const QJsonObject &arguments) {
+	const auto x = JsonNumber(arguments, "rootX").value_or(
+		JsonNumber(arguments, "screenX").value_or(-1.));
+	const auto y = JsonNumber(arguments, "rootY").value_or(
+		JsonNumber(arguments, "screenY").value_or(-1.));
+	return (x >= 0.) && (y >= 0.)
+		? std::make_optional(std::pair<int, int>{
+			static_cast<int>(x),
+			static_cast<int>(y),
+		})
+		: std::nullopt;
+}
+
+[[nodiscard]] std::optional<int> ShellControlResizeEdge(
+		const QJsonObject &arguments) {
+	const auto value = arguments.value("edge");
+	if (value.isDouble()) {
+		const auto edge = static_cast<int>(value.toDouble(-1));
+		return (edge >= 0) && (edge <= 7)
+			? std::make_optional(edge)
+			: std::nullopt;
+	}
+	const auto edge = value.toString();
+	if (edge == "north_west" || edge == "north-west"
+		|| edge == "top_left" || edge == "top-left") {
+		return 0;
+	} else if (edge == "north" || edge == "top") {
+		return 1;
+	} else if (edge == "north_east" || edge == "north-east"
+		|| edge == "top_right" || edge == "top-right") {
+		return 2;
+	} else if (edge == "west" || edge == "left") {
+		return 3;
+	} else if (edge == "east" || edge == "right") {
+		return 4;
+	} else if (edge == "south_west" || edge == "south-west"
+		|| edge == "bottom_left" || edge == "bottom-left") {
+		return 5;
+	} else if (edge == "south" || edge == "bottom") {
+		return 6;
+	} else if (edge == "south_east" || edge == "south-east"
+		|| edge == "bottom_right" || edge == "bottom-right") {
+		return 7;
+	}
+	return std::nullopt;
+}
+
+[[nodiscard]] bool ValidPopupAnchorSize(int width, int height) {
+	return (width > 0)
+		&& (height > 0)
+		&& (width <= kMaxPopupAnchorDimension)
+		&& (height <= kMaxPopupAnchorDimension);
+}
+
+[[nodiscard]] Ui::Platform::ForeignParent PopupAnchorParent(
+		int parentPlatform,
+		std::uint64_t x11Id,
+		const std::string &waylandHandle) {
+	const auto type = Ui::Platform::ForeignParent::Type(parentPlatform);
+	switch (type) {
+	case Ui::Platform::ForeignParent::Type::None:
+		return {};
+	case Ui::Platform::ForeignParent::Type::X11:
+		return x11Id
+			? Ui::Platform::ForeignParent{
+				.type = type,
+				.x11 = static_cast<uintptr_t>(x11Id),
+			}
+			: Ui::Platform::ForeignParent();
+	case Ui::Platform::ForeignParent::Type::Wayland:
+		return (!waylandHandle.empty()
+			&& waylandHandle.size() <= kMaxWaylandPopupAnchorHandleBytes)
+			? Ui::Platform::ForeignParent{
+				.type = type,
+				.wayland = QString::fromUtf8(
+					waylandHandle.data(),
+					int(waylandHandle.size())),
+			}
+			: Ui::Platform::ForeignParent();
+	}
+	return {};
+}
+
+[[nodiscard]] std::optional<QRect> PopupAnchorGeometry(
+		bool hasGeometry,
+		int x,
+		int y,
+		int width,
+		int height) {
+	return (hasGeometry && ValidPopupAnchorSize(width, height))
+		? std::make_optional(QRect(x, y, width, height))
+		: std::nullopt;
+}
+
+[[nodiscard]] std::optional<QSize> PopupAnchorOuterSize(
+		bool hasOuterSize,
+		int width,
+		int height) {
+	return (hasOuterSize && ValidPopupAnchorSize(width, height))
+		? std::make_optional(QSize(width, height))
+		: std::nullopt;
+}
+
+[[nodiscard]] bool IsGdkX11Display(GdkDisplay *display) {
+	return display
+		&& gdk_x11_display_get_type
+		&& GDK_IS_X11_DISPLAY(display);
+}
+
+[[nodiscard]] bool IsGdkX11Screen(GdkScreen *screen) {
+	return screen
+		&& gdk_x11_screen_get_type
+		&& GDK_IS_X11_SCREEN(screen);
+}
+
+[[nodiscard]] bool IsGdkX11Surface(GdkSurface *surface) {
+	return surface
+		&& gdk_x11_surface_get_type
+		&& GDK_IS_X11_SURFACE(surface);
+}
+
+[[nodiscard]] bool IsGdkX11Window(GdkWindow *window) {
+	return window
+		&& gdk_x11_window_get_type
+		&& GDK_IS_X11_WINDOW(window);
+}
+
+[[nodiscard]] bool IsGdkWaylandWindow(GdkWindow *window) {
+	return window
+		&& gdk_wayland_window_get_type
+		&& GDK_IS_WAYLAND_WINDOW(window);
+}
+
+[[nodiscard]] GdkSurface *GtkNativeSurface(GtkWidget *window) {
+	return window
+		&& gtk_native_get_surface
+		&& gtk_native_get_type
+		&& GTK_IS_NATIVE(window)
+		? gtk_native_get_surface(GTK_NATIVE(window))
+		: nullptr;
+}
+
+[[nodiscard]] GdkToplevel *GdkToplevelFromSurface(GdkSurface *surface) {
+	return surface
+		&& gdk_toplevel_get_type
+		&& GDK_IS_TOPLEVEL(surface)
+		? GDK_TOPLEVEL(surface)
+		: nullptr;
+}
+
+[[nodiscard]] GdkToplevel *GdkWaylandToplevelFromSurface(
+		GdkSurface *surface) {
+	return surface
+		&& gdk_wayland_toplevel_get_type
+		&& GDK_IS_WAYLAND_TOPLEVEL(surface)
+		? GDK_WAYLAND_TOPLEVEL(surface)
+		: nullptr;
+}
+
+[[nodiscard]] unsigned long X11WindowId(GtkWidget *window) {
+	if (!window) {
+		return 0;
+	}
+	const auto isX11Window = [&] {
+		if (gtk_widget_get_display) {
+			if (const auto display = gtk_widget_get_display(window)) {
+				return IsGdkX11Display(display);
+			}
+		}
+		return gtk_widget_get_screen
+			&& IsGdkX11Screen(gtk_widget_get_screen(window));
+	}();
+	if (!isX11Window) {
+		return 0;
+	}
+	if (gtk_native_get_surface && gdk_x11_surface_get_xid) {
+		if (const auto surface = GtkNativeSurface(window)) {
+			if (IsGdkX11Surface(surface)) {
+				if (const auto xid = gdk_x11_surface_get_xid(surface)) {
+					return xid;
+				}
+			}
+		}
+	}
+	if (gtk_widget_get_window && gdk_x11_window_get_xid) {
+		if (const auto gdkWindow = gtk_widget_get_window(window)) {
+			if (IsGdkX11Window(gdkWindow)) {
+				return gdk_x11_window_get_xid(gdkWindow);
+			}
+		}
+	}
+	return 0;
+}
+
+[[nodiscard]] bool SetupWindowAlpha(GtkWidget *window) {
+	if (!window) {
+		return false;
+	}
+	if (gtk_widget_set_visual
+		&& gtk_widget_get_screen
+		&& gdk_screen_get_rgba_visual) {
+		const auto screen = gtk_widget_get_screen(window);
+		if (!screen) {
+			return false;
+		}
+		const auto composited = !gdk_screen_is_composited
+			|| gdk_screen_is_composited(screen);
+		const auto visual = composited
+			? gdk_screen_get_rgba_visual(screen)
+			: nullptr;
+		if (!visual) {
+			return false;
+		}
+		gtk_widget_set_visual(window, visual);
+		return true;
+	}
+	if (gdk_display_is_composited && gtk_widget_get_display) {
+		if (const auto display = gtk_widget_get_display(window)) {
+			return gdk_display_is_composited(display);
+		}
+	}
+	return true;
+}
+
+void SetFrameExtents(GtkWidget *window, const QMargins &margins) {
+	if (gdk_window_set_shadow_width && gtk_widget_get_window) {
+		if (const auto gdkWindow = gtk_widget_get_window(window)) {
+			gdk_window_set_shadow_width(
+				gdkWindow,
+				std::max(margins.left(), 0),
+				std::max(margins.right(), 0),
+				std::max(margins.top(), 0),
+				std::max(margins.bottom(), 0));
+			return;
+		}
+	}
+}
+
 class Instance final : public Interface, public ::base::has_weak_ptr {
 public:
-	Instance(bool remoting = true);
+	Instance(
+		bool remoting = true,
+		WindowMode mode = WindowMode::Embedded);
 	~Instance();
 
 	bool create(Config config);
 	ResolveResult resolve();
 	bool startDataServer();
 
-	void resize(int w, int h);
+	void resize(int w, int h) override;
 
 	void navigate(std::string url) override;
 	void navigateToData(std::string id) override;
@@ -95,8 +489,11 @@ public:
 
 	void focus() override;
 	void setInteractionHandler(Fn<void()> handler) override;
+	void setFullscreen(bool fullscreen) override;
 
 	QWidget *widget() override;
+	void *winId() override;
+	PopupAnchor popupAnchor() override;
 
 	void refreshNavigationHistoryState() override;
 	auto navigationHistoryState()
@@ -108,6 +505,16 @@ public:
 
 private:
 	void scriptMessageReceived(void *message);
+	bool handleShellControlMessage(const std::string &message);
+	void beginShellMove(const QJsonObject &arguments);
+	void beginShellResize(const QJsonObject &arguments);
+	[[nodiscard]] bool notifyExternalWindowClosed();
+	[[nodiscard]] bool customWindowFrame() const;
+	[[nodiscard]] bool transparentWindowBackground() const;
+	void announceCustomWindowFrame();
+	[[nodiscard]] QMargins windowFrameExtents() const;
+	void ensureToplevelFrameExtents();
+	void updateWindowFrameExtents();
 
 	bool loadFailed(
 		WebKitLoadEvent loadEvent,
@@ -121,6 +528,8 @@ private:
 		WebKitPolicyDecisionType decisionType);
 	GtkWidget *createAnother(WebKitNavigationAction *action);
 	bool scriptDialog(WebKitScriptDialog *dialog);
+	void evalNow(std::string js);
+	void scheduleQueuedEvals();
 	bool authenticate(WebKitAuthenticationRequest *request);
 
 	std::string dataDomain();
@@ -139,10 +548,22 @@ private:
 
 	void registerMasterMethodHandlers();
 	void registerHelperMethodHandlers();
-
-	void *winId();
+	void scheduleWaylandPopupAnchorExport();
+	void ensureWaylandPopupAnchorExport();
+	void clearWaylandPopupAnchorExport();
+	void setWaylandPopupAnchorFromToplevel(
+		std::uint64_t generation,
+		GdkToplevel *toplevel,
+		QString handle);
+	void setWaylandPopupAnchorFromWindow(
+		std::uint64_t generation,
+		GdkWindow *window,
+		QString handle);
+	[[nodiscard]] PopupAnchor popupAnchorSnapshot();
 
 	bool _remoting = false;
+	WindowMode _mode = WindowMode::Embedded;
+	WindowStyle _windowStyle = WindowStyle::Default;
 	bool _connected = false;
 	Master _master;
 	Helper _helper;
@@ -159,31 +580,53 @@ private:
 	GtkWidget *_window = nullptr;
 	WebKitWebView *_webview = nullptr;
 	GtkCssProvider *_backgroundProvider = nullptr;
+	QString _waylandPopupAnchorHandle;
+	std::uint64_t _waylandPopupAnchorGeneration = 0;
+	bool _waylandPopupAnchorExportScheduled = false;
+	bool _waylandPopupAnchorExportAllowed = false;
+	bool _waylandPopupAnchorExportPending = false;
+	QMargins _windowMargins;
+	bool _windowSupportsAlpha = true;
+	bool _fullscreen = false;
+	GdkToplevel *_frameExtentsToplevel = nullptr;
+	gulong _frameExtentsComputeSizeHandler = 0;
 
 	bool _debug = false;
 	std::function<void(std::string)> _messageHandler;
 	std::function<bool(std::string,bool)> _navigationStartHandler;
 	std::function<void(bool)> _navigationDoneHandler;
+	std::function<void()> _externalWindowCloseHandler;
 	std::function<DialogResult(DialogArgs)> _dialogHandler;
+	AsyncDialogHandler _asyncDialogHandler;
 	rpl::variable<NavigationHistoryState> _navigationHistoryState;
 	std::function<DataResult(DataRequest)> _dataRequestHandler;
 	Fn<void()> _interactionHandler;
 	std::uint16_t _dataPort = 0;
 	std::string _dataPassword;
+	std::string _shellMessageToken;
+	int _scriptDialogDepth = 0;
+	std::vector<std::string> _queuedScriptDialogEvals;
 	bool _loadFailed = false;
+	bool _externalWindowCloseAllowed = false;
+	bool _externalWindowClosePending = false;
 
 };
 
-Instance::Instance(bool remoting)
-: _remoting(remoting) {
+Instance::Instance(bool remoting, WindowMode mode)
+: _remoting(remoting)
+, _mode(mode) {
 	if (_remoting) {
-		_platform = ::Platform::IsX11()
-			? Platform::X11
+		if (_mode == WindowMode::External) {
+			_platform = Platform::Any;
+		} else {
+			_platform = ::Platform::IsX11()
+				? Platform::X11
 #ifdef DESKTOP_APP_WEBVIEW_WAYLAND_COMPOSITOR
-			: Platform::Wayland;
+				: Platform::Wayland;
 #else // DESKTOP_APP_WEBVIEW_WAYLAND_COMPOSITOR
-			: Platform::Any;
+				: Platform::Any;
 #endif // !DESKTOP_APP_WEBVIEW_WAYLAND_COMPOSITOR
+		}
 		_glBackend = Ui::GL::ChooseBackendDefault(Ui::GL::CheckCapabilities());
 		startProcess();
 	}
@@ -197,6 +640,12 @@ Instance::~Instance() {
 		g_object_unref(_backgroundProvider);
 	}
 	if (_window) {
+		if (_frameExtentsToplevel && _frameExtentsComputeSizeHandler) {
+			g_signal_handler_disconnect(
+				_frameExtentsToplevel,
+				_frameExtentsComputeSizeHandler);
+		}
+		clearWaylandPopupAnchorExport();
 		if (gtk_window_destroy) {
 			gtk_window_destroy(GTK_WINDOW(_window));
 		} else {
@@ -261,8 +710,13 @@ bool Instance::create(Config config) {
 	_messageHandler = std::move(config.messageHandler);
 	_navigationStartHandler = std::move(config.navigationStartHandler);
 	_navigationDoneHandler = std::move(config.navigationDoneHandler);
+	_externalWindowCloseHandler = std::move(config.externalWindowCloseHandler);
 	_dialogHandler = std::move(config.dialogHandler);
+	_asyncDialogHandler = std::move(config.asyncDialogHandler);
 	_dataRequestHandler = std::move(config.dataRequestHandler);
+	_windowStyle = config.windowStyle;
+	_windowMargins = config.windowMargins;
+	_shellMessageToken = std::move(config.shellMessageToken);
 
 	if (_remoting) {
 		if (!_helper) {
@@ -277,12 +731,33 @@ bool Instance::create(Config config) {
 		const auto b = config.opaqueBg.blue();
 		const auto a = config.opaqueBg.alpha();
 		const auto path = config.userDataPath;
-		_helper.call_create(debug, r, g, b, a, path, crl::guard(&guard, [&](
-				GObject::Object source_object,
-				Gio::AsyncResult res) {
-			success = _helper.call_create_finish(res, nullptr);
-			GLib::MainContext::default_().wakeup();
-		}));
+		const auto mode = int(config.mode);
+		const auto windowStyle = int(config.windowStyle);
+		const auto shellMessageToken = _shellMessageToken;
+		const auto margins = config.windowMargins;
+		const auto initialSize = config.initialSize;
+		_helper.call_create(
+			debug,
+			r,
+			g,
+			b,
+			a,
+			path,
+			mode,
+			windowStyle,
+			shellMessageToken,
+			margins.left(),
+			margins.right(),
+			margins.top(),
+			margins.bottom(),
+			initialSize.width(),
+			initialSize.height(),
+			crl::guard(&guard, [&](
+					GObject::Object source_object,
+					Gio::AsyncResult res) {
+				success = _helper.call_create_finish(res, nullptr);
+				GLib::MainContext::default_().wakeup();
+			}));
 
 		while (!success && _connected) {
 			GLib::MainContext::default_().iteration(true);
@@ -292,22 +767,34 @@ bool Instance::create(Config config) {
 			return false;
 		}
 
+		const auto createPlaceholder = [&](bool forwardResize) {
+			_widget = ::base::make_unique_q<QWidget>(config.parent);
+			if (forwardResize) {
+				::base::install_event_filter(_widget, [=](
+						not_null<QEvent*> e) {
+					if (e->type() == QEvent::Resize) {
+						const auto size = static_cast<QResizeEvent*>(
+							e.get()
+						)->size();
+						resize(size.width(), size.height());
+					}
+					return ::base::EventFilterResult::Continue;
+				});
+			}
+			if (_mode != WindowMode::External) {
+				_widget->show();
+			}
+		};
+
 		switch (_platform) {
 		case Platform::Any:
-			_widget = ::base::make_unique_q<QWidget>(config.parent);
-			::base::install_event_filter(_widget, [=](
-					not_null<QEvent*> e) {
-				if (e->type() == QEvent::Resize) {
-					const auto size = static_cast<QResizeEvent*>(
-						e.get()
-					)->size();
-					resize(size.width(), size.height());
-				}
-				return ::base::EventFilterResult::Continue;
-			});
-			_widget->show();
+			createPlaceholder(_mode != WindowMode::External);
 			break;
 		case Platform::X11:
+			if (_mode == WindowMode::External) {
+				createPlaceholder(false);
+				break;
+			}
 			const auto window = QPointer(QWindow::fromWinId(WId(winId())));
 			::base::install_event_filter(window, [=](
 					not_null<QEvent*> e) {
@@ -332,15 +819,53 @@ bool Instance::create(Config config) {
 		return true;
 	}
 
-	_window = _platform == Platform::X11
+	_window = (_platform == Platform::X11)
+		&& (_mode != WindowMode::External)
 		? gtk_plug_new(0)
 		: gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	if (gtk_widget_add_css_class) {
-		gtk_widget_add_css_class(_window, "webviewWindow");
-	} else {
-		gtk_style_context_add_class(
-			gtk_widget_get_style_context(_window),
-			"webviewWindow");
+	if (_mode == WindowMode::External) {
+		if (customWindowFrame()) {
+			gtk_window_set_decorated(GTK_WINDOW(_window), FALSE);
+		}
+		if (config.initialSize.width() > 0 && config.initialSize.height() > 0) {
+			gtk_window_set_default_size(
+				GTK_WINDOW(_window),
+				config.initialSize.width(),
+				config.initialSize.height());
+		}
+		const auto windowType = G_OBJECT_TYPE(_window);
+		if (g_signal_lookup("close-request", windowType)) {
+			g_signal_connect_swapped(
+				_window,
+				"close-request",
+				G_CALLBACK(+[](Instance *instance) -> gboolean {
+					return instance->notifyExternalWindowClosed();
+				}),
+				this);
+		} else if (g_signal_lookup("delete-event", windowType)) {
+			g_signal_connect_swapped(
+				_window,
+				"delete-event",
+				G_CALLBACK(+[](Instance *instance, GdkEvent*) -> gboolean {
+					return instance->notifyExternalWindowClosed();
+				}),
+				this);
+		}
+	}
+	const auto customPainting = (_mode != WindowMode::External)
+		|| customWindowFrame();
+	if (customPainting && gtk_widget_set_app_paintable) {
+		gtk_widget_set_app_paintable(_window, TRUE);
+	}
+	_windowSupportsAlpha = customPainting ? SetupWindowAlpha(_window) : false;
+	if (customPainting) {
+		if (gtk_widget_add_css_class) {
+			gtk_widget_add_css_class(_window, "webviewWindow");
+		} else {
+			gtk_style_context_add_class(
+				gtk_widget_get_style_context(_window),
+				"webviewWindow");
+		}
 	}
 	_backgroundProvider = gtk_css_provider_new();
 	if (gtk_style_context_add_provider_for_display) {
@@ -398,16 +923,42 @@ bool Instance::create(Config config) {
 		_window,
 		"destroy",
 		G_CALLBACK(+[](Instance *instance) {
+			instance->clearWaylandPopupAnchorExport();
 			instance->_window = nullptr;
 			Gio::Application::get_default().quit();
+		}),
+		this);
+	g_signal_connect_swapped(
+		_window,
+		"realize",
+		G_CALLBACK(+[](Instance *instance) {
+			instance->announceCustomWindowFrame();
+			instance->updateWindowFrameExtents();
+		}),
+		this);
+	g_signal_connect_swapped(
+		_window,
+		"map",
+		G_CALLBACK(+[](Instance *instance) {
+			instance->scheduleWaylandPopupAnchorExport();
+		}),
+		this);
+	g_signal_connect_swapped(
+		_window,
+		"unmap",
+		G_CALLBACK(+[](Instance *instance) {
+			instance->_waylandPopupAnchorExportAllowed = false;
+			instance->clearWaylandPopupAnchorExport();
 		}),
 		this);
 	g_signal_connect_swapped(
 		_webview,
 		"web-process-terminated",
 		G_CALLBACK(+[](
-			Instance *instance,
-			WebKitWebProcessTerminationReason reason) {
+				Instance *instance,
+				WebKitWebProcessTerminationReason reason) {
+			LOG(("WebView Error: Web process terminated: %1.").arg(
+				int(reason)));
 			Gio::Application::get_default().quit();
 		}),
 		this);
@@ -415,9 +966,13 @@ bool Instance::create(Config config) {
 		_webview,
 		"notify::is-web-process-responsive",
 		G_CALLBACK(+[](
-			Instance *instance,
-			GParamSpec *pspec) {
-			Gio::Application::get_default().quit();
+				Instance *instance,
+				GParamSpec *pspec) {
+			if (!webkit_web_view_get_is_web_process_responsive(
+					instance->_webview)) {
+				LOG(("WebView Error: Web process became unresponsive."));
+				Gio::Application::get_default().quit();
+			}
 		}),
 		this);
 	g_signal_connect_swapped(
@@ -498,7 +1053,10 @@ bool Instance::create(Config config) {
 			return instance->authenticate(request);
 		}),
 		this);
-	if (gtk_widget_add_controller) {
+	if (gtk_widget_add_controller
+		&& gtk_gesture_click_new
+		&& gtk_event_controller_key_new
+		&& gtk_event_controller_get_type) {
 		const auto click = gtk_gesture_click_new();
 		g_signal_connect_swapped(
 			click,
@@ -515,7 +1073,7 @@ bool Instance::create(Config config) {
 			this);
 		gtk_widget_add_controller(
 			GTK_WIDGET(_webview),
-			(GtkEventController*)click);
+			GTK_EVENT_CONTROLLER(click));
 		const auto key = gtk_event_controller_key_new();
 		g_signal_connect_swapped(
 			key,
@@ -564,7 +1122,19 @@ bool Instance::create(Config config) {
 		manager,
 		"external",
 		nullptr);
-	const GdkRGBA rgba{ 0.f, 0.f, 0.f, 0.f, };
+	init(std::string("window.TelegramDesktopWindowAlphaSupported = ")
+		+ (_windowSupportsAlpha ? "true" : "false")
+		+ ";");
+	const auto fallback = customWindowFrame() && !_windowSupportsAlpha;
+	const GdkRGBA rgba = fallback
+		? GdkRGBA{ 238.f / 255.f, 238.f / 255.f, 238.f / 255.f, 1.f }
+		: transparentWindowBackground()
+		? GdkRGBA{ 0.f, 0.f, 0.f, 0.f }
+		: GdkRGBA{
+			float(config.opaqueBg.redF()),
+			float(config.opaqueBg.greenF()),
+			float(config.opaqueBg.blueF()),
+			float(config.opaqueBg.alphaF()) };
 	webkit_web_view_set_background_color(_webview, &rgba);
 	if (_debug) {
 		WebKitSettings *settings = webkit_web_view_get_settings(_webview);
@@ -574,6 +1144,11 @@ bool Instance::create(Config config) {
 		gtk_window_set_child(GTK_WINDOW(_window), GTK_WIDGET(_webview));
 	} else if (_platform == Platform::X11) {
 		const auto x11SizeFix = gtk_scrolled_window_new(nullptr, nullptr);
+		if (gtk_scrolled_window_set_shadow_type) {
+			gtk_scrolled_window_set_shadow_type(
+				x11SizeFix,
+				GTK_SHADOW_NONE);
+		}
 		gtk_container_add(GTK_CONTAINER(x11SizeFix), GTK_WIDGET(_webview));
 		gtk_container_add(GTK_CONTAINER(_window), x11SizeFix);
 	} else {
@@ -584,33 +1159,193 @@ bool Instance::create(Config config) {
 	} else {
 		gtk_widget_show_all(_window);
 	}
+	updateWindowFrameExtents();
 	init(R"(
 if (window === window.top) {
-	window.external = {
+	const external = Object.freeze({
 		invoke: function(s) {
 			window.webkit.messageHandlers.external.postMessage(s);
 		}
-	};
+	});
+	Object.defineProperty(window, 'external', {
+		value: external,
+		configurable: false,
+		writable: false
+	});
 })");
 
 	return webkit_web_view_get_is_web_process_responsive(_webview);
 }
 
 void Instance::scriptMessageReceived(void *message) {
+	const auto text = JavascriptMessageText(message);
+	if (text.size() > kMaxScriptMessageBytes) {
+		return;
+	}
+	if (handleShellControlMessage(text)) {
+		return;
+	}
 	if (!_master) {
 		return;
 	}
-	_master.call_message_received([&] {
-		const auto s = jsc_value_to_string(
-			!webkit_javascript_result_get_js_value
-				? reinterpret_cast<JSCValue*>(message)
-				: webkit_javascript_result_get_js_value(
-					reinterpret_cast<WebKitJavascriptResult*>(message)));
-		const auto guard = gsl::finally([&] {
-			g_free(s);
-		});
-		return std::string(s);
-	}(), nullptr);
+	_master.call_message_received(text, nullptr);
+}
+
+bool Instance::handleShellControlMessage(const std::string &message) {
+	if (_mode != WindowMode::External) {
+		return false;
+	}
+	const auto parsed = ParseShellControlMessage(message, _shellMessageToken);
+	if (parsed.status == ShellControlParseStatus::NotShellControl) {
+		return false;
+	} else if (parsed.status == ShellControlParseStatus::Invalid
+		|| !_window
+		|| _shellMessageToken.empty()) {
+		return true;
+	}
+	switch (parsed.action) {
+	case ShellControlAction::BeginMove:
+		beginShellMove(parsed.arguments);
+		return true;
+	case ShellControlAction::BeginResize:
+		beginShellResize(parsed.arguments);
+		return true;
+	case ShellControlAction::None:
+		return false;
+	}
+	return false;
+}
+
+void Instance::beginShellMove(const QJsonObject &arguments) {
+	if (gdk_toplevel_begin_move && gtk_native_get_surface) {
+		if (const auto toplevel = GdkToplevelFromSurface(
+				GtkNativeSurface(_window))) {
+			const auto [x, y] = ShellControlSurfacePosition(arguments);
+			gdk_toplevel_begin_move(
+				toplevel,
+				nullptr,
+				ShellControlButton(arguments),
+				x,
+				y,
+				ShellControlTimestamp(arguments));
+			return;
+		}
+	}
+	if (gtk_window_begin_move_drag) {
+		if (const auto position = ShellControlRootPosition(arguments)) {
+			gtk_window_begin_move_drag(
+				GTK_WINDOW(_window),
+				ShellControlButton(arguments),
+				position->first,
+				position->second,
+				ShellControlTimestamp(arguments));
+		}
+	}
+}
+
+void Instance::beginShellResize(const QJsonObject &arguments) {
+	const auto edge = ShellControlResizeEdge(arguments);
+	if (!edge) {
+		return;
+	}
+	if (gdk_toplevel_begin_resize && gtk_native_get_surface) {
+		if (const auto toplevel = GdkToplevelFromSurface(
+				GtkNativeSurface(_window))) {
+			const auto [x, y] = ShellControlSurfacePosition(arguments);
+			gdk_toplevel_begin_resize(
+				toplevel,
+				static_cast<GdkSurfaceEdge>(*edge),
+				nullptr,
+				ShellControlButton(arguments),
+				x,
+				y,
+				ShellControlTimestamp(arguments));
+			return;
+		}
+	}
+	if (gtk_window_begin_resize_drag) {
+		if (const auto position = ShellControlRootPosition(arguments)) {
+			gtk_window_begin_resize_drag(
+				GTK_WINDOW(_window),
+				static_cast<GdkWindowEdge>(*edge),
+				ShellControlButton(arguments),
+				position->first,
+				position->second,
+				ShellControlTimestamp(arguments));
+		}
+	}
+}
+
+bool Instance::customWindowFrame() const {
+	return (_mode == WindowMode::External)
+		&& (_windowStyle == WindowStyle::Frameless);
+}
+
+bool Instance::transparentWindowBackground() const {
+	return _windowSupportsAlpha
+		&& (customWindowFrame()
+			|| (_mode != WindowMode::External
+				&& _platform == Platform::Wayland));
+}
+
+void Instance::announceCustomWindowFrame() {
+	if (!customWindowFrame()
+		|| !gtk_widget_get_window
+		|| !gdk_wayland_window_announce_csd) {
+		return;
+	}
+	if (const auto gdkWindow = gtk_widget_get_window(_window);
+		IsGdkWaylandWindow(gdkWindow)) {
+		gdk_wayland_window_announce_csd(gdkWindow);
+	}
+}
+
+QMargins Instance::windowFrameExtents() const {
+	return (!_fullscreen && customWindowFrame() && _windowSupportsAlpha)
+		? _windowMargins
+		: QMargins();
+}
+
+void Instance::ensureToplevelFrameExtents() {
+	if (!gdk_toplevel_size_set_shadow_width
+		|| !gtk_native_get_surface
+		|| !_window) {
+		return;
+	}
+	const auto toplevel = GdkToplevelFromSurface(GtkNativeSurface(_window));
+	if (!toplevel || toplevel == _frameExtentsToplevel) {
+		return;
+	}
+	if (_frameExtentsToplevel && _frameExtentsComputeSizeHandler) {
+		g_signal_handler_disconnect(
+			_frameExtentsToplevel,
+			_frameExtentsComputeSizeHandler);
+	}
+	_frameExtentsToplevel = toplevel;
+	_frameExtentsComputeSizeHandler = g_signal_connect_after(
+		toplevel,
+		"compute-size",
+		G_CALLBACK(+[](
+				GdkToplevel*,
+				GdkToplevelSize *size,
+				Instance *instance) {
+			const auto margins = instance->windowFrameExtents();
+			gdk_toplevel_size_set_shadow_width(
+				size,
+				std::max(margins.left(), 0),
+				std::max(margins.right(), 0),
+				std::max(margins.top(), 0),
+				std::max(margins.bottom(), 0));
+		}),
+		this);
+}
+
+void Instance::updateWindowFrameExtents() {
+	if (!customWindowFrame() || !_window) {
+		return;
+	}
+	ensureToplevelFrameExtents();
+	SetFrameExtents(_window, windowFrameExtents());
 }
 
 bool Instance::loadFailed(
@@ -691,6 +1426,12 @@ bool Instance::scriptDialog(WebKitScriptDialog *dialog) {
 	std::string result;
 	if (_master) {
 		auto loop = GLib::MainLoop::new_();
+		++_scriptDialogDepth;
+		const auto guard = gsl::finally([&] {
+			if (--_scriptDialogDepth == 0) {
+				scheduleQueuedEvals();
+			}
+		});
 		_master.call_script_dialog(
 			type,
 			text ? text : "",
@@ -892,7 +1633,7 @@ ResolveResult Instance::resolve() {
 
 		const ::base::has_weak_ptr guard;
 		std::optional<ResolveResult> result;
-		_helper.call_resolve(crl::guard(&guard, [&](
+		_helper.call_resolve(int(_mode), crl::guard(&guard, [&](
 				GObject::Object source_object,
 				Gio::AsyncResult res) {
 			const auto reply = _helper.call_resolve_finish(res);
@@ -918,7 +1659,7 @@ ResolveResult Instance::resolve() {
 		return result.value_or(ResolveResult::IPCFailure);
 	}
 
-	return Resolve(_platform);
+	return Resolve(_platform, _mode);
 }
 
 void Instance::navigate(std::string url) {
@@ -984,6 +1725,14 @@ void Instance::eval(std::string js) {
 		return;
 	}
 
+	if (_scriptDialogDepth > 0) {
+		_queuedScriptDialogEvals.push_back(std::move(js));
+		return;
+	}
+	evalNow(std::move(js));
+}
+
+void Instance::evalNow(std::string js) {
 	if (webkit_web_view_evaluate_javascript) {
 		webkit_web_view_evaluate_javascript(
 			_webview,
@@ -1004,6 +1753,34 @@ void Instance::eval(std::string js) {
 	}
 }
 
+void Instance::scheduleQueuedEvals() {
+	if (_queuedScriptDialogEvals.empty()) {
+		return;
+	}
+	struct QueuedEvals {
+		::base::weak_ptr<Instance> instance;
+		std::vector<std::string> scripts;
+	};
+	auto queued = std::make_unique<QueuedEvals>();
+	queued->instance = this;
+	queued->scripts = std::move(_queuedScriptDialogEvals);
+	_queuedScriptDialogEvals = {};
+	g_idle_add_full(
+		G_PRIORITY_DEFAULT_IDLE,
+		+[](gpointer userData) -> gboolean {
+			const auto queued = std::unique_ptr<QueuedEvals>(
+				static_cast<QueuedEvals*>(userData));
+			if (const auto instance = queued->instance.get()) {
+				for (auto &script : queued->scripts) {
+					instance->eval(std::move(script));
+				}
+			}
+			return G_SOURCE_REMOVE;
+		},
+		queued.release(),
+		nullptr);
+}
+
 void Instance::focus() {
 	if (const auto widget = _widget.get()) {
 		widget->activateWindow();
@@ -1016,6 +1793,199 @@ void Instance::setInteractionHandler(Fn<void()> handler) {
 
 QWidget *Instance::widget() {
 	return _widget.get();
+}
+
+void Instance::scheduleWaylandPopupAnchorExport() {
+	struct WaylandPopupAnchorSchedule {
+		::base::weak_ptr<Instance> instance;
+	};
+	if (!_window
+		|| _waylandPopupAnchorExportAllowed
+		|| _waylandPopupAnchorExportScheduled
+		|| _waylandPopupAnchorExportPending
+		|| !_waylandPopupAnchorHandle.isEmpty()) {
+		return;
+	}
+	_waylandPopupAnchorExportScheduled = true;
+	const auto schedule = new WaylandPopupAnchorSchedule{
+		.instance = this,
+	};
+	g_idle_add_full(
+		G_PRIORITY_DEFAULT_IDLE,
+		+[](gpointer userData) -> gboolean {
+			const auto schedule = std::unique_ptr<WaylandPopupAnchorSchedule>(
+				static_cast<WaylandPopupAnchorSchedule*>(userData));
+			if (const auto instance = schedule->instance.get()) {
+				if (!instance->_waylandPopupAnchorExportScheduled) {
+					return G_SOURCE_REMOVE;
+				}
+				instance->_waylandPopupAnchorExportScheduled = false;
+				instance->_waylandPopupAnchorExportAllowed = true;
+				instance->ensureWaylandPopupAnchorExport();
+			}
+			return G_SOURCE_REMOVE;
+		},
+		schedule,
+		nullptr);
+}
+
+void Instance::ensureWaylandPopupAnchorExport() {
+	struct WaylandPopupAnchorRequest {
+		::base::weak_ptr<Instance> instance;
+		std::uint64_t generation = 0;
+	};
+	const auto destroyRequest = +[](gpointer userData) {
+		delete static_cast<WaylandPopupAnchorRequest*>(userData);
+	};
+	if (!_window
+		|| !_waylandPopupAnchorExportAllowed
+		|| _waylandPopupAnchorExportPending
+		|| !_waylandPopupAnchorHandle.isEmpty()) {
+		return;
+	}
+	if (gtk_native_get_surface && gdk_wayland_toplevel_export_handle) {
+		if (const auto toplevel = GdkWaylandToplevelFromSurface(
+				GtkNativeSurface(_window))) {
+			const auto generation = ++_waylandPopupAnchorGeneration;
+			auto request = std::make_unique<WaylandPopupAnchorRequest>(
+				WaylandPopupAnchorRequest{
+					.instance = this,
+					.generation = generation,
+				});
+			_waylandPopupAnchorExportPending = true;
+			const auto exported = gdk_wayland_toplevel_export_handle(
+				toplevel,
+				+[](
+						GdkToplevel *toplevel,
+						const char *handle,
+						gpointer userData) {
+					const auto request = static_cast<WaylandPopupAnchorRequest*>(
+						userData);
+					if (const auto instance = request->instance.get()) {
+						instance->setWaylandPopupAnchorFromToplevel(
+							request->generation,
+							toplevel,
+							handle ? QString::fromUtf8(handle) : QString());
+					}
+				},
+				request.get(),
+				destroyRequest);
+			if (exported) {
+				request.release();
+			} else {
+				_waylandPopupAnchorExportPending = false;
+			}
+			return;
+		}
+	}
+	if (gtk_widget_get_window && gdk_wayland_window_export_handle) {
+		if (const auto gdkWindow = gtk_widget_get_window(_window);
+			IsGdkWaylandWindow(gdkWindow)) {
+			const auto generation = ++_waylandPopupAnchorGeneration;
+			auto request = std::make_unique<WaylandPopupAnchorRequest>(
+				WaylandPopupAnchorRequest{
+					.instance = this,
+					.generation = generation,
+				});
+			_waylandPopupAnchorExportPending = true;
+			const auto exported = gdk_wayland_window_export_handle(
+				gdkWindow,
+				+[](
+						GdkWindow *window,
+						const char *handle,
+						gpointer userData) {
+					const auto request = static_cast<WaylandPopupAnchorRequest*>(
+						userData);
+					if (const auto instance = request->instance.get()) {
+						instance->setWaylandPopupAnchorFromWindow(
+							request->generation,
+							window,
+							handle ? QString::fromUtf8(handle) : QString());
+					}
+				},
+				request.get(),
+				destroyRequest);
+			if (exported) {
+				request.release();
+			} else {
+				_waylandPopupAnchorExportPending = false;
+			}
+		}
+	}
+}
+
+void Instance::clearWaylandPopupAnchorExport() {
+	const auto hadExport = _waylandPopupAnchorExportPending
+		|| !_waylandPopupAnchorHandle.isEmpty();
+	_waylandPopupAnchorExportScheduled = false;
+	const auto handle = _waylandPopupAnchorHandle;
+	_waylandPopupAnchorExportPending = false;
+	_waylandPopupAnchorHandle = QString();
+	if (!hadExport) {
+		return;
+	}
+	++_waylandPopupAnchorGeneration;
+	if (!_window) {
+		return;
+	}
+	if (gtk_native_get_surface) {
+		if (const auto toplevel = GdkWaylandToplevelFromSurface(
+				GtkNativeSurface(_window))) {
+			if (!handle.isEmpty()) {
+				if (gdk_wayland_toplevel_drop_exported_handle) {
+					const auto data = handle.toUtf8();
+					gdk_wayland_toplevel_drop_exported_handle(
+						toplevel,
+						data.constData());
+				} else if (gdk_wayland_toplevel_unexport_handle) {
+					gdk_wayland_toplevel_unexport_handle(toplevel);
+				}
+			}
+			return;
+		}
+	}
+	if (gtk_widget_get_window && gdk_wayland_window_unexport_handle) {
+		if (const auto gdkWindow = gtk_widget_get_window(_window);
+			IsGdkWaylandWindow(gdkWindow)
+			&& !handle.isEmpty()) {
+			gdk_wayland_window_unexport_handle(gdkWindow);
+		}
+	}
+}
+
+void Instance::setWaylandPopupAnchorFromToplevel(
+		std::uint64_t generation,
+		GdkToplevel *toplevel,
+		QString handle) {
+	if (generation != _waylandPopupAnchorGeneration) {
+		if (!handle.isEmpty()) {
+			if (gdk_wayland_toplevel_drop_exported_handle) {
+				const auto data = handle.toUtf8();
+				gdk_wayland_toplevel_drop_exported_handle(
+					toplevel,
+					data.constData());
+			} else if (gdk_wayland_toplevel_unexport_handle) {
+				gdk_wayland_toplevel_unexport_handle(toplevel);
+			}
+		}
+		return;
+	}
+	_waylandPopupAnchorExportPending = false;
+	_waylandPopupAnchorHandle = std::move(handle);
+}
+
+void Instance::setWaylandPopupAnchorFromWindow(
+		std::uint64_t generation,
+		GdkWindow *window,
+		QString handle) {
+	if (generation != _waylandPopupAnchorGeneration) {
+		if (!handle.isEmpty() && gdk_wayland_window_unexport_handle) {
+			gdk_wayland_window_unexport_handle(window);
+		}
+		return;
+	}
+	_waylandPopupAnchorExportPending = false;
+	_waylandPopupAnchorHandle = std::move(handle);
 }
 
 void *Instance::winId() {
@@ -1043,11 +2013,155 @@ void *Instance::winId() {
 		return ret.value_or(nullptr);
 	}
 
-	if (_platform != Platform::X11) {
-		return nullptr;
+	if (_mode == WindowMode::External) {
+		const auto xid = X11WindowId(_window);
+		return xid ? reinterpret_cast<void*>(xid) : nullptr;
 	}
 
-	return reinterpret_cast<void*>(gtk_plug_get_id(GTK_PLUG(_window)));
+	return (_platform == Platform::X11)
+		? reinterpret_cast<void*>(gtk_plug_get_id(GTK_PLUG(_window)))
+		: nullptr;
+}
+
+PopupAnchor Instance::popupAnchorSnapshot() {
+	auto result = PopupAnchor();
+	if (!_window) {
+		return result;
+	}
+	if (gtk_native_get_surface && gdk_surface_get_width && gdk_surface_get_height) {
+		if (const auto surface = GtkNativeSurface(_window)) {
+			const auto width = gdk_surface_get_width(surface);
+			const auto height = gdk_surface_get_height(surface);
+			if (width > 0 && height > 0) {
+				result.outerSize = QSize(width, height);
+			}
+		}
+	} else if (gtk_window_get_size) {
+		auto width = gint(0);
+		auto height = gint(0);
+		gtk_window_get_size(GTK_WINDOW(_window), &width, &height);
+		if (width > 0 && height > 0) {
+			result.outerSize = QSize(width, height);
+		}
+	}
+	if (const auto nativeId = X11WindowId(_window)) {
+		clearWaylandPopupAnchorExport();
+		result.transientParent = {
+			.type = Ui::Platform::ForeignParent::Type::X11,
+			.x11 = nativeId,
+		};
+		return result;
+	}
+	if (gtk_native_get_surface) {
+		if (GdkWaylandToplevelFromSurface(GtkNativeSurface(_window))) {
+			ensureWaylandPopupAnchorExport();
+			if (!_waylandPopupAnchorHandle.isEmpty()) {
+				result.transientParent = {
+					.type = Ui::Platform::ForeignParent::Type::Wayland,
+					.wayland = _waylandPopupAnchorHandle,
+				};
+			}
+			return result;
+		}
+	}
+	if (gtk_widget_get_window) {
+		if (const auto gdkWindow = gtk_widget_get_window(_window);
+			IsGdkWaylandWindow(gdkWindow)) {
+			ensureWaylandPopupAnchorExport();
+			if (!_waylandPopupAnchorHandle.isEmpty()) {
+				result.transientParent = {
+					.type = Ui::Platform::ForeignParent::Type::Wayland,
+					.wayland = _waylandPopupAnchorHandle,
+				};
+			}
+			return result;
+		}
+	}
+	clearWaylandPopupAnchorExport();
+	return result;
+}
+
+bool Instance::notifyExternalWindowClosed() {
+	if (_mode != WindowMode::External) {
+		return false;
+	} else if (_externalWindowCloseAllowed) {
+		return false;
+	} else if (_externalWindowClosePending) {
+		return true;
+	} else if (!_master) {
+		return false;
+	}
+	_externalWindowClosePending = true;
+	const auto weak = ::base::make_weak(this);
+	_master.call_external_window_closed([=](
+			GObject::Object,
+			Gio::AsyncResult res) {
+		if (const auto instance = weak.get()) {
+			instance->_externalWindowClosePending = false;
+			if (instance->_master) {
+				instance->_master.call_external_window_closed_finish(res);
+			}
+			const auto window = instance->_window;
+			if (!window) {
+				return;
+			}
+			instance->_externalWindowCloseAllowed = true;
+			if (gtk_window_destroy) {
+				gtk_window_destroy(GTK_WINDOW(window));
+			} else {
+				gtk_widget_destroy(window);
+			}
+		}
+	});
+	return true;
+}
+
+PopupAnchor Instance::popupAnchor() {
+	if (_remoting) {
+		if (!_helper) {
+			return {};
+		}
+
+		const ::base::has_weak_ptr guard;
+		std::optional<PopupAnchor> ret;
+		_helper.call_get_window_anchor(crl::guard(&guard, [&](
+				GObject::Object source_object,
+				Gio::AsyncResult res) {
+			auto result = PopupAnchor();
+			if (const auto reply = _helper.call_get_window_anchor_finish(res)) {
+				if (const auto parent = PopupAnchorParent(
+						std::get<1>(*reply),
+						std::get<2>(*reply),
+						std::get<3>(*reply))) {
+					result.transientParent = parent;
+				}
+				if (const auto geometry = PopupAnchorGeometry(
+						std::get<4>(*reply),
+						std::get<5>(*reply),
+						std::get<6>(*reply),
+						std::get<7>(*reply),
+						std::get<8>(*reply))) {
+					result.geometry = *geometry;
+				}
+				if (const auto outerSize = PopupAnchorOuterSize(
+						std::get<9>(*reply),
+						std::get<10>(*reply),
+						std::get<11>(*reply))) {
+					result.outerSize = *outerSize;
+				}
+			}
+			ret = std::move(result);
+			GLib::MainContext::default_().wakeup();
+		}));
+
+		while (!ret && _connected) {
+			GLib::MainContext::default_().iteration(true);
+		}
+
+		return ret.value_or(PopupAnchor());
+	}
+
+	return popupAnchorSnapshot();
 }
 
 void Instance::refreshNavigationHistoryState() {
@@ -1081,11 +2195,31 @@ void Instance::setOpaqueBg(QColor opaqueBg) {
 		return;
 	}
 
-	const auto background = std::format(
-		".webviewWindow {{background: {};}}",
-		_platform == Platform::Wayland
+	auto background = std::format(R"(
+		.webviewWindow,
+		window.webviewWindow,
+		window.webviewWindow.background {{
+			background: {};
+			box-shadow: none;
+		}}
+	)",
+		transparentWindowBackground()
 			? "transparent"
+			: customWindowFrame()
+			? kExternalShellFallbackBackground
 			: opaqueBg.name().toStdString());
+
+	if (customWindowFrame()) {
+		background += R"(
+		window.webviewWindow.csd,
+		window.webviewWindow.solid-csd,
+		window.webviewWindow.ssd,
+		window.webviewWindow decoration {
+			box-shadow: none;
+			margin: 0;
+		}
+	)";
+	}
 
 	if (gtk_css_provider_load_from_string) {
 		gtk_css_provider_load_from_string(
@@ -1098,6 +2232,7 @@ void Instance::setOpaqueBg(QColor opaqueBg) {
 			-1,
 			nullptr);
 	}
+	updateWindowFrameExtents();
 }
 
 void Instance::resize(int w, int h) {
@@ -1110,10 +2245,38 @@ void Instance::resize(int w, int h) {
 		return;
 	}
 
+	if (_mode == WindowMode::External) {
+		gtk_window_set_default_size(GTK_WINDOW(_window), w, h);
+		return;
+	}
 	gtk_widget_set_size_request(_window, w, h);
 	GLib::timeout_add_seconds_once(1, crl::guard(this, [=] {
-		gtk_widget_set_size_request(_window, -1, -1);
+		if (_window) {
+			gtk_widget_set_size_request(_window, -1, -1);
+		}
 	}));
+}
+
+void Instance::setFullscreen(bool fullscreen) {
+	if (_remoting) {
+		if (!_helper) {
+			return;
+		}
+
+		_helper.call_set_fullscreen(fullscreen, nullptr);
+		return;
+	}
+	if (!_window) {
+		return;
+	} else if (!gtk_window_fullscreen || !gtk_window_unfullscreen) {
+		return;
+	} else if (fullscreen) {
+		gtk_window_fullscreen(GTK_WINDOW(_window));
+	} else {
+		gtk_window_unfullscreen(GTK_WINDOW(_window));
+	}
+	_fullscreen = fullscreen;
+	updateWindowFrameExtents();
 }
 
 void Instance::startProcess() {
@@ -1285,6 +2448,10 @@ void Instance::stopProcess() {
 void Instance::updateHistoryStates() {
 	const auto url = webkit_web_view_get_uri(_webview);
 	const auto title = webkit_web_view_get_title(_webview);
+	if (((_platform == Platform::Any) || (_mode == WindowMode::External))
+		&& _window) {
+		gtk_window_set_title(GTK_WINDOW(_window), title ? title : "");
+	}
 	_master.call_navigation_state_update(
 		url ? url : "",
 		title ? title : "",
@@ -1371,6 +2538,16 @@ void Instance::registerMasterMethodHandlers() {
 		return true;
 	});
 
+	_master.signal_handle_external_window_closed().connect([=](
+			Master,
+			Gio::DBusMethodInvocation invocation) {
+		if (_externalWindowCloseHandler) {
+			_externalWindowCloseHandler();
+		}
+		_master.complete_external_window_closed(invocation);
+		return true;
+	});
+
 	_master.signal_handle_script_dialog().connect([=](
 			Master,
 			Gio::DBusMethodInvocation invocation,
@@ -1388,11 +2565,30 @@ void Instance::registerMasterMethodHandlers() {
 			? DialogType::Alert
 			: DialogType::Confirm;
 
-		const auto result = _dialogHandler(DialogArgs{
+		auto args = DialogArgs{
 			.type = dialogType,
 			.value = value,
 			.text = text,
-		});
+		};
+
+		if (_asyncDialogHandler) {
+			const auto weak = ::base::make_weak(this);
+			const auto handled = _asyncDialogHandler(args, [=](
+					DialogResult result) mutable {
+				if (!weak || !_master) {
+					return;
+				}
+				_master.complete_script_dialog(
+					invocation,
+					result.accepted,
+					result.text);
+			});
+			if (handled) {
+				return true;
+			}
+		}
+
+		const auto result = _dialogHandler(std::move(args));
 
 		_master.complete_script_dialog(
 			invocation,
@@ -1548,11 +2744,36 @@ void Instance::registerHelperMethodHandlers() {
 			int g,
 			int b,
 			int a,
-			const std::string &path) {
+			const std::string &path,
+			int mode,
+			int windowStyle,
+			const std::string &shellMessageToken,
+			int marginLeft,
+			int marginRight,
+			int marginTop,
+			int marginBottom,
+			int initialWidth,
+			int initialHeight) {
+		const auto windowMode = (mode == int(WindowMode::External))
+			? WindowMode::External
+			: WindowMode::Embedded;
+		const auto frameStyle = (windowStyle == int(WindowStyle::Frameless))
+			? WindowStyle::Frameless
+			: WindowStyle::Default;
+		_mode = windowMode;
 		if (create({
 			.opaqueBg = QColor(r, g, b, a),
 			.userDataPath = path,
 			.debug = debug,
+			.mode = windowMode,
+			.windowStyle = frameStyle,
+			.windowMargins = QMargins(
+				marginLeft,
+				marginTop,
+				marginRight,
+				marginBottom),
+			.initialSize = QSize(initialWidth, initialHeight),
+			.shellMessageToken = shellMessageToken,
 		})) {
 			_helper.complete_create(invocation);
 		} else {
@@ -1571,7 +2792,11 @@ void Instance::registerHelperMethodHandlers() {
 
 	_helper.signal_handle_resolve().connect([=](
 			Helper,
-			Gio::DBusMethodInvocation invocation) {
+			Gio::DBusMethodInvocation invocation,
+			int mode) {
+		_mode = (mode == int(WindowMode::External))
+			? WindowMode::External
+			: WindowMode::Embedded;
 		_helper.complete_resolve(invocation, int(resolve()));
 		return true;
 	});
@@ -1592,6 +2817,15 @@ void Instance::registerHelperMethodHandlers() {
 			int h) {
 		resize(w, h);
 		_helper.complete_resize(invocation);
+		return true;
+	});
+
+	_helper.signal_handle_set_fullscreen().connect([=](
+			Helper,
+			Gio::DBusMethodInvocation invocation,
+			bool fullscreen) {
+		setFullscreen(fullscreen);
+		_helper.complete_set_fullscreen(invocation);
 		return true;
 	});
 
@@ -1633,6 +2867,28 @@ void Instance::registerHelperMethodHandlers() {
 			reinterpret_cast<uint64>(winId()));
 		return true;
 	});
+
+	_helper.signal_handle_get_window_anchor().connect([=](
+			Helper,
+			Gio::DBusMethodInvocation invocation) {
+		const auto anchor = popupAnchorSnapshot();
+		const auto geometry = anchor.geometry.value_or(QRect());
+		const auto outerSize = anchor.outerSize.value_or(QSize());
+		_helper.complete_get_window_anchor(
+			invocation,
+			int(anchor.transientParent.type),
+			uint64(anchor.transientParent.x11),
+			anchor.transientParent.wayland.toStdString(),
+			anchor.geometry.has_value(),
+			geometry.x(),
+			geometry.y(),
+			geometry.width(),
+			geometry.height(),
+			anchor.outerSize.has_value(),
+			outerSize.width(),
+			outerSize.height());
+		return true;
+	});
 }
 
 } // namespace
@@ -1658,7 +2914,7 @@ Available Availability() {
 }
 
 std::unique_ptr<Interface> CreateInstance(Config config) {
-	auto result = std::make_unique<Instance>();
+	auto result = std::make_unique<Instance>(true, config.mode);
 	if (!result->create(std::move(config))) {
 		return nullptr;
 	}

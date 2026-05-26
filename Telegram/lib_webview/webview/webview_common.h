@@ -14,6 +14,16 @@
 
 namespace Webview {
 
+enum class WindowMode {
+	Embedded,
+	External,
+};
+
+enum class WindowStyle {
+	Default,
+	Frameless,
+};
+
 struct StorageId {
 	QString path;
 	QByteArray token;

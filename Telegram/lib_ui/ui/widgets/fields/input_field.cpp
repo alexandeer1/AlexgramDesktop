@@ -11,11 +11,13 @@
 #include "base/qt/qt_common_adapters.h"
 #include "base/invoke_queued.h"
 #include "base/qthelp_regex.h"
+#include "base/qthelp_url.h"
 #include "base/random.h"
 #include "ui/platform/ui_platform_utility.h"
 #include "emoji_suggestions_helper.h"
 #include "ui/text/text.h"
 #include "ui/text/text_html_tags.h"
+#include "ui/basic_click_handlers.h"
 #include "ui/text/text_renderer.h" // kQuoteCollapsedLines
 #include "ui/widgets/fields/custom_field_object.h"
 #include "ui/widgets/labels.h"
@@ -39,6 +41,8 @@
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QTextEdit>
 #include <QShortcut>
+
+#include <private/qkeymapper_p.h>
 
 #include <crl/crl_async.h>
 
@@ -184,6 +188,88 @@ QVariant InputDocument::loadResource(int type, const QUrl &name) {
 	const auto htmlMention = StartingMention(QStringView(htmlText));
 	return htmlMention.isEmpty()
 		|| StartingMention(QStringView(plainText)) == htmlMention;
+}
+
+// Sometimes browsers, like Firefox, for copying the address bar
+// put URL in text/plain and <a href=URL>PageTitle</a> in text/html
+// We want to ignore such text/html and paste plain URL in those cases.
+[[nodiscard]] bool HtmlIsSingleLinkOfPlainUrl(
+		const TextWithTags &parsed,
+		const QString &plainText) {
+	const auto plain = plainText.trimmed();
+	if (plain.isEmpty()
+		|| parsed.tags.size() != 1
+		|| parsed.tags.front().offset != 0
+		|| parsed.tags.front().length != int(parsed.text.size())) {
+		return false;
+	}
+	auto href = QString();
+	const auto &tag = parsed.tags.front().id;
+	for (const auto &single : TextUtilities::SplitTags(tag)) {
+		if (InputField::IsValidMarkdownLink(single)
+				&& !TextUtilities::IsMentionLink(single)) {
+			href = single.toString();
+		}
+	}
+	if (href.isEmpty()) {
+		return false;
+	}
+	const auto protocolMatch = qthelp::RegExpProtocol().match(plain);
+	if (protocolMatch.hasMatch()
+			&& qthelp::IsGoodProtocol(protocolMatch.captured(1))) {
+		return true;
+	}
+	const auto domainMatch = qthelp::RegExpDomainExplicit().match(plain);
+	return domainMatch.hasMatch() && domainMatch.capturedStart() == 0;
+}
+
+// Detects Ctrl+Shift+V (or any "Paste shortcut with extra Shift") in a way
+// that survives non-Latin keyboard layouts. QKeyEvent::matches() only looks
+// at the layout-translated key(), so on Russian etc. the V key reports as
+// Cyrillic М and stripping Shift is not enough. QKeyMapper::possibleKeys()
+// returns the Latin fallback as one of the alternatives, which is exactly
+// what QShortcutMap uses for plain Ctrl+V to keep working across layouts.
+[[nodiscard]] bool IsPasteWithShift(not_null<QKeyEvent*> e) {
+	if (!(e->modifiers() & Qt::ShiftModifier)) {
+		return false;
+	}
+	const auto bindings = QKeySequence::keyBindings(QKeySequence::Paste);
+	if (bindings.empty()) {
+		return false;
+	}
+	const auto match = [&](Qt::KeyboardModifiers mods, int key) {
+		if (!(mods & Qt::ShiftModifier)) {
+			return false;
+		}
+		const auto combined = (int(mods & ~Qt::ShiftModifier) | key)
+			& ~int(Qt::KeypadModifier | Qt::GroupSwitchModifier);
+		const auto sequence = QKeySequence(combined);
+		for (const auto &binding : bindings) {
+			if (binding == sequence) {
+				return true;
+			}
+		}
+		return false;
+	};
+	if (match(e->modifiers(), e->key())) {
+		return true;
+	}
+	const auto possible = QKeyMapper::possibleKeys(e);
+	for (const auto &p : possible) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+		if (match(p.keyboardModifiers(), int(p.key()))) {
+			return true;
+		}
+#else // Qt >= 6.7.0
+		const auto mods = Qt::KeyboardModifiers(
+			p & Qt::KeyboardModifierMask);
+		const auto key = p & ~int(Qt::KeyboardModifierMask);
+		if (match(mods, key)) {
+			return true;
+		}
+#endif // Qt < 6.7.0
+	}
+	return false;
 }
 
 [[nodiscard]] QStringView FindBlockTag(QStringView tag) {
@@ -1324,7 +1410,6 @@ struct FormattingAction {
 		InsertEmoji,
 		InsertCustomEmoji,
 		RemoveCustomEmoji,
-		TildeFont,
 		RemoveTag,
 		RemoveNewline,
 		ClearInstantReplace,
@@ -1339,8 +1424,6 @@ struct FormattingAction {
 
 	Type type = Type::Invalid;
 	EmojiPtr emoji = nullptr;
-	bool isTilde = false;
-	QString tildeTag;
 	QString existingTags;
 	QString customEmojiText;
 	QString customEmojiLink;
@@ -3043,13 +3126,6 @@ bool InputField::isRedoAvailable() const {
 }
 
 void InputField::processFormatting(int insertPosition, int insertEnd) {
-	// Tilde formatting.
-	const auto ratio = style::DevicePixelRatio();
-	const auto processTilde = (_st.style.font->f.pixelSize() * ratio == 13)
-		&& (_st.style.font->f.family() == qstr("Open Sans"));
-	auto isTildeFragment = false;
-	auto tildeFixedFont = _st.style.font->semibold()->f;
-
 	// First tag handling (the one we inserted text to).
 	bool startTagFound = false;
 	bool breakTagOnNotLetter = false;
@@ -3147,15 +3223,6 @@ void InputField::processFormatting(int insertPosition, int insertEnd) {
 					action.intervalEnd = fragmentEnd;
 					break;
 				}
-				if (processTilde) {
-					const auto formatFont = format.font();
-					if (!tildeFixedFont.styleName().isEmpty()
-						&& formatFont.styleName().isEmpty()) {
-						tildeFixedFont.setStyleName(QString());
-					}
-					isTildeFragment = (format.font() == tildeFixedFont);
-				}
-
 				auto fragmentText = fragment.text();
 				auto *textStart = fragmentText.constData();
 				auto *textEnd = textStart + fragmentText.size();
@@ -3259,23 +3326,6 @@ void InputField::processFormatting(int insertPosition, int insertEnd) {
 							break;
 						}
 					}
-					if (processTilde) { // Tilde symbol fix in OpenSans.
-						bool tilde = (ch->unicode() == '~');
-						if ((tilde && !isTildeFragment) || (!tilde && isTildeFragment)) {
-							if (action.type == ActionType::Invalid) {
-								action.type = ActionType::TildeFont;
-								action.intervalStart = fragmentPosition + (ch - textStart);
-								action.intervalEnd = action.intervalStart + 1;
-								action.tildeTag = format.property(kTagProperty).toString();
-								action.isTilde = tilde;
-							} else {
-								++action.intervalEnd;
-							}
-						} else if (action.type == ActionType::TildeFont) {
-							break;
-						}
-					}
-
 					if (ch + 1 < textEnd && ch->isHighSurrogate() && (ch + 1)->isLowSurrogate()) {
 						++ch;
 					}
@@ -3441,13 +3491,6 @@ void InputField::processFormatting(int insertPosition, int insertEnd) {
 					action.existingTags,
 					action.intervalStart,
 					action.intervalEnd);
-			} else if (action.type == ActionType::TildeFont) {
-				auto format = QTextCharFormat();
-				format.setFont(action.isTilde
-					? tildeFixedFont
-					: PrepareTagFormat(_st, action.tildeTag).font());
-				cursor.mergeCharFormat(format);
-				insertPosition = action.intervalEnd;
 			} else if (action.type == ActionType::ClearInstantReplace) {
 				auto format = _defaultCharFormat;
 				ApplyTagFormat(format, cursor.charFormat());
@@ -4028,6 +4071,12 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 		e->ignore();
 	} else if (handleMarkdownKey(e)) {
 		e->accept();
+	} else if (IsPasteWithShift(e)) {
+		// Layout-independent Ctrl+Shift+V (Paste as Plain Text).
+		// insertFromMimeDataInner() looks at the live keyboard state
+		// to take the plain-text branch.
+		e->accept();
+		_inner->paste();
 	} else if (_customUpDown
 		&& (key == Qt::Key_Up
 			|| key == Qt::Key_Down
@@ -4094,26 +4143,7 @@ void InputField::keyPressEventInner(QKeyEvent *e) {
 			}
 			e->accept();
 		} else {
-			// Ctrl+Shift+V as "Paste as Plain Text" support.
-			auto removedShift = false;
-			const auto nowModifiers = e->modifiers();
-			if ((e != QKeySequence::Paste)
-				&& (oldModifiers & Qt::ShiftModifier)) {
-				// If we had Shift+Smth and we see that Smth == Paste,
-				// then we'll "Paste as Plain Text". Like Ctrl+Shift+V.
-				e->setModifiers(oldModifiers & ~Qt::ShiftModifier);
-				if (e == QKeySequence::Paste) {
-					removedShift = true;
-				} else {
-					e->setModifiers(nowModifiers);
-				}
-			}
-
 			_inner->QTextEdit::keyPressEvent(e);
-
-			if (removedShift) {
-				e->setModifiers(nowModifiers);
-			}
 		}
 		if (createEditBlock) {
 			cursor.endEditBlock();
@@ -5399,11 +5429,14 @@ void InputField::insertFromMimeDataInner(const QMimeData *source) {
 			_insertedTagsAreFromMime = true;
 			return result;
 		}
-		if (source->hasHtml()) {
+		if (source->hasHtml() && !_markdownEnabledState.disabled()) {
 			if (auto parsed = TextUtilities::TextWithTagsFromHtml(
 					source->html())) {
 				if (!HtmlTextMatchesPlainTextStart(
 						parsed->text,
+						source->text())
+					|| HtmlIsSingleLinkOfPlainUrl(
+						*parsed,
 						source->text())) {
 					return plainText();
 				}

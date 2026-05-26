@@ -22,7 +22,6 @@
 
 #if defined(__FreeBSD__)
 #include <fcntl.h>
-#define F_RDADVISE F_RDAHEAD
 #endif
 
 #ifndef DISPATCH_IO_DEBUG
@@ -2358,8 +2357,11 @@ _dispatch_operation_advise(dispatch_operation_t op, size_t chunk_size)
 		case ESPIPE: break; // fd refers to a pipe or FIFO
 		default: (void)dispatch_assume_zero(err); break;
 	}
+#elif defined(__OpenBSD__)
+	(void)err;
 #else
 #error "_dispatch_operation_advise not implemented on this platform"
+	(void)err;
 #endif // defined(F_RDADVISE)
 #endif // defined(_WIN32)
 }
