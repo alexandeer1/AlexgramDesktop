@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QJsonArray>
 #include <QtCore/QRegularExpression>
 #include <QtCore/QStandardPaths>
+#include <QtCore/QFileInfo>
 
 namespace Alex {
 
@@ -408,8 +409,11 @@ void VideoDownloaderEngine::startDownload(
 
 	auto args = QStringList{
 		u"-f"_q, finalFormatId,
-		u"--ffmpeg-location"_q, _ffmpegPath,
 	};
+	if (QFileInfo(_ffmpegPath).isAbsolute()) {
+		args.append(u"--ffmpeg-location"_q);
+		args.append(_ffmpegPath);
+	}
 	if (multiAudio) {
 		args.append(u"--audio-multistreams"_q);
 	}

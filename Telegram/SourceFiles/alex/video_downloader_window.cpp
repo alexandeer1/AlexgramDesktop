@@ -20,12 +20,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QMenu>
-#include <QtGui/QAction>
+#include <QAction>
 #include <QtWidgets/QListWidget>
 #include <QtWidgets/QCheckBox>
 #include <QtWidgets/QScrollArea>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtCore/QStandardPaths>
+#include <QtCore/QTimer>
 #include <QtGui/QPixmap>
 #include <QtGui/QPainter>
 #include <QtGui/QPainterPath>
@@ -34,6 +35,7 @@ namespace Alex {
 
 namespace {
 	VideoDownloaderWindow *GlobalWindow = nullptr;
+	VideoDownloaderSetupWindow *GlobalSetupWindow = nullptr;
 }
 
 VideoDownloaderWindow::VideoDownloaderWindow(QWidget *parent)
@@ -58,12 +60,20 @@ VideoDownloaderWindow::~VideoDownloaderWindow() {
 }
 
 void VideoDownloaderWindow::Show() {
-	if (!GlobalWindow) {
-		GlobalWindow = new VideoDownloaderWindow();
+	auto manager = std::make_unique<VideoDownloaderManager>();
+	if (manager->areDependenciesReady()) {
+		if (GlobalSetupWindow) {
+			GlobalSetupWindow->close();
+		}
+		if (!GlobalWindow) {
+			GlobalWindow = new VideoDownloaderWindow();
+		}
+		GlobalWindow->show();
+		GlobalWindow->raise();
+		GlobalWindow->activateWindow();
+	} else {
+		VideoDownloaderSetupWindow::Show();
 	}
-	GlobalWindow->show();
-	GlobalWindow->raise();
-	GlobalWindow->activateWindow();
 }
 
 void VideoDownloaderWindow::setupUi() {
@@ -697,6 +707,164 @@ void VideoDownloaderWindow::onAudioButtonClicked() {
 			_audioButton->setText(u"%1 Tracks Selected"_q.arg(_selectedAudioFormatIds.size()));
 		}
 	}
+}
+
+// ================= VideoDownloaderSetupWindow Implementation =================
+
+VideoDownloaderSetupWindow::VideoDownloaderSetupWindow(QWidget *parent)
+: QWidget(parent)
+, _manager(std::make_unique<VideoDownloaderManager>()) {
+	setAttribute(Qt::WA_DeleteOnClose);
+	setWindowFlags(Qt::Window | Qt::WindowStaysOnTopHint | Qt::CustomizeWindowHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint);
+	setWindowTitle(u"Media Downloader Setup"_q);
+	setFixedSize(450, 250);
+
+	setupUi();
+	applyStyle();
+	startSetup();
+}
+
+VideoDownloaderSetupWindow::~VideoDownloaderSetupWindow() {
+	if (GlobalSetupWindow == this) {
+		GlobalSetupWindow = nullptr;
+	}
+}
+
+void VideoDownloaderSetupWindow::Show() {
+	if (!GlobalSetupWindow) {
+		GlobalSetupWindow = new VideoDownloaderSetupWindow();
+	}
+	GlobalSetupWindow->show();
+	GlobalSetupWindow->raise();
+	GlobalSetupWindow->activateWindow();
+}
+
+void VideoDownloaderSetupWindow::setupUi() {
+	auto mainLayout = new QVBoxLayout(this);
+	mainLayout->setContentsMargins(15, 15, 15, 15);
+	mainLayout->setSpacing(10);
+
+	auto card = new QWidget(this);
+	card->setObjectName(u"Card"_q);
+	auto cardLayout = new QVBoxLayout(card);
+	cardLayout->setContentsMargins(20, 20, 20, 20);
+	cardLayout->setSpacing(12);
+
+	_titleLabel = new QLabel(u"Preparing Media Downloader"_q, card);
+	_titleLabel->setObjectName(u"Title"_q);
+
+	_descLabel = new QLabel(u"Downloading required components (yt-dlp and FFmpeg) for high-speed video processing..."_q, card);
+	_descLabel->setObjectName(u"Desc"_q);
+	_descLabel->setWordWrap(true);
+
+	_progressBar = new QProgressBar(card);
+	_progressBar->setRange(0, 100);
+	_progressBar->setValue(0);
+	_progressBar->setFixedHeight(12);
+
+	_statusLabel = new QLabel(u"Initializing..."_q, card);
+	_statusLabel->setObjectName(u"Status"_q);
+
+	auto buttonLayout = new QHBoxLayout();
+	_retryButton = new QPushButton(u"Retry"_q, card);
+	_retryButton->setCursor(Qt::PointingHandCursor);
+	_retryButton->hide();
+
+	_cancelButton = new QPushButton(u"Cancel"_q, card);
+	_cancelButton->setObjectName(u"CancelBtn"_q);
+	_cancelButton->setCursor(Qt::PointingHandCursor);
+
+	buttonLayout->addStretch(1);
+	buttonLayout->addWidget(_retryButton);
+	buttonLayout->addWidget(_cancelButton);
+
+	cardLayout->addWidget(_titleLabel);
+	cardLayout->addWidget(_descLabel);
+	cardLayout->addWidget(_progressBar);
+	cardLayout->addWidget(_statusLabel);
+	cardLayout->addLayout(buttonLayout);
+
+	mainLayout->addWidget(card);
+
+	connect(_cancelButton, &QPushButton::clicked, this, &QWidget::close);
+	connect(_retryButton, &QPushButton::clicked, this, [=] {
+		_retryButton->hide();
+		_descLabel->setText(u"Downloading required components (yt-dlp and FFmpeg) for high-speed video processing..."_q);
+		startSetup();
+	});
+}
+
+void VideoDownloaderSetupWindow::applyStyle() {
+	setStyleSheet(uR"(
+		QWidget {
+			background-color: #121820;
+			color: #e0e5ea;
+			font-family: 'Segoe UI', Arial, sans-serif;
+			font-size: 13px;
+		}
+		#Card {
+			background-color: #1a222c;
+			border-radius: 12px;
+			border: 1px solid #2a3542;
+		}
+		#Title {
+			font-size: 16px;
+			font-weight: bold;
+			color: #ffffff;
+		}
+		#Desc {
+			color: #9ba5b1;
+			font-size: 12px;
+			line-height: 1.4;
+		}
+		#Status {
+			color: #2ed573;
+			font-weight: bold;
+		}
+		QProgressBar {
+			background-color: #2a3542;
+			border-radius: 6px;
+			text-align: center;
+			color: transparent;
+		}
+		QProgressBar::chunk {
+			background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2ed573, stop:1 #1e90ff);
+			border-radius: 6px;
+		}
+		QPushButton {
+			background-color: #2ed573;
+			color: #121820;
+			font-weight: bold;
+			border-radius: 8px;
+			padding: 6px 18px;
+			border: none;
+		}
+		QPushButton:hover { background-color: #3be080; }
+		#CancelBtn {
+			background-color: #364454;
+			color: #ffffff;
+		}
+		#CancelBtn:hover { background-color: #445468; }
+	)"_q);
+}
+
+void VideoDownloaderSetupWindow::startSetup() {
+	_manager->setupProgress() | rpl::on_next([=](const VideoDownloaderManager::SetupProgress &prog) {
+		_statusLabel->setText(prog.statusText);
+		_progressBar->setValue(prog.percent);
+
+		if (prog.stage == VideoDownloaderManager::DownloadStage::Finished) {
+			QTimer::singleShot(800, this, [=] {
+				close();
+				VideoDownloaderWindow::Show();
+			});
+		} else if (prog.stage == VideoDownloaderManager::DownloadStage::Error) {
+			_descLabel->setText(u"Error: "_q + prog.statusText);
+			_retryButton->show();
+		}
+	}, _lifetime);
+
+	_manager->ensureDependencies();
 }
 
 } // namespace Alex

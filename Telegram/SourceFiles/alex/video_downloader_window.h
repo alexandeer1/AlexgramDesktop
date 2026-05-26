@@ -26,6 +26,29 @@ namespace Alex {
 
 class VideoDownloaderManager;
 
+class VideoDownloaderSetupWindow : public QWidget {
+public:
+	VideoDownloaderSetupWindow(QWidget *parent = nullptr);
+	~VideoDownloaderSetupWindow() override;
+
+	static void Show();
+
+private:
+	void setupUi();
+	void startSetup();
+	void applyStyle();
+
+	std::unique_ptr<VideoDownloaderManager> _manager;
+	QLabel *_titleLabel = nullptr;
+	QLabel *_descLabel = nullptr;
+	QProgressBar *_progressBar = nullptr;
+	QLabel *_statusLabel = nullptr;
+	QPushButton *_retryButton = nullptr;
+	QPushButton *_cancelButton = nullptr;
+
+	rpl::lifetime _lifetime;
+};
+
 class VideoDownloaderWindow : public QWidget {
 public:
 	VideoDownloaderWindow(QWidget *parent = nullptr);

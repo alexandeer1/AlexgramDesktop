@@ -56,7 +56,8 @@ QString VideoDownloaderManager::ffmpegPath() const {
 #ifdef Q_OS_WIN
 	return _binDir + u"/ffmpeg.exe"_q;
 #else
-	return u"ffmpeg"_q;
+	const auto systemPath = QStandardPaths::findExecutable(u"ffmpeg"_q);
+	return systemPath.isEmpty() ? u"ffmpeg"_q : systemPath;
 #endif
 }
 

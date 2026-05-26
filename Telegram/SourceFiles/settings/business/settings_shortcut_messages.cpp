@@ -62,6 +62,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/section_widget.h"
 #include "window/window_peer_menu.h"
 #include "window/window_session_controller.h"
+#include <QtCore/QObject>
+#include <QtCore/QPointer>
+#include <QtWidgets/QWidget>
 #include "styles/style_boxes.h"
 #include "styles/style_chat_helpers.h"
 #include "styles/style_chat.h"
@@ -107,6 +110,10 @@ public:
 		not_null<QWidget*> outer,
 		int maxVisibleHeight,
 		QRect clip) override;
+
+	SendMenu::Details sendMenuDetails() const override {
+		return AbstractSection::sendMenuDetails();
+	}
 
 private:
 	void outerResized();
@@ -531,14 +538,14 @@ void ShortcutMessages::fillTopBarMenu(
 						: text);
 				}
 			};
-			messages->editShortcut(id, name, close, crl::guard(this, error));
+			messages->editShortcut(id, name, close, crl::guard(static_cast<QWidget*>(this), error));
 		};
 		const auto name = _shortcut.current();
 		_controller->show(
-			Box(EditShortcutNameBox, name, crl::guard(this, submit)));
+			Box(EditShortcutNameBox, name, crl::guard(static_cast<QWidget*>(this), submit)));
 	}, &st::menuIconEdit);
 
-	const auto justDelete = crl::guard(this, [=] {
+	const auto justDelete = crl::guard(static_cast<QWidget*>(this), [=] {
 		messages->removeShortcut(_shortcutId.current());
 	});
 	const auto confirmDeleteShortcut = [=] {
@@ -560,7 +567,7 @@ void ShortcutMessages::fillTopBarMenu(
 	};
 	addAction({
 		.text = tr::lng_context_delete_shortcut(tr::now),
-		.handler = crl::guard(this, confirmDeleteShortcut),
+		.handler = crl::guard(static_cast<QWidget*>(this), confirmDeleteShortcut),
 		.icon = &st::menuIconDeleteAttention,
 		.isAttention = true,
 	});
@@ -689,13 +696,13 @@ void ShortcutMessages::setupComposeControls() {
 		return !_choosingAttach;
 	}) | rpl::on_next([=](std::optional<bool> overrideCompress) {
 		_choosingAttach = true;
-		base::call_delayed(st::historyAttach.ripple.hideDuration, this, [=] {
+		base::call_delayed(st::historyAttach.ripple.hideDuration, static_cast<QWidget*>(this), [=] {
 			_choosingAttach = false;
 			chooseAttach(overrideCompress);
 		});
 	}, lifetime());
 
-	_composeControls->setSendAsFileConfirmed(crl::guard(this, [=](
+	_composeControls->setSendAsFileConfirmed(crl::guard(static_cast<QWidget*>(this), [=](
 			std::shared_ptr<Ui::PreparedBundle> bundle,
 			Api::SendOptions options) {
 		sendingFilesConfirmed(std::move(bundle), options);
@@ -1001,7 +1008,7 @@ void ShortcutMessages::listShowPremiumToast(
 	if (!_stickerToast) {
 		_stickerToast = std::make_unique<HistoryView::StickerToast>(
 			_controller,
-			this,
+			static_cast<QWidget*>(this),
 			[=] { _stickerToast = nullptr; });
 	}
 	_stickerToast->showFor(document);
@@ -1287,8 +1294,8 @@ void ShortcutMessages::edit(
 		sending,
 		webpage,
 		options,
-		crl::guard(this, done),
-		crl::guard(this, fail),
+		crl::guard(static_cast<QWidget*>(this), done),
+		crl::guard(static_cast<QWidget*>(this), fail),
 		spoilered);
 
 	_composeControls->hidePanelsAnimated();
@@ -1346,7 +1353,7 @@ bool ShortcutMessages::confirmSendingFiles(
 		Api::SendType::Normal,
 		SendMenu::Details());
 
-	box->setConfirmedCallback(crl::guard(this, [=](
+	box->setConfirmedCallback(crl::guard(static_cast<QWidget*>(this), [=](
 			std::shared_ptr<Ui::PreparedBundle> bundle,
 			Api::SendOptions options,
 			FullReplyTo) {
@@ -1414,7 +1421,7 @@ void ShortcutMessages::chooseAttach(
 	const auto filter = (overrideSendImagesAsPhotos == true)
 		? FileDialog::PhotoVideoFilesFilter()
 		: FileDialog::AllOrImagesFilter();
-	FileDialog::GetOpenPaths(this, tr::lng_choose_files(tr::now), filter, crl::guard(this, [=](
+	FileDialog::GetOpenPaths(this, tr::lng_choose_files(tr::now), filter, crl::guard(static_cast<QWidget*>(this), [=](
 			FileDialog::OpenResult &&result) {
 		if (result.paths.isEmpty() && result.remoteContent.isEmpty()) {
 			return;

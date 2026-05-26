@@ -4125,7 +4125,6 @@ void AddSenderUserpicModerateAction(
 				}
 				controller->show(Box(
 					CreateModerateMessagesBox,
-<<<<<<< HEAD
 					ModerateMessagesBoxEntry{
 						.items = HistoryItemsList{
 							not_null<HistoryItem*>(item),
