@@ -4,6 +4,7 @@
 #include "base/unixtime.h"
 #include <map>
 #include <QtCore/QFileInfo>
+#include <QtCore/QFile>
 #include <rpl/event_stream.h>
 #include <rpl/producer.h>
 #include <rpl/range.h>
@@ -139,7 +140,12 @@ void runMigrations() {
 }
 
 void initialize() {
-	const auto path = (cWorkingDir() + u"tdata/alexdata.db"_q).toStdString();
+	const auto newPath = cWorkingDir() + u"tdata/alexdata.db"_q;
+	const auto oldPath = u"./tdata/alexdata.db"_q;
+	if (!QFile::exists(newPath) && QFile::exists(oldPath)) {
+		QFile::copy(oldPath, newPath);
+	}
+	const auto path = newPath.toStdString();
 	storage = std::make_unique<Storage>(CreateStorage(path));
 	try {
 		storage->sync_schema(true);
