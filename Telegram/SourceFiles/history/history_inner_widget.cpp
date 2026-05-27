@@ -3359,25 +3359,40 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 							[=] { copyContextText(itemId); },
 							&st::menuIconCopy);
 					}
-					if ((!item->translation() || !_history->translatedTo())
-						&& (view->hasVisibleText() || mediaHasTextForCopy)) {
-						const auto peer = item->history()->peer;
-						const auto itemId = item->id;
+					if (view->hasVisibleText() || mediaHasTextForCopy) {
 						const auto translate = mediaHasTextForCopy
 							? (HistoryView::TransribedText(item)
 								.append('\n')
 								.append(item->originalText()))
 							: item->originalText();
-						if (!translate.text.isEmpty()
-							&& !Ui::SkipTranslate(translate)) {
-							_menu->addAction(tr::lng_context_translate(tr::now), [=] {
-								_controller->show(Box(
-									Ui::TranslateBox,
-									peer,
-									mediaHasTextForCopy ? MsgId() : itemId,
-									translate,
-									hasRestriction));
+						const auto translation = item->translation();
+						if (translation && translation->used) {
+							_menu->addAction(tr::lng_context_hide_translation(tr::now), [=] {
+								if (_translateTracker) {
+									_translateTracker->toggleTranslation(item);
+								}
 							}, &st::menuIconTranslate);
+						} else if (!translate.text.isEmpty() && !Ui::SkipTranslate(translate)) {
+							const auto requested = translation && translation->requested;
+							const auto used = translation && translation->used;
+							const auto label = requested
+								? u"Translating..."_q
+								: used
+								? tr::lng_translate_show_original(tr::now)
+								: tr::lng_context_translate(tr::now);
+							if (!requested && !used) {
+								_menu->addAction(label, [=] {
+									if (_translateTracker) {
+										_translateTracker->toggleTranslation(item);
+									}
+								}, &st::menuIconTranslate);
+							} else {
+								_menu->addAction(label, [=] {
+									if (_translateTracker) {
+										_translateTracker->toggleTranslation(item);
+									}
+								}, &st::menuIconTranslate)->setEnabled(!requested);
+							}
 						}
 					}
 				}
