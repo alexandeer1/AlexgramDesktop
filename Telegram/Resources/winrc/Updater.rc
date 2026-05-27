@@ -51,11 +51,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "Telegram FZ-LLC"
-            VALUE "FileDescription", "Telegram Desktop Updater"
+            VALUE "CompanyName", "Alexgram FZ-LLC"
+            VALUE "FileDescription", "Alexgram Desktop Updater"
             VALUE "FileVersion", "6.8.3.0"
             VALUE "LegalCopyright", "Copyright (C) 2014-2026"
-            VALUE "ProductName", "Telegram Desktop"
+            VALUE "ProductName", "Alexgram Desktop"
             VALUE "ProductVersion", "6.8.3.0"
         END
     END
