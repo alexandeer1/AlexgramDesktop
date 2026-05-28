@@ -160,22 +160,22 @@ jobs:
           if [ -n "${{ matrix.defines }}" ]; then
             DEFINE="-D ${{ matrix.defines }}=ON"
             echo Define from matrix: $DEFINE
-            echo "ARTIFACT_NAME=Telegram ${{ matrix.defines }}" >> $GITHUB_ENV
+            echo "ARTIFACT_NAME=Alexgram ${{ matrix.defines }}" >> $GITHUB_ENV
           else
-            echo "ARTIFACT_NAME=Telegram" >> $GITHUB_ENV
+            echo "ARTIFACT_NAME=Alexgram" >> $GITHUB_ENV
           fi
 
           cmake -Bbuild . -DTDESKTOP_API_TEST=ON $DEFINE
           cmake --build build
-          macdeployqt build/Telegram.app
-          codesign --remove-signature build/Telegram.app
+          macdeployqt build/Alexgram.app
+          codesign --remove-signature build/Alexgram.app
 
       - name: Move artifact.
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           cd $REPO_NAME/build
           mkdir artifact
-          mv Telegram.app artifact/
+          mv Alexgram.app artifact/
       - uses: actions/upload-artifact@v7
         if: env.UPLOAD_ARTIFACT == 'true'
         name: Upload artifact.
