@@ -18,6 +18,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QTextEdit>
 #include <QtWidgets/QDialogButtonBox>
 #include <rpl/lifetime.h>
+#include <rpl/producer.h>
+#include <rpl/event_stream.h>
 #include <memory>
 
 #include "alex/video_downloader_engine.h"
@@ -25,6 +27,44 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace Alex {
 
 class VideoDownloaderManager;
+
+class DepsStatusWidget : public QWidget {
+public:
+	explicit DepsStatusWidget(VideoDownloaderManager *manager, QWidget *parent = nullptr);
+
+	[[nodiscard]] rpl::producer<> allReady() const;
+
+private:
+	struct ToolRow {
+		QLabel *iconLabel = nullptr;
+		QLabel *nameLabel = nullptr;
+		QLabel *statusLabel = nullptr;
+		QLabel *versionLabel = nullptr;
+		QPushButton *updateBtn = nullptr;
+		QProgressBar *progressBar = nullptr;
+		QPushButton *installBtn = nullptr;
+	};
+
+	void setupUi();
+	void applyStyle();
+	void checkAndRefresh();
+	void setToolReady(ToolRow &row, const QString &name);
+	void setToolMissing(ToolRow &row, const QString &name);
+	void setToolDownloading(ToolRow &row, const QString &name, int percent);
+	void setYtDlpVersionChecking();
+	void setYtDlpVersionUpToDate(const QString &version);
+	void setYtDlpVersionUpdateAvailable(const QString &installed, const QString &latest);
+	void setYtDlpVersionError(const QString &installed, const QString &errorDetails);
+
+	VideoDownloaderManager *_manager = nullptr;
+	ToolRow _ytDlpRow;
+	ToolRow _ffmpegRow;
+	QLabel *_allGoodLabel = nullptr;
+	QPushButton *_dismissBtn = nullptr;
+	rpl::event_stream<> _allReadyStream;
+	rpl::lifetime _lifetime;
+};
+
 
 class VideoDownloaderSetupWindow : public QWidget {
 public:
@@ -68,9 +108,11 @@ private:
 	void onAudioButtonClicked();
 
 	void ensureEngine();
+	void setUiEnabled(bool enabled);
 
 	std::unique_ptr<VideoDownloaderManager> _manager;
 	std::unique_ptr<VideoDownloaderEngine> _engine;
+	DepsStatusWidget *_depsWidget = nullptr;
 
 	QLineEdit *_urlInput = nullptr;
 	QPushButton *_fetchButton = nullptr;

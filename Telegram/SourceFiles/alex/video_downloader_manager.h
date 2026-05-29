@@ -35,23 +35,44 @@ public:
 		QString statusText;
 	};
 
+	enum class VersionState {
+		Checking,
+		UpToDate,
+		UpdateAvailable,
+		Error,
+	};
+
+	struct YtDlpVersionInfo {
+		VersionState state = VersionState::Checking;
+		QString installed;
+		QString latest;
+		QString errorDetails;
+	};
+
 	VideoDownloaderManager();
 	~VideoDownloaderManager();
 
 	[[nodiscard]] bool areDependenciesReady() const;
+	[[nodiscard]] bool isYtDlpReady() const;
+	[[nodiscard]] bool isFfmpegReady() const;
 	void ensureDependencies();
+	void ensureYtDlp();
+	void ensureFfmpeg();
 
 	[[nodiscard]] QString ytDlpPath() const;
 	[[nodiscard]] QString ffmpegPath() const;
+	[[nodiscard]] QString resolvedFfmpegPath() const;
 
 	void forceReinstall();
+	void checkYtDlpVersion();
 
 	[[nodiscard]] rpl::producer<SetupProgress> setupProgress() const;
+	[[nodiscard]] rpl::producer<YtDlpVersionInfo> ytDlpVersion() const;
 
 private:
 	void downloadNextPending();
 	void downloadFile(const QString &url, const QString &savePath, DownloadStage stage);
-	void extractFfmpegFromZip(const QString &zipPath);
+	void extractFfmpegFromArchive(const QString &archivePath);
 	void makePlatformExecutable(const QString &path);
 	void finishSetup();
 	QString buildBinDir() const;
@@ -68,6 +89,8 @@ private:
 	bool _downloading = false;
 
 	rpl::event_stream<SetupProgress> _setupProgress;
+	rpl::event_stream<YtDlpVersionInfo> _versionStream;
+	bool _checkingVersion = false;
 };
 
 } // namespace Alex

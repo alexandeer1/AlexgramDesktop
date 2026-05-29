@@ -2043,6 +2043,15 @@ void Settings::setDisableNumberRounding(bool value) {
   writePref<bool>("disable-number-rounding", value);
 }
 
+QString Settings::customAppIcon() {
+  return readPref<QString>("custom-app-icon", QString());
+}
+
+void Settings::setCustomAppIcon(const QString &value) {
+  writePref<QString>("custom-app-icon", value);
+}
+
+
 bool Settings::hideAllChatsTab() {
   return readPref<bool>("hide-all-chats-tab", false);
 }

@@ -444,9 +444,9 @@ QImage *PeerData::userpicCloudImage(Ui::PeerUserpicView &view) const {
 		_userpicEmpty = nullptr;
 		return image;
 	} else if (isNotificationsUser()) {
-		static auto result = Window::LogoNoMargin().scaledToWidth(
-			kUserpicSize,
-			Qt::SmoothTransformation);
+		static auto result = QImage(
+			u":/gui/art/logo_256_no_margin.png"_q
+		).scaledToWidth(kUserpicSize, Qt::SmoothTransformation);
 		return &result;
 	}
 	return nullptr;

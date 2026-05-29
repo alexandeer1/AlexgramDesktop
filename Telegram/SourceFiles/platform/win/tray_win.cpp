@@ -116,15 +116,17 @@ bool DarkTasbarValueValid/* = false*/;
 	return image;
 }
 
+auto ScaledLogo = base::flat_map<int, QImage>();
+auto ScaledLogoNoMargin = base::flat_map<int, QImage>();
+auto ScaledLogoDark = base::flat_map<int, QImage>();
+auto ScaledLogoLight = base::flat_map<int, QImage>();
+
 [[nodiscard]] QImage ImageIconWithCounter(
 		Window::CounterLayerArgs &&args,
 		bool supportMode,
 		bool smallIcon,
 		bool monochrome) {
-	static auto ScaledLogo = base::flat_map<int, QImage>();
-	static auto ScaledLogoNoMargin = base::flat_map<int, QImage>();
-	static auto ScaledLogoDark = base::flat_map<int, QImage>();
-	static auto ScaledLogoLight = base::flat_map<int, QImage>();
+
 
 	const auto darkMode = IsDarkTaskbar();
 	auto &scaled = (monochrome && darkMode)
@@ -443,6 +445,13 @@ bool HasMonochromeSetting() {
 
 void RefreshTaskbarThemeValue() {
 	DarkTasbarValueValid = false;
+}
+
+void ClearTrayLogoCache() {
+	ScaledLogo.clear();
+	ScaledLogoNoMargin.clear();
+	ScaledLogoDark.clear();
+	ScaledLogoLight.clear();
 }
 
 } // namespace Platform

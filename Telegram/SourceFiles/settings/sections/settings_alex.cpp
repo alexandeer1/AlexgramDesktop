@@ -56,11 +56,66 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "core/file_utilities.h"
 #include "ui/effects/animations.h"
+#include <QtCore/QDir>
+#include <QtCore/QFileInfo>
+#include <QtCore/QCoreApplication>
+
 
 
 namespace Settings {
 
 using namespace Builder;
+
+struct AppIconItem {
+	QString id;
+	QString displayName;
+	QString imagePath;
+};
+
+std::vector<AppIconItem> GetAvailableAppIcons() {
+	auto icons = std::vector<AppIconItem>();
+	icons.push_back({ QString(), u"Default"_q, u":/gui/art/alexgram_dark.png"_q });
+	icons.push_back({ u"ninja"_q, u"Ninja"_q, u":/gui/art/alex_icon_ninja.png"_q });
+	icons.push_back({ u"kawaii"_q, u"Kawaii"_q, u":/gui/art/alex_icon_kawaii.png"_q });
+	icons.push_back({ u"flowers"_q, u"Flowers"_q, u":/gui/art/alex_icon_flowers.png"_q });
+	icons.push_back({ u"fox"_q, u"Cute Fox"_q, u":/gui/art/alex_icon_fox.png"_q });
+
+	const auto searchDirs = {
+		QCoreApplication::applicationDirPath() + u"/logo"_q,
+		QCoreApplication::applicationDirPath() + u"/icon"_q,
+		QCoreApplication::applicationDirPath() + u"/../logo"_q,
+		QCoreApplication::applicationDirPath() + u"/../../logo"_q,
+		QCoreApplication::applicationDirPath() + u"/../icon"_q,
+		QCoreApplication::applicationDirPath() + u"/../../icon"_q,
+	};
+
+	for (const auto &dirPath : searchDirs) {
+		auto dir = QDir(dirPath);
+		if (dir.exists()) {
+			const auto list = dir.entryInfoList({ u"*.png"_q }, QDir::Files);
+			for (const auto &fileInfo : list) {
+				const auto fileName = fileInfo.fileName();
+				if (fileName == u"alexgram_dark.png"_q
+					|| fileName == u"cute_fox.png"_q
+					|| fileName == u"ChatGPT Image May 29, 2026, 07_20_01 AM.png"_q
+					|| fileName == u"ChatGPT Image May 29, 2026, 07_22_59 AM.png"_q
+					|| fileName == u"ChatGPT Image May 29, 2026, 07_25_33 AM.png"_q) {
+					continue;
+				}
+				const auto absolutePath = fileInfo.absoluteFilePath();
+				const auto displayName = fileInfo.baseName();
+				const auto exists = std::any_of(icons.begin(), icons.end(), [&](const AppIconItem &item) {
+					return item.imagePath == absolutePath || (item.displayName == displayName && !item.id.isEmpty());
+				});
+				if (!exists) {
+					icons.push_back({ absolutePath, displayName, absolutePath });
+				}
+			}
+		}
+	}
+	return icons;
+}
+
 class AlexgramMain final : public Section<AlexgramMain> {
 public:
 	AlexgramMain(QWidget *parent, not_null<Window::SessionController*> controller) : Section(parent, controller) {
@@ -410,9 +465,205 @@ void BuildAlexgramChatsSection(SectionBuilder &builder) {	builder.addDivider();
 	builder.addSkip();
 
 	if (const auto container = builder.container()) {
+		const auto iconTitle = container->add(
+			object_ptr<Ui::RpWidget>(container),
+			QMargins(st::settingsCheckboxPadding.left(), st::settingsCheckboxPadding.top(), st::settingsCheckboxPadding.right(), 0));
+		iconTitle->setFixedHeight(st::normalFont->height + st::normalFont->height / 2);
+		iconTitle->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(iconTitle);
+			p.setFont(st::boxTitleFont);
+			p.setPen(st::windowActiveTextFg);
+			p.drawText(0, st::boxTitleFont->ascent, tr::lng_settings_alexgram_custom_icon(tr::now));
+		}, iconTitle->lifetime());
+
+		const auto iconItems = GetAvailableAppIcons();
+		const auto count = int(iconItems.size());
+
+		struct State {
+			std::vector<float64> hovers;
+			std::vector<std::unique_ptr<Ui::Animations::Simple>> anims;
+			int pressedIndex = -1;
+		};
+		const auto state = std::make_shared<State>();
+		state->hovers.resize(count, 0.);
+		state->anims.resize(count);
+		for (auto i = 0; i < count; ++i) {
+			state->anims[i] = std::make_unique<Ui::Animations::Simple>();
+		}
+
+		const auto cardW = 80;
+		const auto cardH = 110;
+		const auto gapX = 12;
+		const auto gapY = 12;
+
+		const auto getGridGeometry = [=](int index, int width) -> QRect {
+			const auto cols = std::max(1, (width + gapX) / (cardW + gapX));
+			const auto row = index / cols;
+			const auto col = index % cols;
+			const auto x = col * (cardW + gapX);
+			const auto y = row * (cardH + gapY);
+			return QRect(x, y, cardW, cardH);
+		};
+
+		const auto selector = container->add(
+			object_ptr<Ui::RpWidget>(container),
+			QMargins(st::settingsCheckboxPadding.left(), st::lineWidth * 4, st::settingsCheckboxPadding.right(), st::lineWidth * 4));
+
+		const auto updateHeight = [=](int width) {
+			const auto cols = std::max(1, (width + gapX) / (cardW + gapX));
+			const auto rows = (count + cols - 1) / cols;
+			const auto height = rows * cardH + (rows - 1) * gapY;
+			if (selector->height() != height) {
+				selector->setFixedHeight(height);
+			}
+		};
+
+		selector->widthValue() | rpl::on_next([=](int w) {
+			updateHeight(w);
+		}, selector->lifetime());
+
+		selector->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(selector);
+			p.setRenderHint(QPainter::Antialiasing);
+			p.setRenderHint(QPainter::SmoothPixmapTransform);
+
+			const auto w = selector->width();
+			const auto currentIcon = Core::App().settings().customAppIcon();
+
+			for (auto i = 0; i < count; ++i) {
+				const auto &item = iconItems[i];
+				const auto rect = getGridGeometry(i, w);
+				const auto x = rect.x();
+				const auto y = rect.y();
+
+				const auto active = (item.id == currentIcon);
+				const auto hover = state->hovers[i];
+
+				auto bg = anim::color(
+					anim::with_alpha(st::windowBgOver->c, 0.45),
+					anim::with_alpha(st::windowBgOver->c, 0.75),
+					hover);
+				
+				p.setPen(Qt::NoPen);
+				p.setBrush(bg);
+				p.drawRoundedRect(QRectF(rect), st::boxRadius, st::boxRadius);
+
+				if (active) {
+					auto borderPen = QPen(QBrush(QColor(0, 190, 255)), st::lineWidth * 2);
+					p.setPen(borderPen);
+					p.setBrush(Qt::NoBrush);
+					p.drawRoundedRect(QRectF(rect).adjusted(st::lineWidth, st::lineWidth, -st::lineWidth, -st::lineWidth), st::boxRadius, st::boxRadius);
+				} else if (hover > 0.01) {
+					auto borderPen = QPen(anim::color(Qt::transparent, anim::with_alpha(st::windowActiveTextFg->c, 0.4), hover), st::lineWidth);
+					p.setPen(borderPen);
+					p.setBrush(Qt::NoBrush);
+					p.drawRoundedRect(QRectF(rect).adjusted(st::lineWidth / 2., st::lineWidth / 2., -st::lineWidth / 2., -st::lineWidth / 2.), st::boxRadius, st::boxRadius);
+				}
+
+				static auto loadedImages = base::flat_map<QString, QImage>();
+				auto &img = loadedImages[item.imagePath];
+				if (img.isNull()) {
+					img.load(item.imagePath);
+					if (img.isNull()) {
+						img = QImage(u":/gui/art/logo_256.png"_q);
+					}
+				}
+
+				const auto thumbSize = 54;
+				const auto thumbRect = QRectF(x + (cardW - thumbSize) / 2, y + 10, thumbSize, thumbSize);
+				p.save();
+				auto path = QPainterPath();
+				path.addRoundedRect(thumbRect, 8, 8);
+				p.setClipPath(path);
+				p.drawImage(thumbRect, img);
+				p.restore();
+
+				p.setFont(st::normalFont);
+				p.setPen(active ? st::windowActiveTextFg : st::windowSubTextFg);
+				const auto textStr = st::normalFont->elided(item.displayName, cardW - 8);
+				p.drawText(QRect(x + 4, y + cardH - st::normalFont->height - 8, cardW - 8, st::normalFont->height), Qt::AlignCenter, textStr);
+			}
+		}, selector->lifetime());
+
+		selector->setCursor(Qt::PointingHandCursor);
+		selector->events() | rpl::filter([=](not_null<QEvent*> e) {
+			return e->type() == QEvent::MouseMove 
+				|| e->type() == QEvent::MouseButtonPress 
+				|| e->type() == QEvent::MouseButtonRelease 
+				|| e->type() == QEvent::Leave;
+		}) | rpl::on_next([=](not_null<QEvent*> e) {
+			const auto w = selector->width();
+			if (e->type() == QEvent::Leave) {
+				for (auto i = 0; i < count; ++i) {
+					if (state->hovers[i] > 0.) {
+						const auto index = i;
+						state->anims[index]->start([=] {
+							state->hovers[index] = state->anims[index]->value(0.);
+							selector->update();
+						}, state->hovers[index], 0., st::slideDuration);
+					}
+				}
+				return;
+			}
+
+			const auto me = static_cast<QMouseEvent*>(e.get());
+			const auto pos = me->pos();
+
+			auto hoveredIndex = -1;
+			for (auto i = 0; i < count; ++i) {
+				if (getGridGeometry(i, w).contains(pos)) {
+					hoveredIndex = i;
+					break;
+				}
+			}
+
+			if (e->type() == QEvent::MouseMove) {
+				for (auto i = 0; i < count; ++i) {
+					const auto target = (i == hoveredIndex) ? 1. : 0.;
+					if (state->hovers[i] != target && !state->anims[i]->animating()) {
+						const auto index = i;
+						state->anims[index]->start([=] {
+							state->hovers[index] = state->anims[index]->value(target);
+							selector->update();
+						}, state->hovers[index], target, st::slideDuration);
+					}
+				}
+			} else if (e->type() == QEvent::MouseButtonPress) {
+				if (me->button() == Qt::LeftButton) {
+					state->pressedIndex = hoveredIndex;
+				}
+			} else if (e->type() == QEvent::MouseButtonRelease) {
+				if (me->button() == Qt::LeftButton && state->pressedIndex == hoveredIndex && hoveredIndex != -1) {
+					const auto &item = iconItems[hoveredIndex];
+					Core::App().settings().setCustomAppIcon(item.id);
+					Core::App().saveSettingsDelayed();
+					Core::App().reprocessAlexSettings();
+				}
+				state->pressedIndex = -1;
+			}
+		}, selector->lifetime());
+		selector->setAttribute(Qt::WA_Hover);
+
+		const auto aboutRow = container->add(
+			object_ptr<Ui::RpWidget>(container),
+			QMargins(st::settingsCheckboxPadding.left(), 0, st::settingsCheckboxPadding.right(), st::lineWidth * 4));
+		aboutRow->setFixedHeight(st::normalFont->height * 2 + st::lineWidth * 2);
+		aboutRow->paintRequest() | rpl::on_next([=](QRect) {
+			Painter p(aboutRow);
+			p.setFont(st::normalFont);
+			p.setPen(st::windowSubTextFg);
+			p.drawText(QRect(0, 0, aboutRow->width(), aboutRow->height()), Qt::AlignLeft | Qt::TextWordWrap, tr::lng_settings_alexgram_custom_icon_about(tr::now));
+		}, aboutRow->lifetime());
+
+		container->add(
+			object_ptr<Ui::RpWidget>(container),
+			QMargins(0, st::lineWidth * 4, 0, st::lineWidth * 4))
+			->setFixedHeight(st::lineWidth);
+
 		const auto kDefault = 50;
 		const auto kMax = 50;
 		const auto currentRadius = Core::App().settings().dialogAvatarCornerRadius();
+
 
 		const auto radiusValue = std::make_shared<rpl::variable<int>>(currentRadius);
 
@@ -1977,102 +2228,104 @@ void BuildAlexgramGhostModeSection(SectionBuilder &builder) {
 			});
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
 
-			const auto colorWrap = builder.container()->add(
-				object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
-					builder.container(),
-					object_ptr<Ui::VerticalLayout>(builder.container())
-				)
-			);
-			const auto colorInner = colorWrap->entity();
+			if (const auto container = builder.container()) {
+				const auto colorWrap = container->add(
+					object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+						container,
+						object_ptr<Ui::VerticalLayout>(container)
+					)
+				);
+				const auto colorInner = colorWrap->entity();
 
-			static auto transparentSettingsButton = st::defaultSettingsButton;
-			transparentSettingsButton.textBg = st::transparent;
+				static auto transparentSettingsButton = st::defaultSettingsButton;
+				transparentSettingsButton.textBg = st::transparent;
 
-			auto windowController = builder.controller();
-			const auto getCurrentColor = [] {
-				const auto c = Core::App().settings().ghostDeletedIconColor();
-				return (c == 0) ? st::historyOutIconFg->c : QColor::fromRgba(static_cast<QRgb>(c));
-			};
+				auto windowController = builder.controller();
+				const auto getCurrentColor = [] {
+					const auto c = Core::App().settings().ghostDeletedIconColor();
+					return (c == 0) ? st::historyOutIconFg->c : QColor::fromRgba(static_cast<QRgb>(c));
+				};
 
-			auto colorBtn = colorInner->add(
-				object_ptr<Ui::SettingsButton>(
-					colorInner,
-					tr::lng_settings_alexgram_ghost_mode_deleted_icon_color(),
-					transparentSettingsButton
-				)
-			);
-			colorBtn->setColorOverride(st::windowFg->c);
-			colorBtn->setPaddingOverride(style::margins(37, 8, 22, 8));
+				auto colorBtn = colorInner->add(
+					object_ptr<Ui::SettingsButton>(
+						colorInner,
+						tr::lng_settings_alexgram_ghost_mode_deleted_icon_color(),
+						transparentSettingsButton
+					)
+				);
+				colorBtn->setColorOverride(st::windowFg->c);
+				colorBtn->setPaddingOverride(style::margins(37, 8, 22, 8));
 
-			auto colorVar = colorBtn->lifetime().make_state<rpl::variable<QColor>>(getCurrentColor());
+				auto colorVar = colorBtn->lifetime().make_state<rpl::variable<QColor>>(getCurrentColor());
 
-			auto rightLabel = Ui::CreateChild<Ui::FlatLabel>(
-				colorBtn,
-				colorVar->value() | rpl::map([](const QColor &c) {
-					return c.name().toUpper();
-				}),
-				st::defaultSettingsRightLabel
-			);
-			colorVar->value() | rpl::on_next([=](const QColor &c) {
-				rightLabel->setTextColorOverride(c);
-			}, rightLabel->lifetime());
+				auto rightLabel = Ui::CreateChild<Ui::FlatLabel>(
+					colorBtn,
+					colorVar->value() | rpl::map([](const QColor &c) {
+						return c.name().toUpper();
+					}),
+					st::defaultSettingsRightLabel
+				);
+				colorVar->value() | rpl::on_next([=](const QColor &c) {
+					rightLabel->setTextColorOverride(c);
+				}, rightLabel->lifetime());
 
-			colorBtn->sizeValue() | rpl::on_next([=](const QSize &s) {
-				rightLabel->moveToRight(st::defaultSettingsButton.padding.right(), (s.height() - rightLabel->height()) / 2, s.width());
-			}, rightLabel->lifetime());
+				colorBtn->sizeValue() | rpl::on_next([=](const QSize &s) {
+					rightLabel->moveToRight(st::defaultSettingsButton.padding.right(), (s.height() - rightLabel->height()) / 2, s.width());
+				}, rightLabel->lifetime());
 
-			colorBtn->addClickHandler([=] {
-				const auto currentColor = colorVar->current();
+				colorBtn->addClickHandler([=] {
+					const auto currentColor = colorVar->current();
 
-				auto box = Box([=](not_null<Ui::GenericBox*> box) {
-					const auto editor = box->addRow(object_ptr<ColorEditor>(
-						box,
-						ColorEditor::Mode::HSL,
-						currentColor));
+					auto box = Box([=](not_null<Ui::GenericBox*> box) {
+						const auto editor = box->addRow(object_ptr<ColorEditor>(
+							box,
+							ColorEditor::Mode::HSL,
+							currentColor));
 
-					const auto save = crl::guard(editor, [=] {
-						Core::App().settings().setGhostDeletedIconColor(
-							editor->color().rgba());
-						Core::App().saveSettingsDelayed();
-						Core::App().reprocessAlexSettings();
-						*colorVar = editor->color();
-						box->closeBox();
+						const auto save = crl::guard(editor, [=] {
+							Core::App().settings().setGhostDeletedIconColor(
+								editor->color().rgba());
+							Core::App().saveSettingsDelayed();
+							Core::App().reprocessAlexSettings();
+							*colorVar = editor->color();
+							box->closeBox();
+						});
+						const auto reset = [=] {
+							Core::App().settings().setGhostDeletedIconColor(0);
+							Core::App().saveSettingsDelayed();
+							Core::App().reprocessAlexSettings();
+							*colorVar = st::historyOutIconFg->c;
+							box->closeBox();
+						};
+
+						editor->submitRequests(
+						) | rpl::on_next(save, editor->lifetime());
+
+						box->setFocusCallback([=] {
+							editor->setInnerFocus();
+						});
+						box->addButton(tr::lng_settings_save(), save);
+						box->addButton(tr::lng_chat_intro_reset(), reset);
+						box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
+						box->setTitle(tr::lng_settings_alexgram_ghost_mode_deleted_icon_color());
+						box->setWidth(editor->width());
 					});
-					const auto reset = [=] {
-						Core::App().settings().setGhostDeletedIconColor(0);
-						Core::App().saveSettingsDelayed();
-						Core::App().reprocessAlexSettings();
-						*colorVar = st::historyOutIconFg->c;
-						box->closeBox();
-					};
-
-					editor->submitRequests(
-					) | rpl::on_next(save, editor->lifetime());
-
-					box->setFocusCallback([=] {
-						editor->setInnerFocus();
-					});
-					box->addButton(tr::lng_settings_save(), save);
-					box->addButton(tr::lng_chat_intro_reset(), reset);
-					box->addButton(tr::lng_cancel(), [=] { box->closeBox(); });
-					box->setTitle(tr::lng_settings_alexgram_ghost_mode_deleted_icon_color());
-					box->setWidth(editor->width());
+					windowController->show(std::move(box));
 				});
-				windowController->show(std::move(box));
-			});
 
-			colorInner->add(
-				object_ptr<Ui::FlatLabel>(
-					colorInner,
-					tr::lng_settings_alexgram_ghost_mode_deleted_icon_color_about(),
-					st::defaultFlatLabel
-				),
-				QMargins(37, 0, 22, st::settingsCheckboxesSkip / 2)
-			)->setTextColorOverride(st::windowSubTextFg->c);
+				colorInner->add(
+					object_ptr<Ui::FlatLabel>(
+						colorInner,
+						tr::lng_settings_alexgram_ghost_mode_deleted_icon_color_about(),
+						st::defaultFlatLabel
+					),
+					QMargins(37, 0, 22, st::settingsCheckboxesSkip / 2)
+				)->setTextColorOverride(st::windowSubTextFg->c);
 
-			colorWrap->toggleOn(
-				Core::App().settings().ghostDeletedShowIconChanges()
-			);
+				colorWrap->toggleOn(
+					Core::App().settings().ghostDeletedShowIconChanges()
+				);
+			}
 
 			builder.addSkip(st::settingsCheckboxesSkip / 2);
 

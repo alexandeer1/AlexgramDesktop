@@ -38,19 +38,388 @@ namespace {
 	VideoDownloaderSetupWindow *GlobalSetupWindow = nullptr;
 }
 
+// ==================== DepsStatusWidget ====================
+
+DepsStatusWidget::DepsStatusWidget(VideoDownloaderManager *manager, QWidget *parent)
+: QWidget(parent)
+, _manager(manager) {
+	setupUi();
+	applyStyle();
+	checkAndRefresh();
+
+	_manager->setupProgress() | rpl::on_next([=](const VideoDownloaderManager::SetupProgress &prog) {
+		const auto isYt = (prog.stage == VideoDownloaderManager::DownloadStage::DownloadingYtDlp);
+		const auto isFfmpeg = (prog.stage == VideoDownloaderManager::DownloadStage::DownloadingFfmpeg);
+		if (isYt) {
+			setToolDownloading(_ytDlpRow, u"yt-dlp"_q, prog.percent);
+			show();
+		} else if (isFfmpeg) {
+			setToolDownloading(_ffmpegRow, u"FFmpeg"_q, prog.percent);
+			show();
+		} else if (prog.stage == VideoDownloaderManager::DownloadStage::Finished) {
+			checkAndRefresh();
+			if (_manager->isYtDlpReady()) {
+				_manager->checkYtDlpVersion();
+			}
+		} else if (prog.stage == VideoDownloaderManager::DownloadStage::Error) {
+			checkAndRefresh();
+			show();
+		}
+	}, _lifetime);
+
+	_manager->ytDlpVersion() | rpl::on_next([=](const VideoDownloaderManager::YtDlpVersionInfo &info) {
+		using S = VideoDownloaderManager::VersionState;
+		switch (info.state) {
+		case S::Checking:
+			setYtDlpVersionChecking();
+			break;
+		case S::UpToDate:
+			setYtDlpVersionUpToDate(info.installed);
+			hide();
+			break;
+		case S::UpdateAvailable:
+			setYtDlpVersionUpdateAvailable(info.installed, info.latest);
+			show();
+			break;
+		case S::Error:
+			setYtDlpVersionError(info.installed, info.errorDetails);
+			break;
+		}
+	}, _lifetime);
+
+	if (_manager->isYtDlpReady()) {
+		_manager->checkYtDlpVersion();
+	}
+}
+
+void DepsStatusWidget::setupUi() {
+	const auto outerLayout = new QVBoxLayout(this);
+	outerLayout->setContentsMargins(0, 0, 0, 0);
+	outerLayout->setSpacing(0);
+
+	const auto card = new QWidget(this);
+	card->setObjectName(u"DepsCard"_q);
+	const auto cardLayout = new QVBoxLayout(card);
+	cardLayout->setContentsMargins(20, 16, 20, 16);
+	cardLayout->setSpacing(10);
+
+	const auto headerRow = new QHBoxLayout();
+	const auto headerIcon = new QLabel(u"🔧"_q);
+	headerIcon->setObjectName(u"DepsHeaderIcon"_q);
+	const auto headerTitle = new QLabel(u"<b>Dependency Check</b>"_q);
+	headerTitle->setObjectName(u"DepsHeaderTitle"_q);
+	_allGoodLabel = new QLabel(u""_q);
+	_allGoodLabel->setObjectName(u"DepsAllGood"_q);
+	_allGoodLabel->hide();
+	_dismissBtn = new QPushButton(u"✕  Dismiss"_q);
+	_dismissBtn->setObjectName(u"DepsDismiss"_q);
+	_dismissBtn->setCursor(Qt::PointingHandCursor);
+	_dismissBtn->hide();
+	headerRow->addWidget(headerIcon);
+	headerRow->addSpacing(6);
+	headerRow->addWidget(headerTitle);
+	headerRow->addStretch(1);
+	headerRow->addWidget(_allGoodLabel);
+	headerRow->addSpacing(10);
+	headerRow->addWidget(_dismissBtn);
+	cardLayout->addLayout(headerRow);
+
+	const auto separator = new QFrame();
+	separator->setFrameShape(QFrame::HLine);
+	separator->setObjectName(u"DepsSep"_q);
+	cardLayout->addWidget(separator);
+
+	const auto buildRow = [&](ToolRow &row, const QString &toolName, const QString &desc) {
+		const auto rowWidget = new QWidget();
+		rowWidget->setObjectName(u"DepsRow"_q);
+		const auto rowLayout = new QHBoxLayout(rowWidget);
+		rowLayout->setContentsMargins(10, 8, 10, 8);
+		rowLayout->setSpacing(12);
+
+		row.iconLabel = new QLabel(u"⏳"_q);
+		row.iconLabel->setObjectName(u"DepsIcon"_q);
+		row.iconLabel->setFixedWidth(24);
+
+		const auto textCol = new QVBoxLayout();
+		textCol->setSpacing(2);
+		row.nameLabel = new QLabel(u"<b>%1</b>"_q.arg(toolName));
+		row.nameLabel->setObjectName(u"DepsName"_q);
+		row.statusLabel = new QLabel(desc);
+		row.statusLabel->setObjectName(u"DepsStatus"_q);
+		row.versionLabel = new QLabel(u""_q);
+		row.versionLabel->setObjectName(u"DepsVersion"_q);
+		row.versionLabel->hide();
+		textCol->addWidget(row.nameLabel);
+		textCol->addWidget(row.statusLabel);
+		textCol->addWidget(row.versionLabel);
+
+		row.progressBar = new QProgressBar();
+		row.progressBar->setObjectName(u"DepsProgress"_q);
+		row.progressBar->setRange(0, 100);
+		row.progressBar->setValue(0);
+		row.progressBar->setFixedHeight(4);
+		row.progressBar->setTextVisible(false);
+		row.progressBar->hide();
+		textCol->addWidget(row.progressBar);
+
+		row.installBtn = new QPushButton(u"Install"_q);
+		row.installBtn->setObjectName(u"DepsInstall"_q);
+		row.installBtn->setCursor(Qt::PointingHandCursor);
+		row.installBtn->setFixedSize(80, 30);
+		row.installBtn->hide();
+
+		row.updateBtn = new QPushButton(u"Update"_q);
+		row.updateBtn->setObjectName(u"DepsUpdate"_q);
+		row.updateBtn->setCursor(Qt::PointingHandCursor);
+		row.updateBtn->setFixedSize(80, 30);
+		row.updateBtn->hide();
+
+		rowLayout->addWidget(row.iconLabel);
+		rowLayout->addLayout(textCol, 1);
+		rowLayout->addWidget(row.installBtn);
+		rowLayout->addWidget(row.updateBtn);
+
+		return rowWidget;
+	};
+
+	cardLayout->addWidget(buildRow(
+		_ytDlpRow,
+		u"yt-dlp"_q,
+		u"Checking..."_q));
+	cardLayout->addWidget(buildRow(
+		_ffmpegRow,
+		u"FFmpeg"_q,
+		u"Checking..."_q));
+
+	outerLayout->addWidget(card);
+
+	QObject::connect(_dismissBtn, &QPushButton::clicked, this, [this] {
+		hide();
+	});
+
+	QObject::connect(_ytDlpRow.installBtn, &QPushButton::clicked, this, [this] {
+		_ytDlpRow.installBtn->setEnabled(false);
+		_ytDlpRow.installBtn->setText(u"..."_q);
+		_manager->ensureYtDlp();
+	});
+
+	QObject::connect(_ytDlpRow.updateBtn, &QPushButton::clicked, this, [this] {
+		_ytDlpRow.updateBtn->setEnabled(false);
+		_ytDlpRow.updateBtn->setText(u"↻"_q);
+		setYtDlpVersionChecking();
+		_manager->ensureYtDlp();
+	});
+
+	QObject::connect(_ffmpegRow.installBtn, &QPushButton::clicked, this, [this] {
+		_ffmpegRow.installBtn->setEnabled(false);
+		_ffmpegRow.installBtn->setText(u"..."_q);
+		_manager->ensureFfmpeg();
+	});
+}
+
+void DepsStatusWidget::applyStyle() {
+	setStyleSheet(uR"(
+		#DepsCard {
+			background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #0f1923, stop:1 #131f2b);
+			border-bottom: 2px solid #1e2d3d;
+			border-radius: 0px;
+		}
+		#DepsHeaderIcon { font-size: 18px; }
+		#DepsHeaderTitle {
+			color: #cdd6e0;
+			font-size: 14px;
+			font-family: 'Segoe UI', Arial, sans-serif;
+		}
+		#DepsAllGood {
+			color: #2ed573;
+			font-size: 13px;
+			font-weight: bold;
+			font-family: 'Segoe UI', Arial, sans-serif;
+		}
+		#DepsDismiss {
+			background: transparent;
+			color: #556677;
+			border: 1px solid #2a3d52;
+			border-radius: 5px;
+			padding: 3px 10px;
+			font-size: 11px;
+		}
+		#DepsDismiss:hover { color: #cdd6e0; border-color: #4a6070; }
+		#DepsSep {
+			background-color: #1e2d3d;
+			height: 1px;
+			border: none;
+		}
+		#DepsRow {
+			background: transparent;
+			border-radius: 8px;
+		}
+		#DepsRow:hover { background-color: #162030; }
+		#DepsIcon { font-size: 16px; }
+		#DepsName {
+			color: #e0e5ea;
+			font-size: 13px;
+			font-family: 'Segoe UI', Arial, sans-serif;
+		}
+		#DepsStatus {
+			color: #7a8a99;
+			font-size: 11px;
+			font-family: 'Segoe UI', Arial, sans-serif;
+		}
+		#DepsProgress {
+			background-color: #1e2d3d;
+			border-radius: 2px;
+			border: none;
+		}
+		#DepsProgress::chunk {
+			background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #00b4d8,stop:1 #2ed573);
+			border-radius: 2px;
+		}
+		#DepsInstall {
+			background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #1e90ff,stop:1 #2ed573);
+			color: white;
+			font-weight: bold;
+			font-size: 11px;
+			border: none;
+			border-radius: 5px;
+		}
+		#DepsInstall:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #3aa0ff,stop:1 #3be080); }
+		#DepsInstall:disabled { background: #2a3d52; color: #556677; }
+		#DepsUpdate {
+			background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #e67e22,stop:1 #f39c12);
+			color: white;
+			font-weight: bold;
+			font-size: 11px;
+			border: none;
+			border-radius: 5px;
+		}
+		#DepsUpdate:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #f39c12,stop:1 #f1c40f); }
+		#DepsUpdate:disabled { background: #2a3d52; color: #556677; }
+	)"_q);
+}
+
+void DepsStatusWidget::checkAndRefresh() {
+	const auto ytReady = _manager->isYtDlpReady();
+	const auto ffReady = _manager->isFfmpegReady();
+
+	if (ytReady) {
+		setToolReady(_ytDlpRow, u"yt-dlp"_q);
+	} else {
+		setToolMissing(_ytDlpRow, u"yt-dlp"_q);
+	}
+
+	if (ffReady) {
+		setToolReady(_ffmpegRow, u"FFmpeg"_q);
+	} else {
+		setToolMissing(_ffmpegRow, u"FFmpeg"_q);
+	}
+
+	if (ytReady && ffReady) {
+		_allGoodLabel->setText(u"✅  All Systems Go!"_q);
+		_allGoodLabel->show();
+		_dismissBtn->show();
+		_allReadyStream.fire({});
+		hide();
+	} else {
+		_allGoodLabel->hide();
+		_dismissBtn->hide();
+		show();
+	}
+}
+
+rpl::producer<> DepsStatusWidget::allReady() const {
+	return _allReadyStream.events();
+}
+
+void DepsStatusWidget::setToolReady(ToolRow &row, const QString &name) {
+	row.iconLabel->setText(u"✅"_q);
+	row.statusLabel->setText(name + u" is installed and ready."_q);
+	row.statusLabel->setStyleSheet(u"color: #2ed573; font-size: 11px;"_q);
+	row.progressBar->hide();
+	row.installBtn->hide();
+	row.installBtn->setEnabled(true);
+	row.installBtn->setText(u"Install"_q);
+}
+
+void DepsStatusWidget::setToolMissing(ToolRow &row, const QString &name) {
+	row.iconLabel->setText(u"❌"_q);
+	row.statusLabel->setText(name + u" is not installed. Click Install to download it automatically."_q);
+	row.statusLabel->setStyleSheet(u"color: #ff6b6b; font-size: 11px;"_q);
+	row.progressBar->hide();
+	row.installBtn->show();
+	row.installBtn->setEnabled(true);
+	row.installBtn->setText(u"Install"_q);
+}
+
+void DepsStatusWidget::setToolDownloading(ToolRow &row, const QString &name, int percent) {
+	row.iconLabel->setText(u"⬇️"_q);
+	row.statusLabel->setText(u"Downloading %1... %2%"_q.arg(name).arg(percent));
+	row.statusLabel->setStyleSheet(u"color: #1e90ff; font-size: 11px;"_q);
+	row.progressBar->setValue(percent);
+	row.progressBar->show();
+	row.installBtn->setEnabled(false);
+	row.installBtn->show();
+	row.installBtn->setText(u"↓ %1%"_q.arg(percent));
+}
+
+void DepsStatusWidget::setYtDlpVersionChecking() {
+	_ytDlpRow.versionLabel->setText(u"Checking version..."_q);
+	_ytDlpRow.versionLabel->setStyleSheet(u"color: #7a8a99; font-size: 11px;"_q);
+	_ytDlpRow.versionLabel->show();
+	_ytDlpRow.updateBtn->hide();
+}
+
+void DepsStatusWidget::setYtDlpVersionUpToDate(const QString &version) {
+	_ytDlpRow.versionLabel->setText(u"✅ Version: %1 (up to date)"_q.arg(version));
+	_ytDlpRow.versionLabel->setStyleSheet(u"color: #2ed573; font-size: 11px;"_q);
+	_ytDlpRow.versionLabel->show();
+	_ytDlpRow.updateBtn->hide();
+}
+
+void DepsStatusWidget::setYtDlpVersionUpdateAvailable(const QString &installed, const QString &latest) {
+	_ytDlpRow.versionLabel->setText(u"⚡ Update available: %1 ➔ %2"_q.arg(installed).arg(latest));
+	_ytDlpRow.versionLabel->setStyleSheet(u"color: #e67e22; font-size: 11px;"_q);
+	_ytDlpRow.versionLabel->show();
+	_ytDlpRow.updateBtn->show();
+	_ytDlpRow.updateBtn->setEnabled(true);
+	_ytDlpRow.updateBtn->setText(u"Update"_q);
+}
+
+void DepsStatusWidget::setYtDlpVersionError(const QString &installed, const QString &errorDetails) {
+	if (installed.isEmpty()) {
+		_ytDlpRow.versionLabel->setText(u"⚠️ Could not verify version"_q);
+	} else {
+		_ytDlpRow.versionLabel->setText(u"⚠️ Could not verify version (Installed: %1)"_q.arg(installed));
+	}
+	if (!errorDetails.isEmpty()) {
+		_ytDlpRow.versionLabel->setToolTip(errorDetails);
+	} else {
+		_ytDlpRow.versionLabel->setToolTip(u""_q);
+	}
+	_ytDlpRow.versionLabel->setStyleSheet(u"color: #e74c3c; font-size: 11px;"_q);
+	_ytDlpRow.versionLabel->show();
+	_ytDlpRow.updateBtn->hide();
+}
+
+// ==================== VideoDownloaderWindow ====================
+
 VideoDownloaderWindow::VideoDownloaderWindow(QWidget *parent)
 : QWidget(parent)
 , _manager(std::make_unique<VideoDownloaderManager>()) {
 	setAttribute(Qt::WA_DeleteOnClose);
 	setWindowFlags(Qt::Window | Qt::WindowStaysOnTopHint);
-	setWindowTitle(u"YT & Media Downloader"_q);
-	resize(850, 500);
+	setWindowTitle(u"Alexgram Downloader"_q);
+	resize(850, 580);
 
 	_downloadDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
 
 	setupUi();
 	setupConnections();
 	applyStyle();
+
+	if (!_manager->areDependenciesReady()) {
+		setUiEnabled(false);
+	}
 }
 
 VideoDownloaderWindow::~VideoDownloaderWindow() {
@@ -60,36 +429,37 @@ VideoDownloaderWindow::~VideoDownloaderWindow() {
 }
 
 void VideoDownloaderWindow::Show() {
-	auto manager = std::make_unique<VideoDownloaderManager>();
-	if (manager->areDependenciesReady()) {
-		if (GlobalSetupWindow) {
-			GlobalSetupWindow->close();
-		}
-		if (!GlobalWindow) {
-			GlobalWindow = new VideoDownloaderWindow();
-		}
-		GlobalWindow->show();
-		GlobalWindow->raise();
-		GlobalWindow->activateWindow();
-	} else {
-		VideoDownloaderSetupWindow::Show();
+	if (!GlobalWindow) {
+		GlobalWindow = new VideoDownloaderWindow();
 	}
+	GlobalWindow->show();
+	GlobalWindow->raise();
+	GlobalWindow->activateWindow();
 }
 
 void VideoDownloaderWindow::setupUi() {
-	auto mainLayout = new QHBoxLayout(this);
+	const auto rootLayout = new QVBoxLayout(this);
+	rootLayout->setContentsMargins(0, 0, 0, 0);
+	rootLayout->setSpacing(0);
+
+	_depsWidget = new DepsStatusWidget(_manager.get(), this);
+	rootLayout->addWidget(_depsWidget);
+
+	const auto contentWidget = new QWidget(this);
+	const auto mainLayout = new QHBoxLayout(contentWidget);
 	mainLayout->setContentsMargins(15, 15, 15, 15);
 	mainLayout->setSpacing(15);
+	rootLayout->addWidget(contentWidget, 1);
 
 	// LEFT PANE (Controls)
-	auto leftPane = new QWidget(this);
+	auto leftPane = new QWidget(contentWidget);
 	leftPane->setObjectName("LeftPane");
 	auto leftLayout = new QVBoxLayout(leftPane);
 	leftLayout->setContentsMargins(20, 20, 20, 20);
 	leftLayout->setSpacing(20);
 
 	auto titleLayout = new QHBoxLayout();
-	auto titleAppLabel = new QLabel(u"Modern YT & Media Downloader"_q);
+	auto titleAppLabel = new QLabel(u"Alexgram Downloader"_q);
 	titleAppLabel->setObjectName("AppTitle");
 	
 	_updateButton = new QPushButton(u"\U0001F504"_q); // Update/Refresh icon
@@ -203,7 +573,7 @@ void VideoDownloaderWindow::setupUi() {
 
 
 	// RIGHT PANE (Media & Status)
-	auto rightPane = new QWidget(this);
+	auto rightPane = new QWidget(contentWidget);
 	rightPane->setObjectName("RightPane");
 	rightPane->setFixedWidth(350);
 	auto rightLayout = new QVBoxLayout(rightPane);
@@ -504,6 +874,11 @@ void VideoDownloaderWindow::setupConnections() {
 		
 		menu.exec(_updateButton->mapToGlobal(QPoint(0, _updateButton->height())));
 	});
+
+	_depsWidget->allReady() | rpl::on_next([=] {
+		setUiEnabled(true);
+		_engine.reset();
+	}, lifetime());
 }
 
 void VideoDownloaderWindow::ensureEngine() {
@@ -512,7 +887,7 @@ void VideoDownloaderWindow::ensureEngine() {
 	}
 	_engine = std::make_unique<VideoDownloaderEngine>(
 		_manager->ytDlpPath(),
-		_manager->ffmpegPath());
+		_manager->resolvedFfmpegPath());
 
 	// Since rpl fires on Telegram's event loop, and this widget lives in it, it works.
 	_engine->infoReady() | rpl::on_next([=](VideoInfo info) {
@@ -587,6 +962,29 @@ void VideoDownloaderWindow::ensureEngine() {
 		_statusLabel->setText(text);
 		_progressBar->setValue(prog.percent);
 	}, lifetime());
+}
+
+void VideoDownloaderWindow::setUiEnabled(bool enabled) {
+	if (_urlInput) {
+		_urlInput->setEnabled(enabled);
+		_urlInput->setPlaceholderText(enabled
+			? u"Paste video URL here..."_q
+			: u"Install required tools above before downloading..."_q);
+	}
+	if (_fetchButton) _fetchButton->setEnabled(enabled);
+	if (_downloadButton) _downloadButton->setEnabled(enabled);
+	if (_qualityCombo) _qualityCombo->setEnabled(enabled);
+	if (_audioButton) _audioButton->setEnabled(enabled);
+	if (_subtitleCombo) _subtitleCombo->setEnabled(enabled);
+	if (_statusLabel) {
+		if (!enabled) {
+			_statusLabel->setText(u"⚠️  Install required tools using the panel above."_q);
+			_statusLabel->setStyleSheet(u"color: #ff9f43; font-weight: bold;"_q);
+		} else {
+			_statusLabel->setText(u"Ready."_q);
+			_statusLabel->setStyleSheet(QString());
+		}
+	}
 }
 
 void VideoDownloaderWindow::onFetchClicked() {

@@ -1032,6 +1032,10 @@ public:
 	[[nodiscard]] bool disableNumberRounding();
 	void setDisableNumberRounding(bool value);
 
+	[[nodiscard]] QString customAppIcon();
+	void setCustomAppIcon(const QString &value);
+
+
 	[[nodiscard]] bool hideAllChatsTab();
 	[[nodiscard]] rpl::producer<bool> hideAllChatsTabChanges();
 	void setHideAllChatsTab(bool value);

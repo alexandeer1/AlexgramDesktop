@@ -75,5 +75,6 @@ private:
 };
 
 void RefreshTaskbarThemeValue();
+void ClearTrayLogoCache();
 
 } // namespace Platform

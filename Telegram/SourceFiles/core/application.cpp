@@ -86,8 +86,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_separate_id.h"
 #include "window/window_session_controller.h"
 #include "window/window_controller.h"
+#include "window/main_window.h"
+#ifdef Q_OS_WIN
+#include "platform/win/tray_win.h"
+#endif
 #include "boxes/abstract_box.h"
 #include "base/qthelp_regex.h"
+
 #include "base/qthelp_url.h"
 #include "boxes/premium_limits_box.h"
 #include "ui/accessible/ui_accessible_factory.h"
@@ -1060,12 +1065,19 @@ void Application::switchDebugMode() {
 }
 
 void Application::reprocessAlexSettings() {
+	Window::ClearLogoCache();
+#ifdef Q_OS_WIN
+	Platform::ClearTrayLogoCache();
+#endif
+
 	enumerateWindows([](not_null<Window::Controller*> window) {
 		if (const auto controller = window->sessionController()) {
 			controller->content()->reprocessAlexSettings();
 		}
+		window->widget()->updateWindowIcon();
 	});
 }
+
 
 Main::Account &Application::activeAccount() const {
 	return _domain->active();

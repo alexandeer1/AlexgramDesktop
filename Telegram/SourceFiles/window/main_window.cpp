@@ -63,6 +63,11 @@ constexpr auto kSaveWindowPositionTimeout = crl::time(1000);
 
 using Core::WindowPosition;
 
+QString g_customLogoKey;
+QImage g_customLogo;
+QImage g_customLogoNoMargin;
+
+
 [[nodiscard]] QPoint ChildSkip() {
 	const auto skipx = st::defaultDialogRow.padding.left()
 		+ st::defaultDialogRow.photoSize
@@ -122,15 +127,125 @@ base::options::toggle OptionDisableTouchbar({
 const char kOptionNewWindowsSizeAsFirst[] = "new-windows-size-as-first";
 const char kOptionDisableTouchbar[] = "touchbar-disabled";
 
+const QImage &GetCustomLogo(bool noMargin) {
+	static const auto defaultLogo = [] {
+		auto raw = QImage(u":/gui/art/alexgram_dark.png"_q);
+		if (raw.isNull()) {
+			raw = QImage(u":/gui/art/logo_256.png"_q);
+		}
+		auto scaledMargin = raw.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+		auto canvas = QImage(256, 256, QImage::Format_ARGB32_Premultiplied);
+		canvas.fill(Qt::transparent);
+		auto p = QPainter(&canvas);
+		p.drawImage((256 - scaledMargin.width()) / 2, (256 - scaledMargin.height()) / 2, scaledMargin);
+		p.end();
+		return canvas;
+	}();
+	static const auto defaultLogoNoMargin = [] {
+		auto raw = QImage(u":/gui/art/alexgram_dark.png"_q);
+		if (raw.isNull()) {
+			raw = QImage(u":/gui/art/logo_256_no_margin.png"_q);
+		}
+		auto scaled = raw.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+		if (scaled.size() != QSize(256, 256)) {
+			auto canvas = QImage(256, 256, QImage::Format_ARGB32_Premultiplied);
+			canvas.fill(Qt::transparent);
+			auto p = QPainter(&canvas);
+			p.drawImage((256 - scaled.width()) / 2, (256 - scaled.height()) / 2, scaled);
+			p.end();
+			scaled = std::move(canvas);
+		}
+		return scaled;
+	}();
+
+	if (!Core::IsAppLaunched()) {
+		return noMargin ? defaultLogoNoMargin : defaultLogo;
+	}
+
+	const auto custom = Core::App().settings().customAppIcon();
+	if (custom.isEmpty()) {
+		return noMargin ? defaultLogoNoMargin : defaultLogo;
+	}
+
+
+	if (g_customLogoKey != custom) {
+		auto rawImage = QImage();
+		if (custom == u"ninja"_q) {
+			rawImage.load(u":/gui/art/alex_icon_ninja.png"_q);
+		} else if (custom == u"kawaii"_q) {
+			rawImage.load(u":/gui/art/alex_icon_kawaii.png"_q);
+		} else if (custom == u"flowers"_q) {
+			rawImage.load(u":/gui/art/alex_icon_flowers.png"_q);
+		} else if (custom == u"fox"_q) {
+			rawImage.load(u":/gui/art/alex_icon_fox.png"_q);
+		} else {
+			rawImage.load(custom);
+			if (rawImage.isNull()) {
+				const auto fileName = QFileInfo(custom).fileName();
+				const auto searchDirs = {
+					QCoreApplication::applicationDirPath() + u"/logo"_q,
+					QCoreApplication::applicationDirPath() + u"/icon"_q,
+					QCoreApplication::applicationDirPath() + u"/../logo"_q,
+					QCoreApplication::applicationDirPath() + u"/../../logo"_q,
+					QCoreApplication::applicationDirPath() + u"/../icon"_q,
+					QCoreApplication::applicationDirPath() + u"/../../icon"_q,
+				};
+				for (const auto &dirPath : searchDirs) {
+					const auto fullPath = dirPath + u"/"_q + fileName;
+					if (QFileInfo::exists(fullPath)) {
+						rawImage.load(fullPath);
+						if (!rawImage.isNull()) {
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		if (rawImage.isNull()) {
+			g_customLogoKey = custom;
+			g_customLogo = defaultLogo;
+			g_customLogoNoMargin = defaultLogoNoMargin;
+		} else {
+			g_customLogoKey = custom;
+			auto scaled = rawImage.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+			if (scaled.size() != QSize(256, 256)) {
+				auto canvas = QImage(256, 256, QImage::Format_ARGB32_Premultiplied);
+				canvas.fill(Qt::transparent);
+				auto p = QPainter(&canvas);
+				p.drawImage((256 - scaled.width()) / 2, (256 - scaled.height()) / 2, scaled);
+				p.end();
+				scaled = std::move(canvas);
+			}
+			g_customLogoNoMargin = scaled;
+
+			auto scaledMargin = rawImage.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+			auto canvas = QImage(256, 256, QImage::Format_ARGB32_Premultiplied);
+			canvas.fill(Qt::transparent);
+			auto p = QPainter(&canvas);
+			p.drawImage((256 - scaledMargin.width()) / 2, (256 - scaledMargin.height()) / 2, scaledMargin);
+			p.end();
+			g_customLogo = std::move(canvas);
+		}
+	}
+
+	return noMargin ? g_customLogoNoMargin : g_customLogo;
+}
+
 const QImage &Logo() {
-	static const auto result = QImage(u":/gui/art/logo_256.png"_q);
-	return result;
+	return GetCustomLogo(false);
 }
 
 const QImage &LogoNoMargin() {
-	static const auto result = QImage(u":/gui/art/logo_256_no_margin.png"_q);
-	return result;
+	return GetCustomLogo(true);
 }
+
+void ClearLogoCache() {
+	g_customLogoKey = QString();
+	g_customLogo = QImage();
+	g_customLogoNoMargin = QImage();
+}
+
 
 void ConvertIconToBlack(QImage &image) {
 	if (image.format() != QImage::Format_ARGB32_Premultiplied) {
@@ -198,7 +313,9 @@ QIcon CreateOfficialIcon(Main::Session *session) {
 
 QIcon CreateIcon(Main::Session *session, bool returnNullIfDefault) {
 	const auto officialIcon = CreateOfficialIcon(session);
-	if (!officialIcon.isNull() || returnNullIfDefault) {
+	const auto hasCustom = Core::IsAppLaunched()
+		&& !Core::App().settings().customAppIcon().isEmpty();
+	if (!officialIcon.isNull() || (returnNullIfDefault && !hasCustom)) {
 		return officialIcon;
 	}
 
