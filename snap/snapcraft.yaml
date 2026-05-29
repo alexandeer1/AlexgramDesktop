@@ -123,6 +123,7 @@ parts:
       - rnnoise
       - tde2e
       - webrtc
+      - cmake
 
   pkgs:
     plugin: nil
@@ -500,3 +501,26 @@ parts:
     after:
       - ffmpeg
       - mozjpeg
+
+  cmake:
+    plugin: nil
+    build-packages:
+      - wget
+    override-build: |
+      ARCH=$(uname -m)
+      if [ "$ARCH" = "x86_64" ]; then
+        URL="https://github.com/Kitware/CMake/releases/download/v3.31.5/cmake-3.31.5-linux-x86_64.tar.gz"
+      elif [ "$ARCH" = "aarch64" ]; then
+        URL="https://github.com/Kitware/CMake/releases/download/v3.31.5/cmake-3.31.5-linux-aarch64.tar.gz"
+      else
+        echo "Unsupported architecture: $ARCH"
+        exit 1
+      fi
+      echo "Downloading CMake from $URL"
+      wget -qO- "$URL" | tar xz --strip-components=1 -C "$CRAFT_PART_INSTALL"
+    stage:
+      - bin
+      - share
+    prime:
+      - -./*
+
