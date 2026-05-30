@@ -14,6 +14,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtWidgets/QComboBox>
 #include <QtWidgets/QProgressBar>
 #include <QtWidgets/QDialog>
+#include <QtWidgets/QScrollArea>
+#include <QtWidgets/QCheckBox>
 #include <QtCore/QStringList>
 #include <QtWidgets/QTextEdit>
 #include <QtWidgets/QDialogButtonBox>
@@ -66,6 +68,83 @@ private:
 };
 
 
+class PlaylistBrowserDialog : public QDialog {
+	Q_OBJECT
+public:
+	struct RowWidget {
+		QWidget *widget = nullptr;
+		QCheckBox *checkbox = nullptr;
+		QLabel *thumbnail = nullptr;
+		QLabel *indexBadge = nullptr;
+		QLabel *titleLabel = nullptr;
+		QLabel *durationLabel = nullptr;
+		QLabel *statusLabel = nullptr;
+		QProgressBar *progressBar = nullptr;
+		bool thumbnailStarted = false;
+	};
+
+	explicit PlaylistBrowserDialog(
+		VideoDownloaderEngine *engine,
+		const PlaylistInfo &playlist,
+		const QString &defaultDownloadDir,
+		QWidget *parent = nullptr);
+
+	[[nodiscard]] QVector<PlaylistEntry> selectedEntries() const;
+	[[nodiscard]] QString videoFormatId() const;
+	[[nodiscard]] QString audioFormatId() const;
+	[[nodiscard]] QString subtitleLang() const;
+	[[nodiscard]] QString downloadDir() const;
+	[[nodiscard]] int maxConcurrency() const;
+
+	void setItemStatus(int entryIndex, int percent, bool done, bool error, const QString &statusText);
+	void setDownloadingMode(bool downloading);
+	void setRowVisible(int index, bool visible);
+
+protected:
+	void showEvent(QShowEvent *e) override;
+	void resizeEvent(QResizeEvent *e) override;
+
+private:
+	void setupUi();
+	void applyStyle();
+	void populateList();
+	void updateSelectionCount();
+	void fetchThumbnailForRow(int rowIdx, const QString &url);
+	void filterRows(const QString &query);
+	void loadVisibleThumbnails();
+
+	VideoDownloaderEngine *_engine = nullptr;
+	PlaylistInfo _playlist;
+	QString _downloadDir;
+
+	QLabel *_playlistTitleLabel = nullptr;
+	QLabel *_uploaderLabel = nullptr;
+	QLabel *_countLabel = nullptr;
+
+	QLineEdit *_searchBox = nullptr;
+	QPushButton *_selectAllBtn = nullptr;
+	QPushButton *_selectNoneBtn = nullptr;
+	QPushButton *_invertBtn = nullptr;
+
+	QWidget *_listContainer = nullptr;
+	QScrollArea *_scrollArea = nullptr;
+	QVector<RowWidget> _rows;
+
+	QComboBox *_qualityCombo = nullptr;
+	QComboBox *_subtitleCombo = nullptr;
+	QComboBox *_concurrencyCombo = nullptr;
+	QLabel *_folderLabel = nullptr;
+	QPushButton *_folderButton = nullptr;
+
+	QLabel *_selectionCountLabel = nullptr;
+	QPushButton *_downloadBtn = nullptr;
+	QPushButton *_cancelBtn = nullptr;
+
+	QNetworkAccessManager *_thumbnailNetwork = nullptr;
+	rpl::lifetime _lifetime;
+};
+
+
 class VideoDownloaderSetupWindow : public QWidget {
 public:
 	VideoDownloaderSetupWindow(QWidget *parent = nullptr);
@@ -106,9 +185,12 @@ private:
 	void onDownloadClicked();
 	void onFolderClicked();
 	void onAudioButtonClicked();
+	void onOpenPlaylistClicked();
 
 	void ensureEngine();
 	void setUiEnabled(bool enabled);
+	void showPlaylistButton(const PlaylistInfo &info);
+	void hidePlaylistButton();
 
 	std::unique_ptr<VideoDownloaderManager> _manager;
 	std::unique_ptr<VideoDownloaderEngine> _engine;
@@ -126,7 +208,8 @@ private:
 	QLabel *_folderLabel = nullptr;
 	QPushButton *_folderButton = nullptr;
 	QPushButton *_downloadButton = nullptr;
-	
+	QPushButton *_playlistButton = nullptr;
+
 	QLabel *_thumbnailLabel = nullptr;
 	QLabel *_statusLabel = nullptr;
 	QProgressBar *_progressBar = nullptr;
@@ -137,7 +220,11 @@ private:
 	QString _rawFormatsText;
 	QStringList _selectedAudioFormatIds;
 	VideoInfo _lastInfo;
-	
+	PlaylistInfo _lastPlaylistInfo;
+	bool _isPlaylist = false;
+	int _lastQualityIndex = 0;
+	bool _formatsDialogOpen = false;
+
 	rpl::lifetime _lifetime;
 };
 

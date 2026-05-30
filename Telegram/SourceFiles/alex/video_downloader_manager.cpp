@@ -62,10 +62,8 @@ QString VideoDownloaderManager::ytDlpPath() const {
 QString VideoDownloaderManager::ffmpegPath() const {
 #ifdef Q_OS_WIN
 	return _binDir + u"/ffmpeg.exe"_q;
-#elif defined(Q_OS_MAC)
-	return _binDir + u"/ffmpeg_mac"_q;
 #else
-	return _binDir + u"/ffmpeg_linux"_q;
+	return _binDir + u"/ffmpeg"_q;
 #endif
 }
 
@@ -137,6 +135,8 @@ void VideoDownloaderManager::forceReinstall() {
 	}
 	QFile::remove(ytDlpPath());
 	QFile::remove(ffmpegPath());
+	QFile::remove(_binDir + u"/ffmpeg_linux"_q);
+	QFile::remove(_binDir + u"/ffmpeg_mac"_q);
 	
 	ensureDependencies();
 }
