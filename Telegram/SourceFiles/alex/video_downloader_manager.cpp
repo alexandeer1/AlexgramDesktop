@@ -242,6 +242,14 @@ void VideoDownloaderManager::downloadFile(
 		[this, reply, savePath, stage, isFfmpeg]() {
 			_downloading = false;
 			if (reply->error() != QNetworkReply::NoError) {
+				if (isFfmpeg && savePath.endsWith(u".tar.xz"_q)) {
+					LOG(("VideoDownloader Info: tar.xz download failed: %1. Trying zip fallback from Martin Riedl...").arg(reply->errorString()));
+					reply->deleteLater();
+					const auto zipUrl = u"https://ffmpeg.martin-riedl.de/redirect/latest/linux/amd64/release/ffmpeg.zip"_q;
+					const auto zipSavePath = _binDir + u"/ffmpeg_linux_fallback.zip"_q;
+					downloadFile(zipUrl, zipSavePath, DownloadStage::DownloadingFfmpeg);
+					return;
+				}
 				SetupProgress p;
 				p.stage = DownloadStage::Error;
 				p.percent = 0;
@@ -306,16 +314,24 @@ void VideoDownloaderManager::extractFfmpegFromArchive(const QString &archivePath
 		.arg(ffmpegPath());
 	process->start(u"bash"_q, QStringList{ u"-c"_q, script });
 #else
-	const auto script = u"tar -xf '%1' -C '%2' && find '%2' -type f -name 'ffmpeg' -exec mv {} '%3' \\; && chmod +x '%3'"_q
-		.arg(archivePath)
-		.arg(extractDir)
-		.arg(ffmpegPath());
-	process->start(u"bash"_q, QStringList{ u"-c"_q, script });
+	const auto isZip = archivePath.endsWith(u".zip"_q);
+	const auto script = isZip
+		? u"(unzip -o '%1' -d '%2' || python3 -c \"import zipfile; zipfile.ZipFile('%1').extractall('%2')\" || python -c \"import zipfile; zipfile.ZipFile('%1').extractall('%2')\") && find '%2' -type f -name 'ffmpeg' -exec mv {} '%3' \\; && chmod +x '%3'"_q
+			.arg(archivePath)
+			.arg(extractDir)
+			.arg(ffmpegPath())
+		: u"(tar -xf '%1' -C '%2' || python3 -c \"import tarfile; tarfile.open('%1').extractall('%2')\" || python -c \"import tarfile; tarfile.open('%1').extractall('%2')\") && find '%2' -type f -name 'ffmpeg' -exec mv {} '%3' \\; && chmod +x '%3'"_q
+			.arg(archivePath)
+			.arg(extractDir)
+			.arg(ffmpegPath());
+	process->start(u"sh"_q, QStringList{ u"-c"_q, script });
 #endif
 
 	QObject::connect(process,
 		qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
 		[this, process, archivePath, extractDir](int code, QProcess::ExitStatus) {
+			const auto stdOut = QString::fromUtf8(process->readAllStandardOutput()).trimmed();
+			const auto stdErr = QString::fromUtf8(process->readAllStandardError()).trimmed();
 			process->deleteLater();
 
 			QFile::remove(archivePath);
@@ -324,6 +340,20 @@ void VideoDownloaderManager::extractFfmpegFromArchive(const QString &archivePath
 			if (code == 0 && QFile::exists(ffmpegPath())) {
 				downloadNextPending();
 			} else {
+				LOG(("VideoDownloader Error: ffmpeg extraction failed. Code: %1, Stdout: %2, Stderr: %3")
+					.arg(code)
+					.arg(stdOut)
+					.arg(stdErr));
+
+				const auto isTarXz = archivePath.endsWith(u".tar.xz"_q);
+				if (isTarXz) {
+					LOG(("VideoDownloader Info: tar.xz extraction failed. Trying zip fallback from Martin Riedl..."));
+					const auto zipUrl = u"https://ffmpeg.martin-riedl.de/redirect/latest/linux/amd64/release/ffmpeg.zip"_q;
+					const auto zipSavePath = _binDir + u"/ffmpeg_linux_fallback.zip"_q;
+					downloadFile(zipUrl, zipSavePath, DownloadStage::DownloadingFfmpeg);
+					return;
+				}
+
 				SetupProgress p;
 				p.stage = DownloadStage::Error;
 				p.percent = 0;
