@@ -569,6 +569,7 @@ void VideoDownloaderWindow::setupUi() {
 	_downloadButton->setMinimumHeight(50);
 	_downloadButton->setCursor(Qt::PointingHandCursor);
 	_downloadButton->setObjectName("DownloadBtn");
+	_downloadButton->hide();
 	leftLayout->addWidget(_downloadButton);
 
 
@@ -913,11 +914,12 @@ void VideoDownloaderWindow::ensureEngine() {
 		
 		_statusLabel->setText(u"Ready to download."_q);
 		_progressBar->setValue(0);
+		_downloadButton->show();
 	}, lifetime());
 	
 	_engine->thumbnailReady() | rpl::on_next([=](QPixmap pm) {
 		auto scaled = pm.scaled(_thumbnailLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
+ 
 		QPixmap rounded(scaled.size());
 		rounded.fill(Qt::transparent);
 		QPainter p(&rounded);
@@ -927,13 +929,14 @@ void VideoDownloaderWindow::ensureEngine() {
 		p.setClipPath(path);
 		p.drawPixmap(0, 0, scaled);
 		p.end();
-
+ 
 		_thumbnailLabel->setPixmap(rounded);
 	}, lifetime());
-
+ 
 	_engine->fetchError() | rpl::on_next([=](const QString &err) {
 		_statusLabel->setText(u"Error: "_q + err);
 		_progressBar->setValue(0);
+		_downloadButton->hide();
 	}, lifetime());
 	
 	_engine->downloadProgress() | rpl::on_next([=](const VideoDownloaderEngine::DownloadProgress &prog) {
@@ -993,6 +996,7 @@ void VideoDownloaderWindow::onFetchClicked() {
 		return;
 	}
 
+	_downloadButton->hide();
 	_statusLabel->setText(u"Checking dependencies..."_q);
 	_progressBar->setValue(0);
 	_selectedAudioFormatIds.clear();

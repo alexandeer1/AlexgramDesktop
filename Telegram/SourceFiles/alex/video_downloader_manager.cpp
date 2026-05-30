@@ -300,14 +300,13 @@ void VideoDownloaderManager::extractFfmpegFromArchive(const QString &archivePath
 		u"powershell"_q,
 		QStringList{ u"-NoProfile"_q, u"-Command"_q, script });
 #elif defined(Q_OS_MAC)
-	const auto script = u"unzip -o '%1' 'ffmpeg' -d '%2' && mv '%2/ffmpeg' '%3' && chmod +x '%3'"_q
+	const auto script = u"unzip -o '%1' -d '%2' && find '%2' -type f -name 'ffmpeg' -exec mv {} '%3' \\; && chmod +x '%3'"_q
 		.arg(archivePath)
 		.arg(extractDir)
 		.arg(ffmpegPath());
 	process->start(u"bash"_q, QStringList{ u"-c"_q, script });
 #else
-	const auto script = u"tar -xf '%1' -C '%2' --wildcards '*/ffmpeg' --strip-components=1 "
-		"&& mv '%2/ffmpeg' '%3' && chmod +x '%3'"_q
+	const auto script = u"tar -xf '%1' -C '%2' && find '%2' -type f -name 'ffmpeg' -exec mv {} '%3' \\; && chmod +x '%3'"_q
 		.arg(archivePath)
 		.arg(extractDir)
 		.arg(ffmpegPath());

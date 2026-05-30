@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QRegularExpression>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QFileInfo>
+#include "base/debug_log.h"
 
 namespace Alex {
 
@@ -243,9 +244,6 @@ void VideoDownloaderEngine::parseFetchOutput(const QByteArray &json) {
 			continue;
 		}
 		const auto key = QString::number(height);
-		if (heightMap.contains(key)) {
-			continue;
-		}
 
 		VideoFormat fmt;
 		fmt.id = u"bestvideo[height<=%1]+bestaudio/best[height<=%1]"_q.arg(height);
@@ -382,34 +380,41 @@ void VideoDownloaderEngine::startDownload(
 	QString finalFormatId = videoFormatId;
 	bool multiAudio = false;
 
-	if (!audioFormatId.isEmpty()) {
-		if (finalFormatId.contains(u"+bestaudio"_q)) {
-			finalFormatId = finalFormatId.left(finalFormatId.indexOf(u"+bestaudio"_q));
-		} else if (finalFormatId.contains(u"bestvideo"_q) && finalFormatId.contains(u"/"_q)) {
-			finalFormatId = u"bestvideo"_q;
-		}
+	if (videoFormatId != u"bestaudio"_q) {
+		if (!audioFormatId.isEmpty()) {
+			if (finalFormatId.contains(u"+bestaudio"_q)) {
+				finalFormatId = finalFormatId.left(finalFormatId.indexOf(u"+bestaudio"_q));
+			} else if (finalFormatId.contains(u"bestvideo"_q) && finalFormatId.contains(u"/"_q)) {
+				finalFormatId = u"bestvideo"_q;
+			}
 
-		auto audioParts = audioFormatId.split(u","_q);
-		if (audioParts.size() > 1) {
-			multiAudio = true;
-		}
-		
-		for (const auto &part : audioParts) {
-			if (!part.isEmpty() && !finalFormatId.contains(part)) {
-				finalFormatId += u"+"_q + part;
+			auto audioParts = audioFormatId.split(u","_q);
+			if (audioParts.size() > 1) {
+				multiAudio = true;
+			}
+			
+			for (const auto &part : audioParts) {
+				if (!part.isEmpty() && !finalFormatId.contains(part)) {
+					finalFormatId += u"+"_q + part;
+				}
 			}
 		}
-	}
-	
-	if (!finalFormatId.contains(u"/"_q) && !finalFormatId.contains(u"+"_q)) {
-		finalFormatId += u"+bestaudio/best"_q;
-	} else if (!finalFormatId.contains(u"/"_q)) {
-		finalFormatId += u"/best"_q;
+		
+		if (!finalFormatId.contains(u"/"_q) && !finalFormatId.contains(u"+"_q)) {
+			finalFormatId += u"+bestaudio/best"_q;
+		} else if (!finalFormatId.contains(u"/"_q)) {
+			finalFormatId += u"/best"_q;
+		}
 	}
 
 	auto args = QStringList{
 		u"-f"_q, finalFormatId,
 	};
+	if (videoFormatId == u"bestaudio"_q) {
+		args.append(u"-x"_q);
+		args.append(u"--audio-format"_q);
+		args.append(u"m4a"_q);
+	}
 	if (QFileInfo(_ffmpegPath).isAbsolute()) {
 		args.append(u"--ffmpeg-location"_q);
 		args.append(_ffmpegPath);
@@ -435,9 +440,6 @@ void VideoDownloaderEngine::startDownload(
 		// Embedded subs work best in mkv
 		args.append(u"--merge-output-format"_q);
 		args.append(u"mkv"_q);
-	} else {
-		args.append(u"--merge-output-format"_q);
-		args.append(u"mp4"_q);
 	}
 	
 	args.append(u"--newline"_q);
@@ -478,6 +480,7 @@ void VideoDownloaderEngine::startDownload(
 			}
 		});
 
+	LOG(("VideoDownloader Info: yt-dlp arguments: %1").arg(args.join(u" "_q)));
 	process->start(_ytDlpPath, args);
 }
 
