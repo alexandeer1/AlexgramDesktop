@@ -666,7 +666,7 @@ void VideoDownloaderEngine::startPlaylistDownload(
 	_playlistState.cancelled = false;
 	_isPlaylistDownloading = true;
 
-	const int startCount = std::min(maxConcurrency, entries.size());
+	const int startCount = std::min(maxConcurrency, int(entries.size()));
 	for (int i = 0; i < startCount; ++i) {
 		processNextPlaylistItem();
 	}

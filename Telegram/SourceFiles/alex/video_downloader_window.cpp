@@ -1947,7 +1947,7 @@ void VideoDownloaderWindow::onOpenPlaylistClicked() {
 			}
 			const auto overallPercent = totalItems > 0 ? (sum / totalItems) : 0;
 
-			const auto idx = std::min(prog.entryIndex, totalItems - 1);
+			const auto idx = std::min(prog.entryIndex, int(totalItems - 1));
 			if (prog.done) {
 				const auto title = (idx >= 0 && idx < selected.size()) ? selected[idx].title : u""_q;
 				const auto prefix = (prog.statusText == u"Already Downloaded"_q) ? u"Already downloaded"_q : u"Saved"_q;
