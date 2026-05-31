@@ -93,7 +93,7 @@ jobs:
                   try {
                       Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
                   } catch {
-                      Write-Host "Failed to remove $path: $_"
+                      Write-Host "Failed to remove $($path): $_"
                   }
               }
           }
