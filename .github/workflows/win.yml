@@ -68,6 +68,26 @@ jobs:
         shell: cmd
 
     steps:
+      - name: Free disk space.
+        shell: pwsh
+        run: |
+          Write-Host "Checking initial disk space:"
+          Get-PSDrive C | Select-Object Used, Free
+          if (Test-Path "C:\Android") {
+              Write-Host "Removing C:\Android..."
+              Remove-Item -Path "C:\Android" -Recurse -Force
+          }
+          if (Test-Path "C:\hostedtoolcache\Java") {
+              Write-Host "Removing C:\hostedtoolcache\Java..."
+              Remove-Item -Path "C:\hostedtoolcache\Java" -Recurse -Force
+          }
+          if (Test-Path "C:\hostedtoolcache\Go") {
+              Write-Host "Removing C:\hostedtoolcache\Go..."
+              Remove-Item -Path "C:\hostedtoolcache\Go" -Recurse -Force
+          }
+          Write-Host "Checking disk space after cleanup:"
+          Get-PSDrive C | Select-Object Used, Free
+
       - name: Prepare directories.
         run: |
           mkdir %userprofile%\TBuild\Libraries

@@ -1397,7 +1397,16 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
 				selfromy - mtop,
 				seltoy - mtop);
 			context.highlight = _widget->itemHighlight(view->data());
+			const auto item = view->data();
+			const auto ghostTranslucent = item->isGhostDeleted()
+				&& Core::App().settings().ghostTranslucentDeleted();
+			if (ghostTranslucent) {
+				p.setOpacity(Core::App().settings().ghostDeletedOpacity() / 100.0);
+			}
 			view->draw(p, context);
+			if (ghostTranslucent) {
+				p.setOpacity(1.0);
+			}
 			processPainted(view, top, height);
 
 			top += height;
@@ -1463,7 +1472,15 @@ void HistoryInner::paintEvent(QPaintEvent *e) {
 					selfromy - htop,
 					seltoy - htop);
 				context.highlight = _widget->itemHighlight(item);
+				const auto ghostTranslucent = item->isGhostDeleted()
+					&& Core::App().settings().ghostTranslucentDeleted();
+				if (ghostTranslucent) {
+					p.setOpacity(Core::App().settings().ghostDeletedOpacity() / 100.0);
+				}
 				view->draw(p, context);
+				if (ghostTranslucent) {
+					p.setOpacity(1.0);
+				}
 				processPainted(view, top, height);
 			}
 			top += height;
