@@ -73,18 +73,39 @@ jobs:
         run: |
           Write-Host "Checking initial disk space:"
           Get-PSDrive C | Select-Object Used, Free
-          if (Test-Path "C:\Android") {
-              Write-Host "Removing C:\Android..."
-              Remove-Item -Path "C:\Android" -Recurse -Force
+
+          $pathsToDelete = @(
+              "C:\Android",
+              "C:\Program Files (x86)\Android",
+              "C:\vcpkg",
+              "C:\hostedtoolcache\Java",
+              "C:\hostedtoolcache\Go",
+              "C:\hostedtoolcache\Ruby",
+              "C:\hostedtoolcache\PyPy",
+              "C:\hostedtoolcache\CodeQL",
+              "C:\Program Files\LLVM",
+              "C:\Program Files\Microsoft\jdk"
+          )
+
+          foreach ($path in $pathsToDelete) {
+              if (Test-Path $path) {
+                  Write-Host "Removing $path..."
+                  try {
+                      Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                  } catch {
+                      Write-Host "Failed to remove $path: $_"
+                  }
+              }
           }
-          if (Test-Path "C:\hostedtoolcache\Java") {
-              Write-Host "Removing C:\hostedtoolcache\Java..."
-              Remove-Item -Path "C:\hostedtoolcache\Java" -Recurse -Force
+
+          Write-Host "Cleaning package manager caches..."
+          try {
+              & choco cache clean 2>&1
+              & nuget locals all -clear 2>&1
+          } catch {
+              Write-Host "Failed to clear caches: $_"
           }
-          if (Test-Path "C:\hostedtoolcache\Go") {
-              Write-Host "Removing C:\hostedtoolcache\Go..."
-              Remove-Item -Path "C:\hostedtoolcache\Go" -Recurse -Force
-          }
+
           Write-Host "Checking disk space after cleanup:"
           Get-PSDrive C | Select-Object Used, Free
 
