@@ -145,6 +145,7 @@ envForThirdPartyKey = hashlib.sha1(envForThirdPartyKeyString.encode('utf-8')).he
 modifiedEnv = os.environ.copy()
 for key in environment:
     modifiedEnv[key] = environment[key]
+modifiedEnv['TDESKTOP_DIR'] = os.path.realpath(os.path.join(scriptPath, '..', '..', '..'))
 if win and 'NoDefaultCurrentDirectoryInExePath' in modifiedEnv:
     del modifiedEnv['NoDefaultCurrentDirectoryInExePath']
 
@@ -470,8 +471,8 @@ win:
     msys64.exe
     del msys64.exe
 
-    bash -c "pacman-key --init; pacman-key --populate; pacman -Syu --noconfirm"
-    pacman -Syu --noconfirm ^
+    bash -c "pacman-key --init; pacman-key --populate; pacman -Syyu --noconfirm"
+    pacman -Syyu --noconfirm ^
         make ^
         mingw-w64-x86_64-diffutils ^
         mingw-w64-x86_64-gperf ^
@@ -518,6 +519,7 @@ mac:
 stage('lzma', """
 win:
     git clone https://github.com/desktop-app/lzma.git
+    python $TDESKTOP_DIR\\fix_toolset.py
     cd lzma\\C\\Util\\LzmaLib
     msbuild -m LzmaLib.sln /property:Configuration=Debug /property:Platform="$X8664"
 release:
@@ -1053,6 +1055,7 @@ depends:patches/libvpx/*.patch
     git checkout v1.14.1
 win:
     for /r %%i in (..\\patches\\libvpx\\*) do git apply %%i
+    python -c "import glob; [open(f, 'wb').write(open(f, 'rb').read().replace(b'v143', b'v145')) for f in glob.glob('build/make/gen_msvs_*.sh')]"
 
     SET PATH=%THIRDPARTY_DIR%\\msys64\\usr\\bin;%PATH%
     SET CHERE_INVOKING=enabled_from_arguments
@@ -1402,6 +1405,7 @@ release:
     ninja -C out/Release%FolderPostfix% common crash_generation_client exception_handler
     cd tools\\windows\\dump_syms
     gyp dump_syms.gyp --format=msvs
+    python -c "import os; r_path=os.path.abspath('../../..'); [open(p, 'wb').write(c.replace(b'v143', b'v145')) for p, c in [(p, open(p, 'rb').read()) for r, _, fs in os.walk(r_path) for f in fs if f.endswith(('.vcxproj', '.sln')) for p in [os.path.join(r, f)]]]"
     msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64"
 win:
     deactivate
