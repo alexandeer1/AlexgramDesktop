@@ -537,6 +537,14 @@ not_null<HistoryItem*> History::createItem(
 		if (result->needsUpdateForVideoQualities(message)) {
 			owner().updateEditedMessage(message);
 		}
+		if (result->ghostDeletedData().isEmpty()) {
+			auto buffer = mtpBuffer();
+			buffer.reserve(tl::count_length(message) >> 2);
+			message.write(buffer);
+			result->setGhostDeletedData(QByteArray(
+				reinterpret_cast<const char*>(buffer.constData()),
+				buffer.size() * sizeof(mtpPrime)));
+		}
 		return result;
 	}
 	const auto result = message.match([&](const auto &data) {
@@ -4306,6 +4314,10 @@ void History::clear(ClearType type, bool markEmpty) {
 		channel->mgInfo->markupSenders.clear();
 	}
 
+	if (blocks.empty() && !_clientSideMessages.empty()) {
+		checkLocalMessages();
+	}
+
 	owner().notifyHistoryChangeDelayed(this);
 	owner().sendHistoryChangeNotifications();
 }
@@ -4315,7 +4327,7 @@ void History::clearUpTill(MsgId availableMinId) {
 	remove.reserve(_items.size());
 	for (const auto &item : _items) {
 		const auto itemId = item->id;
-		if (!item->isRegular()) {
+		if (!item->isRegular() || item->isGhostDeleted()) {
 			continue;
 		} else if (itemId == availableMinId) {
 			item->applyEditionToHistoryCleared();

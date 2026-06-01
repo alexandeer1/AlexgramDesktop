@@ -445,7 +445,7 @@ QImage *PeerData::userpicCloudImage(Ui::PeerUserpicView &view) const {
 		return image;
 	} else if (isNotificationsUser()) {
 		static auto result = QImage(
-			u":/gui/art/logo_256_no_margin.png"_q
+			u":/gui/art/telegram_logo_256.png"_q
 		).scaledToWidth(kUserpicSize, Qt::SmoothTransformation);
 		return &result;
 	}

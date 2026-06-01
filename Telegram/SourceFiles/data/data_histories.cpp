@@ -34,6 +34,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings.h"
 #include "api/api_updates.h"
 #include "apiwrap.h"
+#include "alex/messages_storage.h"
 
 namespace Data {
 namespace {
@@ -1011,7 +1012,7 @@ void Histories::deleteMessagesByDates(
 	history->destroyMessagesByDates(minDate, maxDate);
 }
 
-void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
+void Histories::deleteMessages(const MessageIdsList &ids, bool revoke, bool keepLocally) {
 	auto remove = std::vector<not_null<HistoryItem*>>();
 	remove.reserve(ids.size());
 	base::flat_map<not_null<History*>, QVector<MTPint>> idsByPeer;
@@ -1077,17 +1078,24 @@ void Histories::deleteMessages(const MessageIdsList &ids, bool revoke) {
 		document->owner().savedMusic().remove(document);
 	}
 
-	if (!remove.empty()) {
-		_owner->notifyItemsAboutToBeDestroyed(remove);
-	}
-	for (const auto &item : remove) {
-		const auto history = item->history();
-		const auto wasLast = (history->lastMessage() == item);
-		const auto wasInChats = (history->chatListMessage() == item);
-		item->destroy();
+	if (keepLocally) {
+		for (const auto &item : remove) {
+			item->setGhostDeleted(true);
+			Alex::Messages::addDeletedMessage(item);
+		}
+	} else {
+		if (!remove.empty()) {
+			_owner->notifyItemsAboutToBeDestroyed(remove);
+		}
+		for (const auto &item : remove) {
+			const auto history = item->history();
+			const auto wasLast = (history->lastMessage() == item);
+			const auto wasInChats = (history->chatListMessage() == item);
+			item->destroy();
 
-		if (wasLast || wasInChats) {
-			history->requestChatListMessage();
+			if (wasLast || wasInChats) {
+				history->requestChatListMessage();
+			}
 		}
 	}
 }

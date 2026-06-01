@@ -6,6 +6,8 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "alex/messages_storage.h"
+#include "data/data_peer_id.h"
+#include "api/api_text_entities.h"
 #include "history/history_item.h"
 #include "lang/translate_provider.h"
 
@@ -2415,6 +2417,53 @@ void HistoryItem::applySentMessage(const MTPDmessage &data) {
 	} else {
 		applyTTL(0);
 	}
+
+	if (ghostDeletedData().isEmpty()) {
+		const MTPMessage mtpMsg = MTP_message(
+			data.vflags(),
+			data.vid(),
+			data.vfrom_id() ? *data.vfrom_id() : MTPPeer(),
+			data.vfrom_boosts_applied() ? *data.vfrom_boosts_applied() : MTPint(),
+			data.vfrom_rank() ? *data.vfrom_rank() : MTPstring(),
+			data.vpeer_id(),
+			data.vsaved_peer_id() ? *data.vsaved_peer_id() : MTPPeer(),
+			data.vfwd_from() ? *data.vfwd_from() : MTPMessageFwdHeader(),
+			data.vvia_bot_id() ? *data.vvia_bot_id() : MTPlong(),
+			data.vvia_business_bot_id() ? *data.vvia_business_bot_id() : MTPlong(),
+			data.vguestchat_via_from() ? *data.vguestchat_via_from() : MTPPeer(),
+			data.vreply_to() ? *data.vreply_to() : MTPMessageReplyHeader(),
+			data.vdate(),
+			data.vmessage(),
+			data.vmedia() ? *data.vmedia() : MTPMessageMedia(),
+			data.vreply_markup() ? *data.vreply_markup() : MTPReplyMarkup(),
+			data.ventities() ? *data.ventities() : MTPVector<MTPMessageEntity>(),
+			data.vviews() ? *data.vviews() : MTPint(),
+			data.vforwards() ? *data.vforwards() : MTPint(),
+			data.vreplies() ? *data.vreplies() : MTPMessageReplies(),
+			data.vedit_date() ? *data.vedit_date() : MTPint(),
+			data.vpost_author() ? *data.vpost_author() : MTPbytes(),
+			data.vgrouped_id() ? *data.vgrouped_id() : MTPlong(),
+			data.vreactions() ? *data.vreactions() : MTPMessageReactions(),
+			data.vrestriction_reason() ? *data.vrestriction_reason() : MTPVector<MTPRestrictionReason>(),
+			data.vttl_period() ? *data.vttl_period() : MTPint(),
+			data.vquick_reply_shortcut_id() ? *data.vquick_reply_shortcut_id() : MTPint(),
+			data.veffect() ? *data.veffect() : MTPlong(),
+			data.vfactcheck() ? *data.vfactcheck() : MTPFactCheck(),
+			data.vreport_delivery_until_date() ? *data.vreport_delivery_until_date() : MTPint(),
+			data.vpaid_message_stars() ? *data.vpaid_message_stars() : MTPlong(),
+			data.vsuggested_post() ? *data.vsuggested_post() : MTPSuggestedPost(),
+			data.vschedule_repeat_period() ? *data.vschedule_repeat_period() : MTPint(),
+			data.vsummary_from_language() ? *data.vsummary_from_language() : MTPstring()
+		);
+
+		auto buffer = mtpBuffer();
+		buffer.reserve(tl::count_length(mtpMsg) >> 2);
+		mtpMsg.write(buffer);
+		setGhostDeletedData(QByteArray(
+			reinterpret_cast<const char*>(buffer.constData()),
+			buffer.size() * sizeof(mtpPrime)));
+	}
+
 	_history->owner().notifyItemDataChange(this);
 	_history->owner().requestItemTextRefresh(this);
 	_history->owner().updateDependentMessages(this);
@@ -2440,6 +2489,88 @@ void HistoryItem::applySentMessage(
 		applyTTL(data.vdate().v + period->v);
 	} else {
 		applyTTL(0);
+	}
+
+	if (ghostDeletedData().isEmpty()) {
+		const auto history = this->history();
+		MTPDmessage::Flags flags = MTPDmessage::Flag::f_out;
+		if (!isPost()) {
+			flags |= MTPDmessage::Flag::f_from_id;
+		}
+		if (data.vmedia()) {
+			flags |= MTPDmessage::Flag::f_media;
+		}
+		if (data.ventities()) {
+			flags |= MTPDmessage::Flag::f_entities;
+		}
+		if (const auto period = data.vttl_period(); period && period->v > 0) {
+			flags |= MTPDmessage::Flag::f_ttl_period;
+		}
+
+		const auto replyTo = replyToId();
+		const auto replyHeader = replyTo
+			? MTPMessageReplyHeader(MTP_messageReplyHeader(
+				MTP_flags(MTPDmessageReplyHeader::Flag::f_reply_to_msg_id),
+				MTP_int(replyTo.bare),
+				MTPPeer(),
+				MTPMessageFwdHeader(),
+				MTPMessageMedia(),
+				MTPint(),
+				MTPstring(),
+				MTPVector<MTPMessageEntity>(),
+				MTPint(),
+				MTPint(),
+				MTPbytes()))
+			: MTPMessageReplyHeader();
+		if (replyTo) {
+			flags |= MTPDmessage::Flag::f_reply_to;
+		}
+
+		const MTPMessage mtpMsg = MTP_message(
+			MTP_flags(flags),
+			MTP_int(id.bare),
+			peerToMTP(from()->id),
+			MTPint(), // from_boosts_applied
+			MTPstring(), // from_rank
+			peerToMTP(history->peer->id),
+			MTPPeer(), // saved_peer_id
+			MTPMessageFwdHeader(),
+			MTPlong(), // via_bot_id
+			MTPlong(), // via_business_bot_id
+			MTPPeer(), // guestchat_via_from
+			replyHeader,
+			MTP_int(data.vdate().v),
+			MTP_string(text),
+			data.vmedia() ? *data.vmedia() : MTPMessageMedia(),
+			MTPReplyMarkup(),
+			(data.ventities()
+				? *data.ventities()
+				: MTPVector<MTPMessageEntity>()),
+			MTPint(), // views
+			MTPint(), // forwards
+			MTPMessageReplies(),
+			MTPint(), // edit_date
+			MTPbytes(), // post_author
+			MTPlong(), // grouped_id
+			MTPMessageReactions(),
+			MTPVector<MTPRestrictionReason>(),
+			MTP_int(data.vttl_period().value_or_empty()),
+			MTPint(), // quick_reply_shortcut_id
+			MTPlong(), // effect
+			MTPFactCheck(),
+			MTPint(), // report_delivery_until_date
+			MTPlong(), // paid_message_stars
+			MTPSuggestedPost(),
+			MTPint(), // schedule_repeat_period
+			MTPstring() // summary_from_language
+		);
+
+		auto buffer = mtpBuffer();
+		buffer.reserve(tl::count_length(mtpMsg) >> 2);
+		mtpMsg.write(buffer);
+		setGhostDeletedData(QByteArray(
+			reinterpret_cast<const char*>(buffer.constData()),
+			buffer.size() * sizeof(mtpPrime)));
 	}
 }
 
@@ -2818,7 +2949,7 @@ void HistoryItem::setRealId(MsgId newId) {
 }
 
 bool HistoryItem::canPin() const {
-	if (!isRegular() || isService()) {
+	if (isGhostDeleted() || !isRegular() || isService()) {
 		return false;
 	} else if (const auto m = media(); m && m->call()) {
 		return false;
@@ -2840,7 +2971,8 @@ bool HistoryItem::allowsReschedule() const {
 }
 
 bool HistoryItem::allowsForward() const {
-	return !isService()
+	return !isGhostDeleted()
+		&& !isService()
 		&& isRegular()
 		&& !forbidsForward()
 		&& history()->peer->allowsForwarding()
@@ -2869,7 +3001,8 @@ bool HistoryItem::allowsEditMedia() const {
 }
 
 bool HistoryItem::canBeEdited() const {
-	if ((!isRegular() && !isScheduled() && !isBusinessShortcut())
+	if (isGhostDeleted()
+		|| (!isRegular() && !isScheduled() && !isBusinessShortcut())
 		|| Has<HistoryMessageVia>()
 		|| Has<HistoryMessageForwarded>()) {
 		return false;
@@ -3190,6 +3323,9 @@ void HistoryItem::translationDone(LanguageId to, Ui::TranslateProviderResult &&r
 }
 
 bool HistoryItem::canReact() const {
+	if (isGhostDeleted()) {
+		return false;
+	}
 	if (!isRegular()) {
 		return false;
 	} else if (isService()) {

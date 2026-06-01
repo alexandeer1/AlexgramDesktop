@@ -29,8 +29,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "data/stickers/data_custom_emoji.h"
+#include "alex/messages_storage.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "history/view/history_view_element.h"
 #include "lang/lang_keys.h"
 #include "lottie/lottie_icon.h"
 #include "main/main_session.h"
@@ -1619,6 +1621,16 @@ void DeleteChatBox(not_null<Ui::GenericBox*> box, not_null<PeerData*> peer) {
 				st::defaultBoxCheckbox));
 	}();
 
+	const auto maybeKeepLocally = [&]() -> Ui::Checkbox* {
+		Ui::AddSkip(container);
+		return box->addRow(
+			object_ptr<Ui::Checkbox>(
+				container,
+				tr::lng_delete_keep_locally(tr::now),
+				false,
+				st::defaultBoxCheckbox));
+	}();
+
 	Ui::AddSkip(container);
 
 	auto buttonText = maybeUser
@@ -1668,6 +1680,19 @@ void DeleteChatBox(not_null<Ui::GenericBox*> box, not_null<PeerData*> peer) {
 		//if (const auto from = peer->migrateFrom()) {
 		//	peer->session().api().deleteConversation(from, false);
 		//}
+		const auto keepLocally = maybeKeepLocally && maybeKeepLocally->checked();
+		if (keepLocally) {
+			const auto history = peer->owner().history(peer).get();
+			for (const auto &block : history->blocks) {
+				for (const auto &view : block->messages) {
+					const auto item = view->data();
+					if (item->isRegular() && !item->isGhostDeleted()) {
+						item->setGhostDeleted(true);
+						Alex::Messages::addDeletedMessage(item);
+					}
+				}
+			}
+		}
 		peer->session().api().deleteConversation(peer, revoke);
 		close();
 	}, st::attentionBoxButton);

@@ -1517,20 +1517,29 @@ void Session::deleteConversationLocally(not_null<PeerData*> peer) {
 		}
 	};
 	if (const auto history = historyLoaded(peer)) {
+		bool hasGhostDeleted = false;
+		for (const auto &item : history->clientSideMessages()) {
+			if (item->isGhostDeleted()) {
+				hasGhostDeleted = true;
+				break;
+			}
+		}
 		if (history->folderKnown()) {
 			setChatPinned(history, FilterId(), false);
 		}
 		history->updateChatListExistence();
-		if (!history->inChatList()) {
+		if (!history->inChatList() && !hasGhostDeleted) {
 			history->clearFolder();
 		}
 
 		// We want to mark the channel as left before unloading the history,
 		// otherwise some parts of updating may return us to the chats list.
 		markLeft();
-		history->clear(peer->isChannel()
-			? History::ClearType::Unload
-			: History::ClearType::DeleteChat);
+		if (!hasGhostDeleted) {
+			history->clear(peer->isChannel()
+				? History::ClearType::Unload
+				: History::ClearType::DeleteChat);
+		}
 	} else {
 		markLeft();
 	}
@@ -2967,9 +2976,11 @@ void Session::processMessagesDeleted(
 		if (list && i != list->end()) {
 			const auto item = i->second;
 			const auto history = item->history();
-			if (Core::App().settings().ghostSaveDeletedMessages()) {
-				item->setGhostDeleted(true);
-				Alex::Messages::addDeletedMessage(item);
+			if (Core::App().settings().ghostSaveDeletedMessages() || item->isGhostDeleted()) {
+				if (!item->isGhostDeleted()) {
+					item->setGhostDeleted(true);
+					Alex::Messages::addDeletedMessage(item);
+				}
 			} else {
 				item->destroy();
 			}
@@ -2990,9 +3001,11 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
 	for (const auto &messageId : data) {
 		if (const auto item = nonChannelMessage(messageId.v)) {
 			const auto history = item->history();
-			if (Core::App().settings().ghostSaveDeletedMessages()) {
-				item->setGhostDeleted(true);
-				Alex::Messages::addDeletedMessage(item);
+			if (Core::App().settings().ghostSaveDeletedMessages() || item->isGhostDeleted()) {
+				if (!item->isGhostDeleted()) {
+					item->setGhostDeleted(true);
+					Alex::Messages::addDeletedMessage(item);
+				}
 			} else {
 				item->destroy();
 			}

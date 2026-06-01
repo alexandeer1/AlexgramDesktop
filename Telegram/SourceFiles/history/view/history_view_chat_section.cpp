@@ -374,11 +374,14 @@ ChatWidget::ChatWidget(
 
 	_inner->replyToMessageRequested(
 	) | rpl::on_next([=](ListWidget::ReplyToMessageRequest request) {
+		const auto &to = request.to;
+		const auto still = _history->owner().message(to.messageId);
+		if (still && still->isGhostDeleted()) {
+			return;
+		}
 		const auto canSendReply = _topic
 			? Data::CanSendAnything(_topic)
 			: Data::CanSendAnything(_peer);
-		const auto &to = request.to;
-		const auto still = _history->owner().message(to.messageId);
 		const auto allowInAnotherChat = still && still->allowsForward();
 		if (allowInAnotherChat
 			&& (_joinGroup || !canSendReply || request.forceAnotherChat)) {
@@ -1002,6 +1005,9 @@ void ChatWidget::setupComposeControls() {
 
 void ChatWidget::setupSwipeReplyAndBack() {
 	const auto can = [=](not_null<HistoryItem*> still) {
+		if (still->isGhostDeleted()) {
+			return false;
+		}
 		const auto canSendReply = _topic
 			? Data::CanSendAnything(_topic)
 			: Data::CanSendAnything(_peer);

@@ -16,8 +16,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_histories.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
+#include "alex/messages_storage.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "history/view/history_view_element.h"
 #include "lang/lang_keys.h"
 #include "main/main_app_config.h"
 #include "main/main_session.h"
@@ -237,6 +239,18 @@ void DeleteMessagesBox::prepare() {
 			}
 		}
 	}
+	const auto showKeepLocally = (_wipeHistoryPeer != nullptr
+			|| Core::App().settings().ghostSaveDeletedMessages())
+		&& (!_ids.empty() || _wipeHistoryPeer != nullptr)
+		&& !hasScheduledMessages()
+		&& !hasSavedMusicMessages();
+	if (showKeepLocally) {
+		_keepLocally.create(
+			this,
+			tr::lng_delete_keep_locally(tr::now),
+			false,
+			st::defaultBoxCheckbox);
+	}
 	_text.create(this, rpl::single(std::move(details)), st::boxLabel);
 	_text->resizeToWidth(st::boxWidth - rect::m::sum::h(st::boxPadding));
 
@@ -280,6 +294,9 @@ void DeleteMessagesBox::prepare() {
 			+ st::boxPadding.bottom();
 		if (_revoke) {
 			fullHeight += st::boxMediumSkip + _revoke->heightNoMargins();
+		}
+		if (_keepLocally) {
+			fullHeight += st::boxMediumSkip + _keepLocally->heightNoMargins();
 		}
 		if (_autoDeleteSettings) {
 			fullHeight += st::boxMediumSkip
@@ -417,8 +434,8 @@ void DeleteMessagesBox::resizeEvent(QResizeEvent *e) {
 	const auto &padding = st::boxPadding;
 	_text->moveToLeft(padding.left(), padding.top());
 	auto top = _text->bottomNoMargins() + st::boxMediumSkip;
+	const auto availableWidth = width() - 2 * padding.left();
 	if (_revoke) {
-		const auto availableWidth = width() - 2 * padding.left();
 		_revoke->resizeToNaturalWidth(availableWidth);
 		_revoke->moveToLeft(padding.left(), top);
 		top += _revoke->heightNoMargins() + st::boxLittleSkip;
@@ -427,6 +444,11 @@ void DeleteMessagesBox::resizeEvent(QResizeEvent *e) {
 			_revokeRemember->moveToLeft(padding.left(),top);
 			top += _revokeRemember->heightNoMargins();
 		}
+	}
+	if (_keepLocally) {
+		_keepLocally->resizeToNaturalWidth(availableWidth);
+		_keepLocally->moveToLeft(padding.left(), top);
+		top += _keepLocally->heightNoMargins() + st::boxLittleSkip;
 	}
 	if (_autoDeleteSettings) {
 		top += st::boxMediumSkip - st::boxLittleSkip;
@@ -538,24 +560,32 @@ void DeleteMessagesBox::deleteAndClear() {
 		return;
 	} else if (const auto peer = _wipeHistoryPeer) {
 		const auto justClear = _wipeHistoryJustClear;
+		const auto keepLocally = _keepLocally && _keepLocally->checked();
+		if (keepLocally) {
+			const auto history = session->data().history(peer);
+			for (const auto &block : history->blocks) {
+				for (const auto &view : block->messages) {
+					const auto item = view->data();
+					if (item->isRegular() && !item->isGhostDeleted()) {
+						item->setGhostDeleted(true);
+						Alex::Messages::addDeletedMessage(item);
+					}
+				}
+			}
+		}
 		invokeCallbackAndClose();
 
 		if (justClear) {
 			session->api().clearHistory(peer, revoke);
 		} else {
 			Core::App().closeChatFromWindows(peer);
-			// Don't delete old history by default,
-			// because Android app doesn't.
-			//
-			//if (const auto from = peer->migrateFrom()) {
-			//	peer->session().api().deleteConversation(from, false);
-			//}
 			session->api().deleteConversation(peer, revoke);
 		}
 		return;
 	}
 	const auto ids = _ids;
+	const auto keepLocally = _keepLocally && _keepLocally->checked();
 	invokeCallbackAndClose();
-	session->data().histories().deleteMessages(ids, revoke);
+	session->data().histories().deleteMessages(ids, revoke, keepLocally);
 	session->data().sendHistoryChangeNotifications();
 }

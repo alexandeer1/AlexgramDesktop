@@ -5611,6 +5611,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_selected_unsend_about_group#one" = "You can also delete the {count} message you sent from the inboxes of other group members by checking \"Unsend my messages\".";
 "lng_selected_unsend_about_group#other" = "You can also delete the {count} messages you sent from the inboxes of other group members by checking \"Unsend my messages\".";
 "lng_delete_for_everyone_check" = "Delete for everyone";
+"lng_delete_keep_locally" = "Keep Locally";
 "lng_delete_for_other_check" = "Also delete for {user}";
 "lng_delete_for_other_my" = "Unsend my messages";
 "lng_box_delete" = "Delete";
