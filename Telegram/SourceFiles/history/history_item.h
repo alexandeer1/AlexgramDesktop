@@ -219,7 +219,9 @@ public:
 	void addLogEntryOriginal(
 		WebPageId localId,
 		const QString &label,
-		const TextWithEntities &content);
+		const TextWithEntities &content,
+		PhotoData *photo = nullptr,
+		DocumentData *document = nullptr);
 	void setFactcheck(MessageFactcheck info);
 	[[nodiscard]] bool hasUnrequestedFactcheck() const;
 	[[nodiscard]] TextWithEntities factcheckText() const;
@@ -243,7 +245,8 @@ public:
 	}
 	void refreshMainView();
 	void clearMainView();
-	void removeMainView();
+	void removeMainView(
+		Data::ViewRemovalReason reason = Data::ViewRemovalReason::Removed);
 
 	void invalidateChatListEntry();
 
@@ -557,6 +560,8 @@ public:
 	[[nodiscard]] FullStoryId replyToStory() const;
 	[[nodiscard]] FullReplyTo replyTo() const;
 	[[nodiscard]] bool inThread(MsgId rootId) const;
+
+	void resolveAdminLogReplyTo(not_null<HistoryItem*> replyTo);
 
 	[[nodiscard]] not_null<PeerData*> author() const;
 
