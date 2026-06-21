@@ -456,7 +456,7 @@ if customRunCommand:
 stage('patches', """
     git clone https://github.com/desktop-app/patches.git
     cd patches
-    git checkout 667174b0ac0e062ee13379d585c675df50a5f837
+    git checkout 446f47239df3102a9a24304b5e3a8c9bee5784f7
 mac:
     git clone https://github.com/desktop-app/qt6_highsierra_patches.git qt6_highsierra
 """)
@@ -521,9 +521,13 @@ win:
     git clone https://github.com/desktop-app/lzma.git
     python $TDESKTOP_DIR\\fix_toolset.py
     cd lzma\\C\\Util\\LzmaLib
-    msbuild -m LzmaLib.sln /property:Configuration=Debug /property:Platform="$X8664"
+    SET "ToolsetProp="
+winarm:
+    SET "ToolsetProp=/property:PlatformToolset=v145"
+win:
+    msbuild -m LzmaLib.sln /property:Configuration=Debug /property:Platform="$X8664" %ToolsetProp%
 release:
-    msbuild -m LzmaLib.sln /property:Configuration=Release /property:Platform="$X8664"
+    msbuild -m LzmaLib.sln /property:Configuration=Release /property:Platform="$X8664" %ToolsetProp%
 """)
 
 stage('xz', """
@@ -1390,10 +1394,12 @@ depends:patches/breakpad.diff
 win:
     SET "PYTHONUTF8=1"
     SET "FolderPostfix="
+    SET "ToolsetProp="
 win64:
     SET "FolderPostfix=_x64"
 winarm:
     SET "FolderPostfix=_ARM64"
+    SET "ToolsetProp=/property:PlatformToolset=v145"
 win:
 depends:python/Scripts/activate.bat
     %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
@@ -1406,7 +1412,7 @@ release:
     cd tools\\windows\\dump_syms
     gyp dump_syms.gyp --format=msvs
     python -c "import os; vs=os.environ.get('VisualStudioVersion',''); target='v145' if vs.startswith('18.') or os.path.exists('C:/Program Files/Microsoft Visual Studio/18') or os.path.exists('C:/Program Files (x86)/Microsoft Visual Studio/18') else 'v143'; r_path=os.path.abspath('../../..'); [open(p, 'wb').write(c.replace(b'v143', target.encode())) for p, c in [(p, open(p, 'rb').read()) for r, _, fs in os.walk(r_path) for f in fs if f.endswith(('.vcxproj', '.sln')) for p in [os.path.join(r, f)]]]"
-    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64"
+    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64" %ToolsetProp%
 win:
     deactivate
 mac:

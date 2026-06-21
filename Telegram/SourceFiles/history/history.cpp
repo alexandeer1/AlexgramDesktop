@@ -685,6 +685,9 @@ void History::destroyMessagesByDates(TimeId minDate, TimeId maxDate) {
 			toDestroy.push_back(message.get());
 		}
 	}
+	if (!toDestroy.empty()) {
+		owner().notifyItemsAboutToBeDestroyed(toDestroy);
+	}
 	for (const auto &item : toDestroy) {
 		item->destroy();
 	}
@@ -697,6 +700,9 @@ void History::destroyMessagesByTopic(MsgId topicRootId) {
 		if (message->topicRootId() == topicRootId) {
 			toDestroy.push_back(message.get());
 		}
+	}
+	if (!toDestroy.empty()) {
+		owner().notifyItemsAboutToBeDestroyed(toDestroy);
 	}
 	for (const auto &item : toDestroy) {
 		item->destroy();
@@ -711,6 +717,9 @@ void History::destroyMessagesBySublist(not_null<PeerData*> sublistPeer) {
 		if (message->sublistPeerId() == peerId) {
 			toDestroy.push_back(message.get());
 		}
+	}
+	if (!toDestroy.empty()) {
+		owner().notifyItemsAboutToBeDestroyed(toDestroy);
 	}
 	for (const auto &item : toDestroy) {
 		item->destroy();
@@ -4267,11 +4276,15 @@ void History::clear(ClearType type, bool markEmpty) {
 		_loadedAtTop = _loadedAtBottom = markEmpty;
 	} else {
 		// Leave the 'sending' messages in local messages.
-		auto local = base::flat_set<not_null<HistoryItem*>>();
+		auto local = std::vector<not_null<HistoryItem*>>();
+		local.reserve(_clientSideMessages.size());
 		for (const auto &item : _clientSideMessages) {
 			if (!item->isSending() && !item->isGhostDeleted()) {
-				local.emplace(item);
+				local.push_back(item);
 			}
+		}
+		if (!local.empty()) {
+			owner().notifyItemsAboutToBeDestroyed(local);
 		}
 		for (const auto &item : local) {
 			item->destroy();
@@ -4334,6 +4347,9 @@ void History::clearUpTill(MsgId availableMinId) {
 		} else if (itemId < availableMinId) {
 			remove.push_back(item.get());
 		}
+	}
+	if (!remove.empty()) {
+		owner().notifyItemsAboutToBeDestroyed(remove);
 	}
 	for (const auto &item : remove) {
 		item->destroy();
