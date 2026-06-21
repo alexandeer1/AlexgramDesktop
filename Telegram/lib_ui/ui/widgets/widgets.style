@@ -296,6 +296,7 @@ InputField {
 	textBg: color;
 	textBgActive: color; // Used only with borderRadius.
 	textFg: color;
+	textMarkBg: color;
 	textMargins: margins;
 	textAlign: align;
 
@@ -1039,6 +1040,7 @@ defaultInputField: InputField {
 	textBg: windowBg;
 	textBgActive: windowBg;
 	textFg: windowFg;
+	textMarkBg: windowBgOver;
 	textMargins: margins(0px, 28px, 0px, 4px);
 	textAlign: align(topleft);
 
@@ -1370,6 +1372,9 @@ historySendActionChooseStickerPosition: point(1px, -10px);
 historySendActionChooseStickerEyeWidth: 7px;
 historySendActionChooseStickerEyeHeight: 11px;
 historySendActionChooseStickerEyeStep: 2px;
+
+historySendActionRoundPosition: point(3px, -4px);
+historySendActionRoundRadius: 4px;
 
 PeerListItem {
 	left: pixels;
