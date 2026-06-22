@@ -208,7 +208,10 @@ public:
 		_phoneNumberHidden = hidden;
 	}
 	[[nodiscard]] bool phoneNumberHidden() const {
-		return _phoneNumberHidden;
+		return _phoneNumberHidden.current();
+	}
+	[[nodiscard]] rpl::producer<bool> phoneNumberHiddenValue() const {
+		return _phoneNumberHidden.value();
 	}
 
 private:
@@ -263,7 +266,7 @@ private:
 
 	std::vector<int32> _moderateCommonGroups;
 
-	bool _phoneNumberHidden = false;
+	rpl::variable<bool> _phoneNumberHidden = false;
 
 };
 
