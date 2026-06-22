@@ -1692,7 +1692,8 @@ int Element::textHeightFor(int textWidth) const {
 		if (const auto rich = const_cast<Element*>(this)->richpage()) {
 			const auto articleHeight = rich->article.resizeGetHeight(
 				richPageWidthFor(textWidth));
-			_textHeight = articleHeight + skipBlockHeight();
+			_textHeight = articleHeight
+				+ (_text.hasSkipBlock() ? skipBlockHeight() : 0);
 			rich->article.setVisibleTopBottom(0, articleHeight);
 			_textRealWidth = std::clamp(
 				rich->article.lastLayoutWidth(),
@@ -1878,13 +1879,13 @@ void Element::validateText() {
 		}
 		const auto runtime = Get<HistoryMessageRichPage>();
 		const auto needsBinding = (runtime->article.mediaBlockHost()
-			!= &runtime->host);
+			!= runtime->host.get());
 		const auto needsHighlightSubscription = !runtime->highlightReadyLifetime;
 		if (needsBinding || needsHighlightSubscription) {
 			const auto weak = base::make_weak(message);
-			runtime->host.owner = weak;
+			runtime->host->owner = weak;
 			if (needsBinding) {
-				runtime->article.setMediaBlockHost(&runtime->host);
+				runtime->article.setMediaBlockHost(runtime->host.get());
 				runtime->article.setTextRepaintCallbacks(
 					[weak] {
 						if (const auto owner = weak.get()) {
@@ -1908,7 +1909,7 @@ void Element::validateText() {
 		}
 		if (needsHighlightSubscription) {
 			Spellchecker::HighlightReady(
-			) | rpl::on_next([weak = runtime->host.owner](
+			) | rpl::on_next([weak = runtime->host->owner](
 					Spellchecker::HighlightProcessId processId) {
 				if (const auto owner = weak.get()) {
 					if (const auto rich = owner->richpage()) {
