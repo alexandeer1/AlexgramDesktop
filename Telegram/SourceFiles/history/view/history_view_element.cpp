@@ -1293,6 +1293,9 @@ void Element::hideSpoilers() {
 	if (_media) {
 		_media->hideSpoilers();
 	}
+	if (const auto rich = richpage()) {
+		rich->article.hideSpoilers();
+	}
 }
 
 void Element::revealSpoilers() {
@@ -1892,6 +1895,14 @@ void Element::validateText() {
 						if (const auto owner = weak.get()) {
 							owner->requestRichPageRepaint(articleRect);
 						}
+					},
+					[weak](const ClickContext &context) {
+						const auto owner = weak.get();
+						if (context.button != Qt::LeftButton || !owner) {
+							return false;
+						}
+						owner->history()->owner().registerShownSpoiler(owner);
+						return true;
 					});
 			}
 		}
