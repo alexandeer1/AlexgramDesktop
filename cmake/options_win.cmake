@@ -32,7 +32,6 @@ if (MSVC)
         /utf-8
         /W4
         /MP     # Enable multi process build.
-        /FS     # Force synchronous PDB writes to avoid build locks.
         /EHsc   # Catch C++ exceptions only, extern C functions never throw a C++ exception.
         /w15038 # wrong initialization order
         /w14265 # class has virtual functions, but destructor is not virtual
@@ -65,7 +64,6 @@ if (MSVC)
     target_link_options(common_options
     INTERFACE
         $<$<CONFIG:Debug>:/NODEFAULTLIB:LIBCMT>
-        $<$<CONFIG:Debug>:/LTCG>
         $<$<AND:$<CONFIG:Debug>,$<OR:$<BOOL:${build_win64}>,$<BOOL:${build_winarm}>>>:/DEBUG:FASTLINK>
         $<$<NOT:$<AND:$<CONFIG:Debug>,$<OR:$<BOOL:${build_win64}>,$<BOOL:${build_winarm}>>>>:$<IF:$<BOOL:$<GENEX_EVAL:$<TARGET_PROPERTY:MSVC_DEBUG_INFORMATION_FORMAT>>>,/DEBUG,/DEBUG:NONE>>
         $<$<NOT:$<CONFIG:Debug>>:/OPT:REF>
@@ -136,6 +134,7 @@ INTERFACE
     Gdiplus
     Strmiids
     Netapi32
+    Mpr
     Userenv
     Version
     Dwmapi

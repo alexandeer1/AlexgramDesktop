@@ -39,7 +39,6 @@ extern const char kOptionUseQtRhi[];
 [[nodiscard]] Backend ChooseBackendDefault(Capabilities capabilities);
 
 [[nodiscard]] bool WidgetsRhiEnabled();
-[[nodiscard]] bool WidgetsRhiSupported();
 [[nodiscard]] RhiCapabilities CheckRhiCapabilities();
 
 void ForceDisable(bool disable);

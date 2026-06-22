@@ -25,10 +25,12 @@ def run(project, arguments, buildType=''):
     if sys.platform == 'win32' and not explicitGenerator:
         if vsArch == 'x64':
             cmake.append('-Ax64')
+            cmake.append('-T v143')
         elif vsArch == 'arm':
             cmake.append('-AARM64')
         else:
             cmake.append('-AWin32') # default
+            cmake.append('-T v143')
     elif vsArch != '':
         print("[ERROR] x86/x64/arm switch is supported only with Visual Studio.")
         return 1
@@ -52,7 +54,7 @@ def run(project, arguments, buildType=''):
                 if len(target) > 0:
                     cmake.append('-DDESKTOP_APP_SPECIAL_TARGET=' + target)
 
-    cmake.extend(['..' if not buildType else '../..'])
+    cmake.extend(['-Werror=dev', '-Werror=deprecated', '--warn-uninitialized', '..' if not buildType else '../..'])
     command = '"' + '" "'.join(cmake) + '"'
 
     if not os.path.exists(basePath):

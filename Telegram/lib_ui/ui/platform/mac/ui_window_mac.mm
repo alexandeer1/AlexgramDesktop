@@ -580,6 +580,10 @@ rpl::producer<FullScreenEvent> FullScreenEvents(
 			if (attach(winId)) {
 				return;
 			}
+			// NSView exists but its NSWindow is not attached yet — happens
+			// when the parent window is on a screen with a different device
+			// pixel ratio and Qt is mid-flight rebuilding the native window.
+			// Re-try whenever Qt assigns a screen to the QWindow.
 			const auto handle = window->windowHandle();
 			if (!handle) {
 				return;
