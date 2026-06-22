@@ -23,14 +23,32 @@ def run(project, arguments, buildType=''):
                 explicitGenerator = True
             cmake.append(arg)
     if sys.platform == 'win32' and not explicitGenerator:
+        toolset = 'v143'
+        vs_version = os.environ.get('VisualStudioVersion')
+        if vs_version:
+            major = vs_version.split('.')[0]
+            if major == '18':
+                toolset = 'v145'
+            elif major == '17':
+                toolset = 'v143'
+            elif major == '16':
+                toolset = 'v142'
+        else:
+            for path in [
+                r"C:\Program Files (x86)\Microsoft Visual Studio\18",
+                r"C:\Program Files\Microsoft Visual Studio\18"
+            ]:
+                if os.path.exists(path):
+                    toolset = 'v145'
+                    break
         if vsArch == 'x64':
             cmake.append('-Ax64')
-            cmake.append('-T v143')
+            cmake.append(f'-T {toolset}')
         elif vsArch == 'arm':
             cmake.append('-AARM64')
         else:
             cmake.append('-AWin32') # default
-            cmake.append('-T v143')
+            cmake.append(f'-T {toolset}')
     elif vsArch != '':
         print("[ERROR] x86/x64/arm switch is supported only with Visual Studio.")
         return 1
@@ -54,7 +72,9 @@ def run(project, arguments, buildType=''):
                 if len(target) > 0:
                     cmake.append('-DDESKTOP_APP_SPECIAL_TARGET=' + target)
 
-    cmake.extend(['-Werror=dev', '-Werror=deprecated', '--warn-uninitialized', '..' if not buildType else '../..'])
+    if sys.platform != 'win32':
+        cmake.extend(['-Werror=dev', '-Werror=deprecated', '--warn-uninitialized'])
+    cmake.extend(['..' if not buildType else '../..'])
     command = '"' + '" "'.join(cmake) + '"'
 
     if not os.path.exists(basePath):
