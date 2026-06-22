@@ -57,7 +57,7 @@ BEGIN
             VALUE "LegalCopyright", "Copyright (C) 2014-2026"
             VALUE "ProductName", "Alexgram Desktop"
             VALUE "ProductVersion", "6.9.2.0"
-        END
+5        END
     END
     BLOCK "VarFileInfo"
     BEGIN
