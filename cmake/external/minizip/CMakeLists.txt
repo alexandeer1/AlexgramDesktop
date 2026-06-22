@@ -26,31 +26,53 @@ if (DESKTOP_APP_USE_PACKAGED)
     return()
 endif()
 
-add_library(external_minizip STATIC IMPORTED GLOBAL)
-add_library(desktop-app::external_minizip ALIAS external_minizip)
-
 if (WIN32)
+    add_library(external_minizip STATIC)
+    init_target(external_minizip "(external)")
+
+    set(minizip_src_loc ${libs_loc}/zlib/contrib/minizip)
+    target_sources(external_minizip
+    PRIVATE
+        ${minizip_src_loc}/crypt.h
+        ${minizip_src_loc}/ioapi.c
+        ${minizip_src_loc}/ioapi.h
+        ${minizip_src_loc}/iowin32.c
+        ${minizip_src_loc}/iowin32.h
+        ${minizip_src_loc}/zip.c
+        ${minizip_src_loc}/zip.h
+        ${minizip_src_loc}/unzip.c
+        ${minizip_src_loc}/unzip.h
+    )
+
     target_include_directories(external_minizip SYSTEM
-    INTERFACE
+    PUBLIC
+        ${minizip_src_loc}
         ${libs_loc}/zlib/contrib
     )
-    set(minizip_lib_loc ${libs_loc}/zlib/contrib/minizip)
-    set_target_properties(external_minizip PROPERTIES
-        IMPORTED_LOCATION "${minizip_lib_loc}/Release/libminizips.lib"
-        IMPORTED_LOCATION_DEBUG "${minizip_lib_loc}/Debug/libminizipsd.lib"
+
+    target_link_libraries(external_minizip
+    PRIVATE
+        desktop-app::external_zlib
     )
-elseif (APPLE)
-    set_target_properties(external_minizip PROPERTIES
-        IMPORTED_LOCATION ${libs_loc}/local/lib/libminizip.a
-    )
+
+    add_library(desktop-app::external_minizip ALIAS external_minizip)
 else()
-    find_library(DESKTOP_APP_MINIZIP_LIBRARIES libminizip.a REQUIRED)
-    set_target_properties(external_minizip PROPERTIES
-        IMPORTED_LOCATION "${DESKTOP_APP_MINIZIP_LIBRARIES}"
+    add_library(external_minizip STATIC IMPORTED GLOBAL)
+    add_library(desktop-app::external_minizip ALIAS external_minizip)
+
+    if (APPLE)
+        set_target_properties(external_minizip PROPERTIES
+            IMPORTED_LOCATION ${libs_loc}/local/lib/libminizip.a
+        )
+    else()
+        find_library(DESKTOP_APP_MINIZIP_LIBRARIES libminizip.a REQUIRED)
+        set_target_properties(external_minizip PROPERTIES
+            IMPORTED_LOCATION "${DESKTOP_APP_MINIZIP_LIBRARIES}"
+        )
+    endif()
+
+    target_link_libraries(external_minizip
+    INTERFACE
+        desktop-app::external_zlib
     )
 endif()
-
-target_link_libraries(external_minizip
-INTERFACE
-    desktop-app::external_zlib
-)
