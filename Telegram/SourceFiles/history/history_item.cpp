@@ -2560,7 +2560,8 @@ void HistoryItem::applySentMessage(const MTPDmessage &data) {
 			data.vpaid_message_stars() ? *data.vpaid_message_stars() : MTPlong(),
 			data.vsuggested_post() ? *data.vsuggested_post() : MTPSuggestedPost(),
 			data.vschedule_repeat_period() ? *data.vschedule_repeat_period() : MTPint(),
-			data.vsummary_from_language() ? *data.vsummary_from_language() : MTPstring()
+			data.vsummary_from_language() ? *data.vsummary_from_language() : MTPstring(),
+			data.vrich_message() ? *data.vrich_message() : MTPRichMessage()
 		);
 
 		auto buffer = mtpBuffer();
@@ -2675,7 +2676,8 @@ void HistoryItem::applySentMessage(
 			MTPlong(), // paid_message_stars
 			MTPSuggestedPost(),
 			MTPint(), // schedule_repeat_period
-			MTPstring() // summary_from_language
+			MTPstring(), // summary_from_language
+			MTPRichMessage()
 		);
 
 		auto buffer = mtpBuffer();

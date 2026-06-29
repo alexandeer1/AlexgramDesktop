@@ -3620,27 +3620,33 @@ void History::setOutboxReadTill(MsgId upTo) {
 }
 
 MsgId History::minMsgId() const {
+	auto result = MsgId(0);
 	for (const auto &block : blocks) {
 		for (const auto &message : block->messages) {
 			const auto item = message->data();
 			if (item->isRegular()) {
-				return item->id;
+				if (!result || item->id < result) {
+					result = item->id;
+				}
 			}
 		}
 	}
-	return 0;
+	return result;
 }
 
 MsgId History::maxMsgId() const {
-	for (const auto &block : ranges::views::reverse(blocks)) {
-		for (const auto &message : ranges::views::reverse(block->messages)) {
+	auto result = MsgId(0);
+	for (const auto &block : blocks) {
+		for (const auto &message : block->messages) {
 			const auto item = message->data();
 			if (item->isRegular()) {
-				return item->id;
+				if (!result || item->id > result) {
+					result = item->id;
+				}
 			}
 		}
 	}
-	return 0;
+	return result;
 }
 
 MsgId History::msgIdForRead() const {
@@ -4074,7 +4080,7 @@ void History::checkLocalMessages() {
 	auto items = std::vector<not_null<HistoryItem*>>();
 	items.reserve(_clientSideMessages.size());
 	for (const auto &item : _clientSideMessages) {
-		if (!item->mainView() && (item->isGhostDeleted() || goodDate(item->date()))) {
+		if (!item->mainView() && goodDate(item->date())) {
 			items.push_back(item);
 		}
 	}

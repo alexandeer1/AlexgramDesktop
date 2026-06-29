@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "alex/messages_storage.h"
 #include "data/data_session.h"
+#include "data/data_peer_id.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 
@@ -3108,11 +3109,49 @@ void Session::loadGhostDeletedMessages() {
 		MTPMessage message;
 		auto from = reinterpret_cast<const int32*>(data.messageData.data());
 		const auto end = from + (data.messageData.size() / sizeof(int32));
+		bool fallback = false;
 		if (!message.read(from, end)) {
-			LOG(("Ghost Error: Failed to read MTP message for peer %1, msgId %2")
+			LOG(("Ghost Error: Failed to read MTP message for peer %1, msgId %2, trying fallback...")
 				.arg(data.dialogId)
 				.arg(data.messageId));
-			continue;
+			fallback = true;
+			message = MTP_message(
+				MTP_flags(MTPDmessage::Flag::f_from_id | (data.groupedId ? MTPDmessage::Flag::f_grouped_id : MTPDmessage::Flag(0))),
+				MTP_int(data.messageId),
+				peerToMTP(PeerId(data.fromId)),
+				MTPint(), // from_boosts_applied
+				MTPstring(), // from_rank
+				peerToMTP(PeerId(data.peerId)),
+				MTPPeer(), // saved_peer_id
+				MTPMessageFwdHeader(),
+				MTPlong(), // via_bot_id
+				MTPlong(), // via_business_bot_id
+				MTPPeer(), // guestchat_via_from
+				MTPMessageReplyHeader(),
+				MTP_int(data.date),
+				MTP_string(QString::fromStdString(data.text)),
+				MTPMessageMedia(),
+				MTPReplyMarkup(),
+				MTP_vector<MTPMessageEntity>(),
+				MTP_int(data.views), // views
+				MTPint(), // forwards
+				MTPMessageReplies(),
+				MTPint(), // edit_date
+				MTPbytes(), // post_author
+				MTP_long(data.groupedId),
+				MTPMessageReactions(),
+				MTPVector<MTPRestrictionReason>(),
+				MTPint(), // ttl_period
+				MTPint(), // quick_reply_shortcut_id
+				MTPlong(), // effect
+				MTPFactCheck(),
+				MTPint(), // report_delivery_until_date
+				MTPlong(), // paid_message_stars
+				MTPSuggestedPost(),
+				MTPint(), // schedule_repeat_period
+				MTPstring(), // summary_from_language
+				MTPRichMessage()
+			);
 		}
 
 		const auto item = addNewMessage(
@@ -3123,9 +3162,19 @@ void Session::loadGhostDeletedMessages() {
 
 		if (item) {
 			item->setGhostDeleted(true);
-			item->setGhostDeletedData(QByteArray(
-				reinterpret_cast<const char*>(data.messageData.data()),
-				data.messageData.size()));
+			if (fallback) {
+				auto buffer = mtpBuffer();
+				buffer.reserve(tl::count_length(message) >> 2);
+				message.write(buffer);
+				item->setGhostDeletedData(QByteArray(
+					reinterpret_cast<const char*>(buffer.constData()),
+					buffer.size() * sizeof(mtpPrime)));
+				Alex::Messages::addDeletedMessage(item);
+			} else {
+				item->setGhostDeletedData(QByteArray(
+					reinterpret_cast<const char*>(data.messageData.data()),
+					data.messageData.size()));
+			}
 			histories.insert(history);
 		} else {
 			LOG(("Ghost Error: Failed to create item for ghost message %1 for peer %2")
