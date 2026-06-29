@@ -153,7 +153,7 @@ jobs:
             '--add','Microsoft.VisualStudio.Workload.VCTools', `
             '--add','Microsoft.VisualStudio.Component.VC.Tools.ARM64', `
             '--add','Microsoft.VisualStudio.Component.VC.ATL.ARM64'
-          Remove-Item vs_buildtools.exe -Force
+          Remove-Item vs_buildtools.exe -Force -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit $p.ExitCode }
 
       - uses: Eden-CI/msvc-dev-cmd@master
