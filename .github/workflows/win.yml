@@ -137,6 +137,7 @@ jobs:
 
           echo "$(sha256sum $TBUILD/$REPO_NAME/$PREPARE_PATH | awk '{ print $1 }')" >> CACHE_KEY.txt
           echo "$(sha256sum $TBUILD/$REPO_NAME/Telegram/build/qt_version.py | awk '{ print $1 }')" >> CACHE_KEY.txt
+          find $TBUILD/$REPO_NAME/cmake/external $TBUILD/$REPO_NAME/Telegram/cmake -type f '(' -name '*.cmake' -o -name 'CMakeLists.txt' ')' -exec sha256sum {} + | sort | sha256sum | awk '{ print $1 }' >> CACHE_KEY.txt
           echo "$SDK" >> CACHE_KEY.txt
           echo "CACHE_KEY=$(sha256sum CACHE_KEY.txt | awk '{ print $1 }')" >> $GITHUB_ENV
 
