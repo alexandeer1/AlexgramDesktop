@@ -84,7 +84,7 @@ jobs:
           path: |
             ${{ env.REPO_NAME }}/Libraries
             ${{ env.REPO_NAME }}/ThirdParty
-          key: ${{ runner.OS }}-libs-${{ hashFiles(format('{0}/{1}', env.REPO_NAME, env.PREPARE_PATH)) }}
+          key: ${{ runner.OS }}-libs-${{ hashFiles(format('{0}/{1}', env.REPO_NAME, env.PREPARE_PATH), format('{0}/Telegram/build/qt_version.py', env.REPO_NAME)) }}
           restore-keys: ${{ runner.OS }}-libs-
 
       - name: Libraries.
