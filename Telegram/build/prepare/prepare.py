@@ -473,8 +473,11 @@ win:
     msys64.exe
     del msys64.exe
 
-    bash -c "pacman-key --init; pacman-key --populate; pacman -Syyu --noconfirm"
-    pacman -Syyu --noconfirm ^
+    powershell -Command "((Get-Content ThirdParty\\msys64\\etc\\pacman.d\\mirrorlist.msys) -replace 'Server = https://mirror.msys2.org', '# Server = https://mirror.msys2.org') | Set-Content ThirdParty\\msys64\\etc\\pacman.d\\mirrorlist.msys"
+    powershell -Command "((Get-Content ThirdParty\\msys64\\etc\\pacman.d\\mirrorlist.mingw) -replace 'Server = https://mirror.msys2.org', '# Server = https://mirror.msys2.org') | Set-Content ThirdParty\\msys64\\etc\\pacman.d\\mirrorlist.mingw"
+
+    bash -c "pacman-key --init; pacman-key --populate; pacman -Syyu --noconfirm --disable-download-timeout"
+    pacman -Syyu --noconfirm --disable-download-timeout ^
         make ^
         mingw-w64-x86_64-diffutils ^
         mingw-w64-x86_64-gperf ^
