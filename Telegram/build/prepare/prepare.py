@@ -1096,6 +1096,38 @@ winarm:
 win:
 depends:patches/build_libvpx_win.sh
     bash --login ../patches/build_libvpx_win.sh
+    if not exist ..\\local\\lib\\Win32\\vpxmt.lib if exist Release\\vpxmt.lib (
+        if not exist ..\\local\\lib\\Win32 mkdir ..\\local\\lib\\Win32
+        copy /y Release\\vpxmt.lib ..\\local\\lib\\Win32\\vpxmt.lib
+    )
+    if not exist ..\\local\\lib\\Win32\\vpxmt.lib if exist Win32\\Release\\vpxmt.lib (
+        if not exist ..\\local\\lib\\Win32 mkdir ..\\local\\lib\\Win32
+        copy /y Win32\\Release\\vpxmt.lib ..\\local\\lib\\Win32\\vpxmt.lib
+    )
+    if not exist ..\\local\\lib\\x64\\vpxmt.lib if exist x64\\Release\\vpxmt.lib (
+        if not exist ..\\local\\lib\\x64 mkdir ..\\local\\lib\\x64
+        copy /y x64\\Release\\vpxmt.lib ..\\local\\lib\\x64\\vpxmt.lib
+    )
+    if not exist ..\\local\\lib\\ARM64\\vpxmt.lib if exist ARM64\\Release\\vpxmt.lib (
+        if not exist ..\\local\\lib\\ARM64 mkdir ..\\local\\lib\\ARM64
+        copy /y ARM64\\Release\\vpxmt.lib ..\\local\\lib\\ARM64\\vpxmt.lib
+    )
+    if not exist ..\\local\\lib\\Win32\\vpxmtd.lib if exist Release\\vpxmtd.lib (
+        if not exist ..\\local\\lib\\Win32 mkdir ..\\local\\lib\\Win32
+        copy /y Release\\vpxmtd.lib ..\\local\\lib\\Win32\\vpxmtd.lib
+    )
+    if not exist ..\\local\\lib\\Win32\\vpxmtd.lib if exist Win32\\Release\\vpxmtd.lib (
+        if not exist ..\\local\\lib\\Win32 mkdir ..\\local\\lib\\Win32
+        copy /y Win32\\Release\\vpxmtd.lib ..\\local\\lib\\Win32\\vpxmtd.lib
+    )
+    if not exist ..\\local\\lib\\x64\\vpxmtd.lib if exist x64\\Release\\vpxmtd.lib (
+        if not exist ..\\local\\lib\\x64 mkdir ..\\local\\lib\\x64
+        copy /y x64\\Release\\vpxmtd.lib ..\\local\\lib\\x64\\vpxmtd.lib
+    )
+    if not exist ..\\local\\lib\\ARM64\\vpxmtd.lib if exist ARM64\\Release\\vpxmtd.lib (
+        if not exist ..\\local\\lib\\ARM64 mkdir ..\\local\\lib\\ARM64
+        copy /y ARM64\\Release\\vpxmtd.lib ..\\local\\lib\\ARM64\\vpxmtd.lib
+    )
 mac:
     find ../patches/libvpx -type f -print0 | sort -z | xargs -0 git apply
 
