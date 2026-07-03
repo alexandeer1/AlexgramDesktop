@@ -175,7 +175,7 @@ jobs:
         id: cache-third-party
         uses: actions/cache@v5
         with:
-          path: ${{ env.TBUILD }}\ThirdParty
+          path: TBuild/ThirdParty
           key: ${{ runner.OS }}-${{ runner.arch }}-third-party-${{ env.CACHE_KEY }}
           restore-keys: ${{ runner.OS }}-${{ runner.arch }}-third-party-
 
@@ -184,11 +184,11 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            ${{ env.LibrariesPath }}\*
-            !${{ env.LibrariesPath }}\cache_keys
-            !${{ env.LibrariesPath }}\[qQ]t[_-]*
-            ${{ env.LibrariesPath }}\cache_keys\*
-            !${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+            TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/*
+            !TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys
+            !TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/[qQ]t[_-]*
+            TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/*
+            !TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/[qQ]t[_-]*
           key: ${{ runner.OS }}-${{ matrix.arch }}-libs-${{ env.CACHE_KEY }}
           restore-keys: ${{ runner.OS }}-${{ matrix.arch }}-libs-
 
@@ -197,8 +197,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            ${{ env.LibrariesPath }}\[qQ]t[_-]*
-            ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
+            TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/[qQ]t[_-]*
+            TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/[qQ]t[_-]*
           key: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-${{ env.CACHE_KEY }}
           restore-keys: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-
 
@@ -252,7 +252,7 @@ jobs:
 
       - name: Free up some disk space.
         shell: bash
-        run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/zlib/contrib/minizip/*' ')' -type f ')' -o -empty ')' -delete
+        run: find TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }} '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' -o -path '*/zlib/contrib/minizip/*' ')' -type f ')' -o -empty ')' -delete
 
       - name: Telegram Desktop build.
         if: env.ONLY_CACHE == 'false'

@@ -32,7 +32,11 @@ if (WIN32)
     else()
         set(libvpx_release_folder Win32)
     endif()
-    set(vpx_lib_loc ${libs_loc}/local/lib/${libvpx_release_folder})
+    if (EXISTS "${libs_loc}/local/lib/${libvpx_release_folder}/vpxmt.lib")
+        set(vpx_lib_loc ${libs_loc}/local/lib/${libvpx_release_folder})
+    else()
+        set(vpx_lib_loc ${libs_loc}/local/lib)
+    endif()
     set_target_properties(external_vpx PROPERTIES
         IMPORTED_LOCATION "${vpx_lib_loc}/vpxmt.lib"
         IMPORTED_LOCATION_DEBUG "${vpx_lib_loc}/vpxmt.lib"
