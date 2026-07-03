@@ -1391,7 +1391,7 @@ mac:
 if 'build-stackwalk' in options:
     stage('stackwalk', """
 mac:
-    git clone https://chromium.googlesource.com/breakpad/breakpad stackwalk
+    git clone https://github.com/google/breakpad.git stackwalk
     cd stackwalk
     git checkout dfcb7b6799
 depends:patches/breakpad.diff
@@ -1407,7 +1407,7 @@ depends:patches/breakpad.diff
 """)
 
 stage('breakpad', """
-    git clone https://chromium.googlesource.com/breakpad/breakpad
+    git clone https://github.com/google/breakpad.git
     cd breakpad
     git checkout dfcb7b6799
 depends:patches/breakpad.diff
