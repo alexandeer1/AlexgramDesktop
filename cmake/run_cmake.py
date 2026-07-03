@@ -13,6 +13,7 @@ def run(project, arguments, buildType=''):
     cmake = ['cmake']
     vsArch = ''
     explicitGenerator = False
+    explicitToolset = ''
     for arg in arguments:
         if arg == 'debug':
             cmake.append('-DCMAKE_BUILD_TYPE=Debug')
@@ -21,6 +22,9 @@ def run(project, arguments, buildType=''):
         elif arg != 'force':
             if arg.startswith('-G'):
                 explicitGenerator = True
+            elif arg.startswith('-T'):
+                explicitToolset = arg
+                continue
             cmake.append(arg)
     if sys.platform == 'win32' and not explicitGenerator:
         toolset = 'v143'
@@ -41,14 +45,26 @@ def run(project, arguments, buildType=''):
                 if os.path.exists(path):
                     toolset = 'v145'
                     break
+        toolset_arg = toolset
+        if explicitToolset:
+            val = explicitToolset[2:].strip()
+            if val.startswith('host='):
+                toolset_arg = f'{toolset},{val}' if toolset else val
+            else:
+                toolset_arg = val
         if vsArch == 'x64':
             cmake.append('-Ax64')
-            cmake.append(f'-T {toolset}')
+            if toolset_arg:
+                cmake.append(f'-T{toolset_arg}')
         elif vsArch == 'arm':
             cmake.append('-AARM64')
+            if explicitToolset:
+                if toolset_arg:
+                    cmake.append(f'-T{toolset_arg}')
         else:
             cmake.append('-AWin32') # default
-            cmake.append(f'-T {toolset}')
+            if toolset_arg:
+                cmake.append(f'-T{toolset_arg}')
     elif vsArch != '':
         print("[ERROR] x86/x64/arm switch is supported only with Visual Studio.")
         return 1

@@ -32,3 +32,7 @@ PUBLIC
     desktop-app::external_qt_static_plugins
     desktop-app::external_qt
 )
+
+if (MSVC)
+    target_compile_options(codegen_emoji PRIVATE /Od /Ob0 /GL-)
+endif()

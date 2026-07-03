@@ -7,7 +7,7 @@
 cmake_minimum_required(VERSION 3.31)
 
 # Set MSVC debug information format to ProgramDatabase (/Zi) for Debug only to avoid parallel locks and save Release memory
-set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT $<$<CONFIG:Debug>:ProgramDatabase> CACHE STRING "MSVC debug information format" FORCE)
+set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:ProgramDatabase> CACHE STRING "MSVC debug information format" FORCE)
 
 
 # Workaround some linking errors in GCC due to static library order.

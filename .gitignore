@@ -113,3 +113,7 @@ build_out.txt
 test.py
 test_json.py
 test_map.cpp
+
+/Libraries_old/
+/test_profile/
+
