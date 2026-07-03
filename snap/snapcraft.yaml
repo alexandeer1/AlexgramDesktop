@@ -42,6 +42,7 @@ parts:
     build-snaps:
       - cmake
       - clang
+    build-packages:
       - libasound2-dev
       - libboost-regex-dev
       - libdav1d-dev
