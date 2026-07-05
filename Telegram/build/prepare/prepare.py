@@ -363,6 +363,23 @@ class _GetchWindows:
 getch = _Getch()
 
 def runStages():
+    if win:
+        libvpx_ok = False
+        if win32 and os.path.exists(os.path.join(libsDir, 'local', 'lib', 'Win32', 'vpxmt.lib')):
+            libvpx_ok = True
+        elif win64 and os.path.exists(os.path.join(libsDir, 'local', 'lib', 'x64', 'vpxmt.lib')):
+            libvpx_ok = True
+        elif winarm and os.path.exists(os.path.join(libsDir, 'local', 'lib', 'ARM64', 'vpxmt.lib')):
+            libvpx_ok = True
+        if not libvpx_ok:
+            key_file = os.path.join(libsDir, 'cache_keys', 'libvpx')
+            if os.path.exists(key_file):
+                print("vpxmt.lib is missing, invalidating cache key to force rebuild...")
+                try:
+                    os.remove(key_file)
+                except Exception as e:
+                    print("Failed to remove cache key:", e)
+
     onlyStages = []
     rebuildStale = False
     for arg in sys.argv[1:]:
