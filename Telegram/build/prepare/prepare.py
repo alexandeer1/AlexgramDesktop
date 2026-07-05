@@ -1081,20 +1081,20 @@ depends:patches/libvpx/*.patch
     git checkout v1.14.1
 win:
     for /r %%i in (..\\patches\\libvpx\\*) do git apply %%i
-    python -c "import os, glob; vs=os.environ.get('VisualStudioVersion',''); is_vs18=vs.startswith('18.') or os.path.exists('C:/Program Files/Microsoft Visual Studio/18') or os.path.exists('C:/Program Files (x86)/Microsoft Visual Studio/18'); target='v145' if is_vs18 else 'v143'; suffix='-v145' if is_vs18 else ''; [open(f, 'wb').write(open(f, 'rb').read().replace(b'v143', target.encode())) for f in glob.glob('build/make/gen_msvs_*.sh')]; open('_vs18_suffix.tmp', 'w').write(suffix)"
+    python -c "import os, glob; vs=os.environ.get('VisualStudioVersion',''); is_vs18=vs.startswith('18.') or os.path.exists('C:/Program Files/Microsoft Visual Studio/18') or os.path.exists('C:/Program Files (x86)/Microsoft Visual Studio/18'); target='v145' if is_vs18 else 'v143'; [open(f, 'wb').write(open(f, 'rb').read().replace(b'v143', target.encode())) for f in glob.glob('build/make/gen_msvs_*.sh')]"
 
     SET PATH=%THIRDPARTY_DIR%\\msys64\\usr\\bin;%PATH%
     SET CHERE_INVOKING=enabled_from_arguments
     SET MSYS2_PATH_TYPE=inherit
 
 win32:
-    for /f "usebackq tokens=*" %%s in (`python -c "s=open('_vs18_suffix.tmp').read(); print('x86-win32-vs17'+s)"`) do SET "TOOLCHAIN=%%s"
+    SET "TOOLCHAIN=x86-win32-vs17"
 win64:
-    for /f "usebackq tokens=*" %%s in (`python -c "s=open('_vs18_suffix.tmp').read(); print('x86_64-win64-vs17'+s)"`) do SET "TOOLCHAIN=%%s"
+    SET "TOOLCHAIN=x86_64-win64-vs17"
 winarm:
     SET "TOOLCHAIN=arm64-win64-vs17-v145"
 win:
-    if exist _vs18_suffix.tmp del _vs18_suffix.tmp
+
 depends:patches/build_libvpx_win.sh
     bash --login ../patches/build_libvpx_win.sh
     if not exist ..\\local\\lib\\Win32\\vpxmt.lib if exist Release\\vpxmt.lib (
