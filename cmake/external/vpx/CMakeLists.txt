@@ -40,8 +40,10 @@ if (WIN32)
         set(vpx_lib_loc ${libs_loc}/local/lib/Win32)
     elseif (EXISTS "${libs_loc}/local/lib/ARM64/vpxmt.lib")
         set(vpx_lib_loc ${libs_loc}/local/lib/ARM64)
-    else()
+    elseif (EXISTS "${libs_loc}/local/lib/vpxmt.lib")
         set(vpx_lib_loc ${libs_loc}/local/lib)
+    else()
+        message(FATAL_ERROR "vpxmt.lib not found in ${libs_loc}/local/lib. Run the prepare script to build libvpx first.")
     endif()
     set_target_properties(external_vpx PROPERTIES
         IMPORTED_LOCATION "${vpx_lib_loc}/vpxmt.lib"
