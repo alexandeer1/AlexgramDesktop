@@ -74,6 +74,16 @@ jobs:
           Write-Host "Checking initial disk space:"
           Get-PSDrive C | Select-Object Used, Free
 
+          Write-Host "Stopping unnecessary services..."
+          $servicesToStop = @("com.docker.service", "MSSQLSERVER", "MSSQL`$SQLEXPRESS", "mysql*", "postgresql*")
+          foreach ($serviceName in $servicesToStop) {
+              $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+              if ($svc) {
+                  Write-Host "Stopping service: $($svc.Name)..."
+                  Stop-Service -InputObject $svc -Force -ErrorAction SilentlyContinue
+              }
+          }
+
           $pathsToDelete = @(
               "C:\Android",
               "C:\Program Files (x86)\Android",
@@ -84,7 +94,14 @@ jobs:
               "C:\hostedtoolcache\PyPy",
               "C:\hostedtoolcache\CodeQL",
               "C:\Program Files\LLVM",
-              "C:\Program Files\Microsoft\jdk"
+              "C:\Program Files\Microsoft\jdk",
+              "C:\Program Files\dotnet",
+              "C:\Program Files\MySQL",
+              "C:\Program Files\PostgreSQL",
+              "C:\Program Files\MongoDB",
+              "C:\Program Files\Microsoft SQL Server",
+              "C:\Program Files\Azure Cosmos DB Emulator",
+              "C:\Program Files\Docker"
           )
 
           foreach ($path in $pathsToDelete) {
@@ -97,6 +114,9 @@ jobs:
                   }
               }
           }
+
+          Write-Host "Removing temporary files..."
+          Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
 
           Write-Host "Cleaning package manager caches..."
           try {
