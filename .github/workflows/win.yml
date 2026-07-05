@@ -185,7 +185,6 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           sdk: ${{ env.SDK }}
-          toolset: ${{ case(matrix.arch == 'arm64', '', '14.44') }}
 
       - name: NuGet sources.
         run: |
@@ -197,8 +196,8 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: TBuild/ThirdParty
-          key: ${{ runner.OS }}-${{ runner.arch }}-third-party-v2-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-${{ runner.arch }}-third-party-v2-
+          key: ${{ runner.OS }}-${{ runner.arch }}-third-party-v3-${{ env.CACHE_KEY }}
+          restore-keys: ${{ runner.OS }}-${{ runner.arch }}-third-party-v3-
 
       - name: Libraries cache restore.
         id: cache-libs
@@ -210,8 +209,8 @@ jobs:
             !TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/[qQ]t[_-]*
             TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/*
             !TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/[qQ]t[_-]*
-          key: ${{ runner.OS }}-${{ matrix.arch }}-libs-v2-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-${{ matrix.arch }}-libs-v2-
+          key: ${{ runner.OS }}-${{ matrix.arch }}-libs-v3-${{ env.CACHE_KEY }}
+          restore-keys: ${{ runner.OS }}-${{ matrix.arch }}-libs-v3-
 
       - name: Qt cache restore.
         id: cache-qt
@@ -220,8 +219,8 @@ jobs:
           path: |
             TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/[qQ]t[_-]*
             TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/[qQ]t[_-]*
-          key: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-v2-${{ env.CACHE_KEY }}
-          restore-keys: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-v2-
+          key: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-v3-${{ env.CACHE_KEY }}
+          restore-keys: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-v3-
 
       - name: Libraries.
         run: |
@@ -232,7 +231,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: TBuild/ThirdParty
-          key: ${{ runner.OS }}-${{ runner.arch }}-third-party-v2-${{ env.CACHE_KEY }}
+          key: ${{ runner.OS }}-${{ runner.arch }}-third-party-v3-${{ env.CACHE_KEY }}
 
       - name: Save Libraries cache.
         if: steps.cache-libs.outputs.cache-hit != 'true'
@@ -244,7 +243,7 @@ jobs:
             !TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/[qQ]t[_-]*
             TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/*
             !TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/[qQ]t[_-]*
-          key: ${{ runner.OS }}-${{ matrix.arch }}-libs-v2-${{ env.CACHE_KEY }}
+          key: ${{ runner.OS }}-${{ matrix.arch }}-libs-v3-${{ env.CACHE_KEY }}
 
       - name: Save Qt cache.
         if: steps.cache-qt.outputs.cache-hit != 'true'
@@ -253,7 +252,7 @@ jobs:
           path: |
             TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/[qQ]t[_-]*
             TBuild/Libraries${{ matrix.arch == 'x64' && '/win64' || '' }}/cache_keys/[qQ]t[_-]*
-          key: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-v2-${{ env.CACHE_KEY }}
+          key: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-v3-${{ env.CACHE_KEY }}
 
       - name: Read configuration matrix.
         shell: bash
