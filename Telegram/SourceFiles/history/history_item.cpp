@@ -3068,7 +3068,8 @@ void HistoryItem::applySentMessage(
 				MTPVector<MTPMessageEntity>(),
 				MTPint(),
 				MTPint(),
-				MTPbytes()))
+				MTPbytes(),
+				MTPVector<MTPRichText>()))
 			: MTPMessageReplyHeader();
 		if (replyTo) {
 			flags |= MTPDmessage::Flag::f_reply_to;

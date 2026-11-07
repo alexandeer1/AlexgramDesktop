@@ -1,4 +1,4 @@
-import os, sys, pprint, re, json, pathlib, hashlib, subprocess, glob, tempfile, plistlib
+import os, sys, pprint, re, json, pathlib, hashlib, subprocess, glob, tempfile, plistlib, shutil
 
 executePath = os.getcwd()
 sys.dont_write_bytecode = True
@@ -54,10 +54,16 @@ pathSep = ';' if win else ':'
 libsLoc = 'Libraries' if not win64 else (os.path.join('Libraries', 'win64'))
 keysLoc = 'cache_keys'
 
-rootDir = os.getcwd()
-libsDir = os.path.realpath(os.path.join(rootDir, libsLoc))
-thirdPartyDir = os.path.realpath(os.path.join(rootDir, 'ThirdParty'))
-usedPrefix = os.path.realpath(os.path.join(libsDir, 'local'))
+rootDir = os.path.abspath(os.getcwd())
+if win and os.path.exists('D:\\Libraries') and os.path.exists('D:\\ThirdParty'):
+    rootDir = 'D:\\AlexgramDesktop'
+    libsDir = 'D:\\Libraries\\win64' if win64 else 'D:\\Libraries'
+    thirdPartyDir = 'D:\\ThirdParty'
+    usedPrefix = os.path.join(libsDir, 'local')
+else:
+    libsDir = os.path.realpath(os.path.join(rootDir, libsLoc))
+    thirdPartyDir = os.path.realpath(os.path.join(rootDir, 'ThirdParty'))
+    usedPrefix = os.path.realpath(os.path.join(libsDir, 'local'))
 
 optionsList = [
     'qt5',
@@ -65,6 +71,7 @@ optionsList = [
     'skip-release',
     'build-stackwalk',
     'qt-asserts',
+    'sync-keys',
 ]
 options = []
 runCommand = []
@@ -81,15 +88,15 @@ for arg in sys.argv[1:]:
         runCommand.append('shell')
 
 pathPrefixes = [
-    'ThirdParty\\msys64\\ucrt64\\bin',
-    'ThirdParty\\jom',
-    'ThirdParty\\gyp',
+    'msys64\\ucrt64\\bin',
+    'jom',
+    'gyp',
 ] if win else [
-    'ThirdParty/gyp',
+    'gyp',
 ]
 pathPrefix = ''
 for singlePrefix in pathPrefixes:
-    pathPrefix = pathPrefix + os.path.join(rootDir, singlePrefix) + pathSep
+    pathPrefix = pathPrefix + os.path.join(thirdPartyDir, singlePrefix) + pathSep
 
 environment = {
     'USED_PREFIX': usedPrefix,
@@ -191,11 +198,22 @@ if mac and macRelease:
     modifiedEnv['PREPARE_DIR'] = scriptPath
 for key in environment:
     modifiedEnv[key] = environment[key]
-modifiedEnv['TDESKTOP_DIR'] = os.path.realpath(os.path.join(scriptPath, '..', '..', '..'))
+modifiedEnv['TDESKTOP_DIR'] = rootDir
 if win and 'NoDefaultCurrentDirectoryInExePath' in modifiedEnv:
     del modifiedEnv['NoDefaultCurrentDirectoryInExePath']
 
 modifiedEnv['PATH'] = environment['PATH_PREFIX'] + modifiedEnv['PATH']
+if win:
+    filtered_path = [p for p in modifiedEnv['PATH'].split(';') if not any(x in p.lower() for x in ['mingw', 'winlibs'])]
+    vs_paths = [
+        r'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin',
+        r'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja',
+        r'C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\HostX64\x64',
+    ]
+    for vp in reversed(vs_paths):
+        if os.path.exists(vp) and vp not in filtered_path:
+            filtered_path.insert(0, vp)
+    modifiedEnv['PATH'] = ';'.join(filtered_path)
 
 if mac:
     toolchainState = pathlib.Path(libsDir) / 'macos_toolchain.json'
@@ -467,6 +485,16 @@ def runStages():
                 break
         if not found:
             error('Unknown argument: ' + arg)
+    if 'sync-keys' in options:
+        for stage in stages:
+            key = keyPath(stage)
+            if os.path.exists(key):
+                stage['key'] = computeCacheKey(stage)
+                writeCacheKey(stage)
+                print(f"Updated key for {stage['name']}: {stage['key']}")
+        print("Done syncing keys!")
+        finish(0)
+
     count = len(stages)
     index = 0
     for stage in stages:
@@ -791,7 +819,7 @@ stage('opus', """
     cd opus
 win:
     cmake -B out . ^
-        -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
+        -DCMAKE_INSTALL_PREFIX="%LIBS_DIR%/local" ^
         -DOPUS_STATIC_RUNTIME=ON
     cmake --build out --config Debug
     cmake --build out --config Release
@@ -893,16 +921,16 @@ win:
     echo endian = 'little' >> %FILE%
 
 depends:python/Scripts/activate.bat
-    %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
-    meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=debug -Denable_tools=false -Denable_tests=false %DAV1D_ASM_DISABLE% -Db_vscrt=mtd builddir-debug
+    "%THIRDPARTY_DIR%\\python\\Scripts\\activate.bat"
+    meson setup --cross-file %FILE% --prefix "%LIBS_DIR%/local" --default-library=static --buildtype=debug -Denable_tools=false -Denable_tests=false %DAV1D_ASM_DISABLE% -Db_vscrt=mtd builddir-debug
     meson compile -C builddir-debug
     meson install -C builddir-debug
 release:
-    meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=release -Denable_tools=false -Denable_tests=false -Db_vscrt=mt builddir-release
+    meson setup --cross-file %FILE% --prefix "%LIBS_DIR%/local" --default-library=static --buildtype=release -Denable_tools=false -Denable_tests=false -Db_vscrt=mt builddir-release
     meson compile -C builddir-release
     meson install -C builddir-release
 win:
-    copy %LIBS_DIR%\\local\\lib\\libdav1d.a %LIBS_DIR%\\local\\lib\\dav1d.lib
+    copy "%LIBS_DIR%\\local\\lib\\libdav1d.a" "%LIBS_DIR%\\local\\lib\\dav1d.lib"
     deactivate
 mac:
     buildOneArch() {
@@ -953,16 +981,16 @@ win:
     echo endian = 'little' >> %FILE%
 
 depends:python/Scripts/activate.bat
-    %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
-    meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=debug -Db_vscrt=mtd builddir-debug
+    "%THIRDPARTY_DIR%\\python\\Scripts\\activate.bat"
+    meson setup --cross-file %FILE% --prefix "%LIBS_DIR%/local" --default-library=static --buildtype=debug -Db_vscrt=mtd builddir-debug
     meson compile -C builddir-debug
     meson install -C builddir-debug
 release:
-    meson setup --cross-file %FILE% --prefix %LIBS_DIR%/local --default-library=static --buildtype=release -Db_vscrt=mt builddir-release
+    meson setup --cross-file %FILE% --prefix "%LIBS_DIR%/local" --default-library=static --buildtype=release -Db_vscrt=mt builddir-release
     meson compile -C builddir-release
     meson install -C builddir-release
 win:
-    copy %LIBS_DIR%\\local\\lib\\libopenh264.a %LIBS_DIR%\\local\\lib\\openh264.lib
+    copy "%LIBS_DIR%\\local\\lib\\libopenh264.a" "%LIBS_DIR%\\local\\lib\\openh264.lib"
     deactivate
 mac:
     buildOneArch() {
@@ -992,7 +1020,7 @@ stage('libavif', """
     cd libavif
 win:
     cmake . ^
-        -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
+        -DCMAKE_INSTALL_PREFIX="%LIBS_DIR%/local" ^
         -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" ^
         -DCMAKE_POLICY_DEFAULT_CMP0091=NEW ^
         -DBUILD_SHARED_LIBS=OFF ^
@@ -1084,7 +1112,7 @@ stage('libjxl', """
 """) + """
 win:
     cmake . ^
-        -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
+        -DCMAKE_INSTALL_PREFIX="%LIBS_DIR%/local" ^
         -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" ^
         -DCMAKE_C_FLAGS="/DJXL_STATIC_DEFINE /DJXL_THREADS_STATIC_DEFINE /DJXL_CMS_STATIC_DEFINE" ^
         -DCMAKE_CXX_FLAGS="/DJXL_STATIC_DEFINE /DJXL_THREADS_STATIC_DEFINE /DJXL_CMS_STATIC_DEFINE" ^
@@ -1109,8 +1137,8 @@ depends:patches/libvpx/*.patch
     cd libvpx
     git checkout v1.14.1
 win:
-    for /r %%i in (..\\patches\\libvpx\\*) do git apply %%i
-    python -c "import os, glob; vs=os.environ.get('VisualStudioVersion',''); is_vs18=vs.startswith('18.') or os.path.exists('C:/Program Files/Microsoft Visual Studio/18') or os.path.exists('C:/Program Files (x86)/Microsoft Visual Studio/18'); target='v145' if is_vs18 else 'v143'; [open(f, 'wb').write(open(f, 'rb').read().replace(b'v143', target.encode())) for f in glob.glob('build/make/gen_msvs_*.sh')]"
+    for /r %%i in (..\\patches\\libvpx\\*) do git apply "%%i"
+    python -c "import os, glob; vs=os.environ.get('VisualStudioVersion',''); is_vs18=vs.startswith('18.') or os.path.exists('C:/Program Files/Microsoft Visual Studio/18') or os.path.exists('C:/Program Files (x86)/Microsoft Visual Studio/18'); target='v145' if is_vs18 else 'v143'; [(lambda p, c: open(p, 'wb').write(c.replace(b'v143', target.encode())))(f, open(f, 'rb').read()) for f in glob.glob('build/make/gen_msvs_*.sh')]"
 
     SET PATH=%THIRDPARTY_DIR%\\msys64\\usr\\bin;%PATH%
     SET CHERE_INVOKING=enabled_from_arguments
@@ -1212,7 +1240,7 @@ stage('liblcms2', """
     cd liblcms2
 win:
 depends:python/Scripts/activate.bat
-    %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
+    "%THIRDPARTY_DIR%\\python\\Scripts\\activate.bat"
     meson setup --default-library=static --buildtype=debug -Db_vscrt=mtd out/Debug
     meson compile -C out/Debug
     meson setup --default-library=static --buildtype=release -Db_vscrt=mt out/Release
@@ -1445,10 +1473,10 @@ depends:patches/libheif.patch
     cd libheif
     git apply ../patches/libheif.patch
 win:
-    %THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed.exe -i 's/HAVE_VISIBILITY/LIBHEIF_STATIC_BUILD/g' libheif/CMakeLists.txt
-    %THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed.exe -i 's/HAVE_VISIBILITY/LIBHEIF_STATIC_BUILD/g' heifio/CMakeLists.txt
+    "%THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed.exe" -i 's/HAVE_VISIBILITY/LIBHEIF_STATIC_BUILD/g' libheif/CMakeLists.txt
+    "%THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed.exe" -i 's/HAVE_VISIBILITY/LIBHEIF_STATIC_BUILD/g' heifio/CMakeLists.txt
     cmake . ^
-        -DCMAKE_INSTALL_PREFIX=%LIBS_DIR%/local ^
+        -DCMAKE_INSTALL_PREFIX="%LIBS_DIR%/local" ^
         -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" ^
         -DBUILD_SHARED_LIBS=OFF ^
         -DBUILD_DOCUMENTATION=OFF ^
@@ -1456,7 +1484,7 @@ win:
         -DENABLE_PLUGIN_LOADING=OFF ^
         -DWITH_LIBDE265=OFF ^
         -DWITH_FFMPEG_DECODER=ON ^
-        -DFFMPEG_ROOT=%LIBS_DIR%/local ^
+        -DFFMPEG_ROOT="%LIBS_DIR%/local" ^
         -DWITH_X264=OFF ^
         -DWITH_OpenH264_DECODER=OFF ^
         -DWITH_SvtEnc=OFF ^
@@ -1590,7 +1618,7 @@ winarm:
     SET "ToolsetProp=/property:PlatformToolset=v145"
 win:
 depends:python/Scripts/activate.bat
-    %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat
+    "%THIRDPARTY_DIR%\\python\\Scripts\\activate.bat"
     cd src\\client\\windows
     gyp --no-circular-check breakpad_client.gyp --format=ninja
     cd ..\\..
@@ -1685,9 +1713,10 @@ win32_win64:
     git clone https://github.com/desktop-app/tg_angle.git
     cd tg_angle
     git checkout 9fd174a91e6155d1006c5f427366b23006f5d899
+    python -c "s=open('src/program_serialize_data_version.py','r',encoding='utf-8').read();open('src/program_serialize_data_version.py','w',encoding='utf-8').write(s.replace('shlex.split(input_files_for_hash_generation)','[l.strip() for l in input_files_for_hash_generation.read().splitlines() if l.strip()]'))"
     cmake -B out ^
         -DTG_ANGLE_SPECIAL_TARGET=%SPECIAL_TARGET% ^
-        -DTG_ANGLE_ZLIB_INCLUDE_PATH=%LIBS_DIR%/zlib
+        -DTG_ANGLE_ZLIB_INCLUDE_PATH="%LIBS_DIR%/zlib"
     cmake --build out --config Debug
 release:
     cmake --build out --config Release
@@ -1704,14 +1733,14 @@ win:
     cd qtbase
     setlocal enabledelayedexpansion
     for /r %%i in (..\\..\\patches\\qtbase_%QT%\\*) do (
-        git apply %%i -v
+        git apply "%%i" -v
         if errorlevel 1 (
             echo ERROR: Applying patch %%~nxi failed!
             exit /b 1
         )
     )
     cd ..\\qtsvg
-    for %%i in (..\\..\\patches\\qtsvg_%QT%\\*) do git apply %%i -v || exit /b 1
+    for %%i in (..\\..\\patches\\qtsvg_%QT%\\*) do git apply "%%i" -v || exit /b 1
     cd ..
 
     SET CONFIGURATIONS=-debug
@@ -1765,8 +1794,8 @@ win:
     jom install
 """)
 else: # qt > '6'
-    qtAngleCmake = os.path.realpath(os.path.join(
-        scriptPath, '../../../cmake/external/angle/qt.cmake')).replace('\\', '/')
+    qtAngleCmake = os.path.join(
+        rootDir, 'cmake/external/angle/qt.cmake').replace('\\', '/')
     # checkouts share Libraries, so the cache key gets the content, not the path
     modifiedEnv['QT_ANGLE_CMAKE'] = qtAngleCmake
     branch = 'v$QT' + ('-lts-lgpl' if qt.startswith('6.2.') else '')
@@ -1826,7 +1855,7 @@ win:
     setlocal enabledelayedexpansion
 win32_win64:
     for %%i in (..\\..\\qt6_windows7\\*.patch) do (
-        git apply %%i --ignore-whitespace -v
+        git apply "%%i" --ignore-whitespace -v
         if errorlevel 1 (
             echo ERROR: Applying patch %%~nxi failed!
             exit /b 1
@@ -1834,7 +1863,7 @@ win32_win64:
     )
 win:
     for /r %%i in (..\\..\\patches\\qtbase_%QT%\\*) do (
-        git apply %%i --ignore-whitespace -v
+        git apply "%%i" --ignore-whitespace -v
         if errorlevel 1 (
             echo ERROR: Applying patch %%~nxi failed!
             exit /b 1
@@ -1842,7 +1871,7 @@ win:
     )
     cd ..\\qtsvg
     for /r %%i in (..\\..\\patches\\qtsvg_%QT%\\*) do (
-        git apply %%i --ignore-whitespace -v
+        git apply "%%i" --ignore-whitespace -v
         if errorlevel 1 (
             echo ERROR: Applying patch %%~nxi failed!
             exit /b 1
@@ -1889,6 +1918,7 @@ win:
         -D ZLIB_WINAPI ^
         -- ^
 win32_win64:
+        -D QT_ALLOW_SYMLINK_IN_PATHS=ON ^
         -D CMAKE_PROJECT_QtBase_INCLUDE:FILEPATH="%QT_ANGLE_CMAKE%" ^
         -D DESKTOP_APP_ANGLE_DIR:PATH="%LIBS_DIR%\\tg_angle" ^
 win:
@@ -1928,22 +1958,22 @@ stage('tg_owt', """
     git checkout 020feec5c040fdae2cf752c2c2be62ddde7c236d
     git submodule update --init --recursive
 win:
-    SET MOZJPEG_PATH=$LIBS_DIR/mozjpeg
-    SET OPUS_PATH=$USED_PREFIX/include/opus
-    SET OPENSSL_PATH=$LIBS_DIR/openssl3/include
-    SET LIBVPX_PATH=$USED_PREFIX/include
-    SET OPENH264_PATH=$USED_PREFIX/include
-    SET FFMPEG_PATH=$LIBS_DIR/ffmpeg
-    cmake -B out \
-        -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" \
-        -DTG_OWT_BUILD_AUDIO_BACKENDS=OFF \
-        -DTG_OWT_SPECIAL_TARGET=$SPECIAL_TARGET \
-        -DTG_OWT_LIBJPEG_INCLUDE_PATH=$MOZJPEG_PATH \
-        -DTG_OWT_OPENSSL_INCLUDE_PATH=$OPENSSL_PATH \
-        -DTG_OWT_OPUS_INCLUDE_PATH=$OPUS_PATH \
-        -DTG_OWT_LIBVPX_INCLUDE_PATH=$LIBVPX_PATH \
-        -DTG_OWT_OPENH264_INCLUDE_PATH=$OPENH264_PATH \
-        -DTG_OWT_FFMPEG_INCLUDE_PATH=$FFMPEG_PATH
+    SET "MOZJPEG_PATH=%LIBS_DIR%/mozjpeg"
+    SET "OPUS_PATH=%USED_PREFIX%/include/opus"
+    SET "OPENSSL_PATH=%LIBS_DIR%/openssl3/include"
+    SET "LIBVPX_PATH=%USED_PREFIX%/include"
+    SET "OPENH264_PATH=%USED_PREFIX%/include"
+    SET "FFMPEG_PATH=%LIBS_DIR%/ffmpeg"
+    cmake -B out ^
+        -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" ^
+        -DTG_OWT_BUILD_AUDIO_BACKENDS=OFF ^
+        -DTG_OWT_SPECIAL_TARGET=%SPECIAL_TARGET% ^
+        -DTG_OWT_LIBJPEG_INCLUDE_PATH="%MOZJPEG_PATH%" ^
+        -DTG_OWT_OPENSSL_INCLUDE_PATH="%OPENSSL_PATH%" ^
+        -DTG_OWT_OPUS_INCLUDE_PATH="%OPUS_PATH%" ^
+        -DTG_OWT_LIBVPX_INCLUDE_PATH="%LIBVPX_PATH%" ^
+        -DTG_OWT_OPENH264_INCLUDE_PATH="%OPENH264_PATH%" ^
+        -DTG_OWT_FFMPEG_INCLUDE_PATH="%FFMPEG_PATH%"
     cmake --build out --config Debug
 release:
     cmake --build out --config Release
@@ -2046,20 +2076,21 @@ stage('tde2e', """
     cd tde2e
     git checkout 51743df
 win:
-    SET OPENSSL_DIR=%LIBS_DIR%\\openssl3
-    SET OPENSSL_LIBS_DIR=%OPENSSL_DIR%\\out
-    SET ZLIB_LIBS_DIR=%LIBS_DIR%\\zlib
-    %THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed -i "s/STREQUAL/MATCHES/" td/generate/CMakeLists.txt
+    SET "OPENSSL_DIR=%LIBS_DIR%\\openssl3"
+    SET "OPENSSL_LIBS_DIR=%OPENSSL_DIR%\\out"
+    SET "ZLIB_LIBS_DIR=%LIBS_DIR%\\zlib"
+    "%THIRDPARTY_DIR%\\msys64\\usr\\bin\\sed" -i "s/STREQUAL/MATCHES/" td/generate/CMakeLists.txt
     mkdir out
     cd out
     mkdir Debug
     cd Debug
     cmake ^
+        -DGPERF_EXECUTABLE:FILEPATH="%THIRDPARTY_DIR%\\msys64\\ucrt64\\bin\\gperf.exe" ^
         -DOPENSSL_FOUND=1 ^
-        -DOPENSSL_INCLUDE_DIR=%OPENSSL_DIR%\\include ^
+        -DOPENSSL_INCLUDE_DIR="%OPENSSL_DIR%\\include" ^
         -DOPENSSL_CRYPTO_LIBRARY="%OPENSSL_LIBS_DIR%.dbg\\libcrypto.lib" ^
         -DZLIB_FOUND=1 ^
-        -DZLIB_INCLUDE_DIR=%ZLIB_LIBS_DIR% ^
+        -DZLIB_INCLUDE_DIR="%ZLIB_LIBS_DIR%" ^
         -DZLIB_LIBRARIES="%ZLIB_LIBS_DIR%\\Debug\\libzsd.lib" ^
         -DCMAKE_CONFIGURATION_TYPES=Debug ^
         -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" ^
@@ -2077,11 +2108,12 @@ release:
     mkdir Release
     cd Release
     cmake ^
+        -DGPERF_EXECUTABLE:FILEPATH="%THIRDPARTY_DIR%\\msys64\\ucrt64\\bin\\gperf.exe" ^
         -DOPENSSL_FOUND=1 ^
-        -DOPENSSL_INCLUDE_DIR=%OPENSSL_DIR%\\include ^
+        -DOPENSSL_INCLUDE_DIR="%OPENSSL_DIR%\\include" ^
         -DOPENSSL_CRYPTO_LIBRARY="%OPENSSL_LIBS_DIR%\\libcrypto.lib" ^
         -DZLIB_FOUND=1 ^
-        -DZLIB_INCLUDE_DIR=%ZLIB_LIBS_DIR% ^
+        -DZLIB_INCLUDE_DIR="%ZLIB_LIBS_DIR%" ^
         -DZLIB_LIBRARIES="%ZLIB_LIBS_DIR%\\Release\\libzs.lib" ^
         -DCMAKE_CONFIGURATION_TYPES=Release ^
         -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" ^

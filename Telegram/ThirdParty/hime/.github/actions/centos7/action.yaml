@@ -1,6 +1,0 @@
-name: 'Build @CentOS7'
-description: 'Build hime with CentOS 7 container'
-
-runs:
-  using: 'docker'
-  image: '../../../distro/centos/ci/centos7/Dockerfile'

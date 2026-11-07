@@ -1,4 +1,5 @@
 #include "alex/alex_crash_report.h"
+#include "core/version.h"
 #include "core/application.h"
 #include "core/crash_report_window.h"
 #include "core/sandbox.h"

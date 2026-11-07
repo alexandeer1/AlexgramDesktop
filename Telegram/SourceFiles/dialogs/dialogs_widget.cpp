@@ -2940,6 +2940,16 @@ void Widget::updateStoriesVisibility() {
 	const auto suggestionsAnimation = widthAnimation
 		&& !_openedFolder
 		&& (!_suggestions || !_hidingSuggestions.empty());
+	const auto hiddenAnimated = _searchHasFocus
+		|| _searchSuggestionsLocked
+		|| !_searchState.query.isEmpty()
+		|| _searchState.inChat
+		|| suggestionsAnimation
+		|| (_openedFolder
+			&& _subsectionTopBar
+			&& _subsectionTopBar->searchMode());
+	const auto pulledDown = _scroll->position().overscroll
+		< -st::dialogsFilterSkip;
 	const auto hiddenInstant = _showAnimation
 		|| _openedForum
 		|| _openedCommunity

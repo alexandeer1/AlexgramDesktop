@@ -48,10 +48,11 @@ if (WIN32)
     PUBLIC
         ${minizip_src_loc}
         ${libs_loc}/zlib/contrib
+        ${libs_loc}/zlib
     )
 
     target_link_libraries(external_minizip
-    PRIVATE
+    PUBLIC
         desktop-app::external_zlib
     )
 

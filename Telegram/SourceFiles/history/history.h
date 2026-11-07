@@ -243,6 +243,7 @@ public:
 	void destroyUnreadBar();
 	[[nodiscard]] Element *unreadBar() const;
 	void calculateFirstUnreadMessage();
+	void unsetFirstUnreadMessage();
 	[[nodiscard]] Element *firstUnreadMessage() const;
 
 	[[nodiscard]] bool loadedAtBottom() const; // last message is in the list

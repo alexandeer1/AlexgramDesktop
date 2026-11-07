@@ -17,7 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 class History;
 
 namespace Ui {
-class ScrollArea;
+class ElasticScroll;
 class PlainShadow;
 } // namespace Ui
 
@@ -156,7 +156,7 @@ private:
 	std::shared_ptr<Ui::ChatTheme> _theme;
 	QPointer<ListWidget> _inner;
 
-	object_ptr<Ui::ScrollArea> _scroll;
+	std::unique_ptr<Ui::ElasticScroll> _scroll;
 	object_ptr<TopBarWidget> _topBar;
 	object_ptr<Ui::PlainShadow> _topBarShadow;
 	CornerButtons _cornerButtons;

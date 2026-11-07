@@ -2796,6 +2796,10 @@ HistoryView::Element *History::unreadBar() const {
 	return _unreadBarView;
 }
 
+void History::unsetFirstUnreadMessage() {
+	_firstUnreadView = nullptr;
+}
+
 HistoryView::Element *History::firstUnreadMessage() const {
 	return _firstUnreadView;
 }

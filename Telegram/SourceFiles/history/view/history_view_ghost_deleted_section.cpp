@@ -13,6 +13,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "history/history_item.h"
 #include "window/window_session_controller.h"
+#include "ui/widgets/elastic_scroll.h"
 #include "ui/widgets/scroll_area.h"
 #include "ui/widgets/shadow.h"
 #include "ui/chat/chat_theme.h"
@@ -53,14 +54,13 @@ GhostDeletedWidget::GhostDeletedWidget(
 : Window::SectionWidget(parent, controller, history->peer)
 , WindowListDelegate(controller)
 , _history(history)
-, _scroll(
+, _scroll(std::make_unique<Ui::ElasticScroll>(
 	this,
-	controller->chatStyle()->value(lifetime(), st::historyScroll),
-	false)
+	controller->chatStyle()->value(lifetime(), st::historyScroll)))
 , _topBar(this, controller)
 , _topBarShadow(this)
 , _cornerButtons(
-	_scroll.data(),
+	_scroll.get(),
 	controller->chatStyle(),
 	static_cast<HistoryView::CornerButtonsDelegate*>(this)) {
 	
@@ -129,7 +129,7 @@ GhostDeletedWidget::GhostDeletedWidget(
 		_inner->refreshViewer();
 	}, lifetime());
 
-	Window::SetupSwipeBackSection(this, _scroll, _inner);
+	Window::SetupSwipeBackSection(this, _scroll.get(), _inner);
 }
 
 GhostDeletedWidget::~GhostDeletedWidget() = default;

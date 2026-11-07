@@ -7,7 +7,7 @@
 import sys, os, shutil, subprocess
 
 def run(project, arguments, buildType=''):
-    scriptPath = os.path.dirname(os.path.realpath(__file__))
+    scriptPath = os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')
     basePath = scriptPath + '/../out/' + buildType
 
     cmake = ['cmake']
@@ -24,15 +24,19 @@ def run(project, arguments, buildType=''):
             cmake.append(arg)
     if sys.platform == 'win32' and not explicitGenerator:
         toolset = 'v143'
+        generator = 'Visual Studio 17 2022'
         vs_version = os.environ.get('VisualStudioVersion')
         if vs_version:
             major = vs_version.split('.')[0]
             if major == '18':
                 toolset = 'v145'
+                generator = 'Visual Studio 18 2026'
             elif major == '17':
                 toolset = 'v143'
+                generator = 'Visual Studio 17 2022'
             elif major == '16':
                 toolset = 'v142'
+                generator = 'Visual Studio 16 2019'
         else:
             for path in [
                 r"C:\Program Files\Microsoft Visual Studio\18",
@@ -40,15 +44,17 @@ def run(project, arguments, buildType=''):
             ]:
                 if os.path.exists(path):
                     toolset = 'v145'
+                    generator = 'Visual Studio 18 2026'
                     break
+        cmake.append(f'-G{generator}')
         if vsArch == 'x64':
             cmake.append('-Ax64')
-            cmake.append(f'-T {toolset}')
+            cmake.append(f'-T{toolset}')
         elif vsArch == 'arm':
             cmake.append('-AARM64')
         else:
             cmake.append('-AWin32') # default
-            cmake.append(f'-T {toolset}')
+            cmake.append(f'-T{toolset}')
     elif vsArch != '':
         print("[ERROR] x86/x64/arm switch is supported only with Visual Studio.")
         return 1
