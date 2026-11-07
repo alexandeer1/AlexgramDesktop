@@ -62,6 +62,7 @@ public:
 	[[nodiscard]] QString ytDlpPath() const;
 	[[nodiscard]] QString ffmpegPath() const;
 	[[nodiscard]] QString resolvedFfmpegPath() const;
+	[[nodiscard]] QString ffmpegManualInstallInstructions() const;
 
 	void forceReinstall();
 	void checkYtDlpVersion();
@@ -73,6 +74,7 @@ private:
 	void downloadNextPending();
 	void downloadFile(const QString &url, const QString &savePath, DownloadStage stage);
 	void extractFfmpegFromArchive(const QString &archivePath);
+	void installFfmpegViaWinget();
 	void makePlatformExecutable(const QString &path);
 	void finishSetup();
 	QString buildBinDir() const;

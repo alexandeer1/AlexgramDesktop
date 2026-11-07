@@ -316,7 +316,7 @@ def run(commands):
         with open("command.bat", 'w') as file:
             file.write('@echo OFF\r\nset "NoDefaultCurrentDirectoryInExePath="\r\n' + winFailOnEach(commands))
         batPath = os.path.abspath("command.bat")
-        result = subprocess.run(batPath, shell=True, env=modifiedEnv).returncode == 0
+        result = subprocess.run(f'"{batPath}"', shell=True, env=modifiedEnv).returncode == 0
         if result and os.path.exists("command.bat"):
             os.remove("command.bat")
         return result
@@ -486,12 +486,12 @@ win:
     SET CHERE_INVOKING=enabled_from_arguments
     SET MSYS2_PATH_TYPE=inherit
 
-    powershell -Command "iwr -OutFile ./msys64.exe https://github.com/msys2/msys2-installer/releases/download/2025-08-30/msys2-base-x86_64-20250830.sfx.exe"
+    curl.exe -fSL --retry 5 --retry-delay 2 -o ./msys64.exe https://github.com/msys2/msys2-installer/releases/download/2025-08-30/msys2-base-x86_64-20250830.sfx.exe
     msys64.exe
     del msys64.exe
 
-    powershell -Command "((Get-Content ThirdParty\\msys64\\etc\\pacman.d\\mirrorlist.msys) -replace 'Server = https://mirror.msys2.org', '# Server = https://mirror.msys2.org') | Set-Content ThirdParty\\msys64\\etc\\pacman.d\\mirrorlist.msys"
-    powershell -Command "((Get-Content ThirdParty\\msys64\\etc\\pacman.d\\mirrorlist.mingw) -replace 'Server = https://mirror.msys2.org', '# Server = https://mirror.msys2.org') | Set-Content ThirdParty\\msys64\\etc\\pacman.d\\mirrorlist.mingw"
+    powershell -Command "((Get-Content msys64\\etc\\pacman.d\\mirrorlist.msys) -replace 'Server = https://mirror.msys2.org', '# Server = https://mirror.msys2.org') | Set-Content msys64\\etc\\pacman.d\\mirrorlist.msys"
+    powershell -Command "((Get-Content msys64\\etc\\pacman.d\\mirrorlist.mingw) -replace 'Server = https://mirror.msys2.org', '# Server = https://mirror.msys2.org') | Set-Content msys64\\etc\\pacman.d\\mirrorlist.mingw"
 
     bash -c "pacman-key --init; pacman-key --populate; pacman -Syyu --noconfirm --disable-download-timeout"
     pacman -Syyu --noconfirm --disable-download-timeout ^
@@ -515,12 +515,12 @@ win:
 stage('NuGet', """
 win:
     mkdir NuGet
-    powershell -Command "iwr -OutFile ./NuGet/nuget.exe https://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
+    curl.exe -fSL --retry 5 --retry-delay 2 -o ./NuGet/nuget.exe https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
 """, 'ThirdParty')
 
 stage('jom', """
 win:
-    powershell -Command "iwr -OutFile ./jom.zip https://master.qt.io/official_releases/jom/jom_1_1_3.zip"
+    curl.exe -fSL --retry 5 --retry-delay 2 -o ./jom.zip https://master.qt.io/official_releases/jom/jom_1_1_3.zip
     powershell -Command "Expand-Archive ./jom.zip"
     del jom.zip
 """, 'ThirdParty')

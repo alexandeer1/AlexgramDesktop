@@ -72,7 +72,42 @@ QString VideoDownloaderManager::resolvedFfmpegPath() const {
 	if (QFile::exists(local)) {
 		return local;
 	}
-	return QStandardPaths::findExecutable(u"ffmpeg"_q);
+	const auto systemPath = QStandardPaths::findExecutable(u"ffmpeg"_q);
+	if (!systemPath.isEmpty()) {
+		return systemPath;
+	}
+#ifdef Q_OS_WIN
+	const auto appData = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+	const auto wingetDir = QDir(appData + u"/Microsoft/WinGet/Packages"_q);
+	if (wingetDir.exists()) {
+		const auto entries = wingetDir.entryList(QStringList{ u"*FFmpeg*"_q }, QDir::Dirs | QDir::NoDotAndDotDot);
+		for (const auto &entry : entries) {
+			const auto searchDir = QDir(wingetDir.absoluteFilePath(entry));
+			const auto ffmpegList = searchDir.entryList(QStringList{ u"ffmpeg.exe"_q }, QDir::Files, QDir::Unsorted);
+			if (!ffmpegList.isEmpty()) {
+				return searchDir.absoluteFilePath(ffmpegList.first());
+			}
+			const auto subdirs = searchDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+			for (const auto &subdir : subdirs) {
+				const auto binDir = QDir(searchDir.absoluteFilePath(subdir) + u"/bin"_q);
+				if (binDir.exists(u"ffmpeg.exe"_q)) {
+					return binDir.absoluteFilePath(u"ffmpeg.exe"_q);
+				}
+			}
+		}
+	}
+#endif
+	return QString();
+}
+
+QString VideoDownloaderManager::ffmpegManualInstallInstructions() const {
+#ifdef Q_OS_WIN
+	return u"Manual installation instructions:\nOpen Command Prompt or PowerShell and run:\n  winget install \"FFmpeg (Essentials Build)\""_q;
+#elif defined(Q_OS_MAC)
+	return u"Manual installation instructions:\nOpen Terminal and run:\n  brew install ffmpeg\nOr download binary from https://evermeet.cx/ffmpeg/ and place in PATH."_q;
+#else
+	return u"Manual installation instructions:\nOpen Terminal and run:\n  Ubuntu/Debian: sudo apt update && sudo apt install ffmpeg\n  Arch Linux: sudo pacman -S ffmpeg\n  Fedora: sudo dnf install ffmpeg"_q;
+#endif
 }
 
 bool VideoDownloaderManager::areDependenciesReady() const {
@@ -84,10 +119,7 @@ bool VideoDownloaderManager::isYtDlpReady() const {
 }
 
 bool VideoDownloaderManager::isFfmpegReady() const {
-	if (QFile::exists(ffmpegPath())) {
-		return true;
-	}
-	return !QStandardPaths::findExecutable(u"ffmpeg"_q).isEmpty();
+	return !resolvedFfmpegPath().isEmpty();
 }
 
 void VideoDownloaderManager::ensureYtDlp() {
@@ -165,8 +197,7 @@ void VideoDownloaderManager::ensureDependencies() {
 		_pending.append({ ytUrl, ytDlpPath(), DownloadStage::DownloadingYtDlp });
 	}
 
-const auto needFfmpeg = !QFile::exists(ffmpegPath())
-		&& QStandardPaths::findExecutable(u"ffmpeg"_q).isEmpty();
+	const auto needFfmpeg = !isFfmpegReady();
 	if (needFfmpeg) {
 #ifdef Q_OS_WIN
 		const auto ffmpegArchivePath = _binDir + u"/"_q + QString::fromUtf8(kFfmpegZipName);
@@ -199,7 +230,44 @@ void VideoDownloaderManager::downloadNextPending() {
 	_downloading = true;
 	const auto item = _pending.first();
 	_pending.removeFirst();
+#ifdef Q_OS_WIN
+	if (item.stage == DownloadStage::DownloadingFfmpeg) {
+		installFfmpegViaWinget();
+		return;
+	}
+#endif
 	downloadFile(item.url, item.savePath, item.stage);
+}
+
+void VideoDownloaderManager::installFfmpegViaWinget() {
+	SetupProgress p;
+	p.stage = DownloadStage::DownloadingFfmpeg;
+	p.percent = 50;
+	p.statusText = u"Installing FFmpeg via winget..."_q;
+	_setupProgress.fire(std::move(p));
+
+	const auto process = new QProcess();
+	QObject::connect(process,
+		qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
+		[this, process](int code, QProcess::ExitStatus) {
+			process->deleteLater();
+			if (isFfmpegReady()) {
+				_downloading = false;
+				downloadNextPending();
+			} else {
+				LOG(("VideoDownloader Info: winget install failed. Falling back to zip download..."));
+				const auto ffmpegArchivePath = _binDir + u"/"_q + QString::fromUtf8(kFfmpegZipName);
+				const auto ffmpegUrl = QString::fromUtf8(kFfmpegUrlWin);
+				downloadFile(ffmpegUrl, ffmpegArchivePath, DownloadStage::DownloadingFfmpeg);
+			}
+		});
+
+	process->start(u"winget"_q, QStringList{
+		u"install"_q,
+		u"FFmpeg (Essentials Build)"_q,
+		u"--accept-package-agreements"_q,
+		u"--accept-source-agreements"_q
+	});
 }
 
 void VideoDownloaderManager::downloadFile(
@@ -253,7 +321,9 @@ void VideoDownloaderManager::downloadFile(
 				SetupProgress p;
 				p.stage = DownloadStage::Error;
 				p.percent = 0;
-				p.statusText = u"Network error: "_q + reply->errorString();
+				p.statusText = (isFfmpeg
+					? u"Network error downloading FFmpeg: "_q + reply->errorString() + u"\n\n"_q + ffmpegManualInstallInstructions()
+					: u"Network error: "_q + reply->errorString());
 				_setupProgress.fire(std::move(p));
 				reply->deleteLater();
 				return;
@@ -357,7 +427,7 @@ void VideoDownloaderManager::extractFfmpegFromArchive(const QString &archivePath
 				SetupProgress p;
 				p.stage = DownloadStage::Error;
 				p.percent = 0;
-				p.statusText = u"Failed to extract ffmpeg from archive."_q;
+				p.statusText = u"Failed to extract FFmpeg archive.\n\n"_q + ffmpegManualInstallInstructions();
 				_setupProgress.fire(std::move(p));
 			}
 		});

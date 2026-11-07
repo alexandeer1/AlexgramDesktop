@@ -85,6 +85,18 @@ VideoDownloaderEngine::~VideoDownloaderEngine() {
 	cancel();
 }
 
+void VideoDownloaderEngine::setYtDlpPath(const QString &path) {
+	if (!path.isEmpty()) {
+		_ytDlpPath = path;
+	}
+}
+
+void VideoDownloaderEngine::setFfmpegPath(const QString &path) {
+	if (!path.isEmpty()) {
+		_ffmpegPath = path;
+	}
+}
+
 void VideoDownloaderEngine::cancel() {
 	if (_process && _process->state() != QProcess::NotRunning) {
 		_process->kill();
@@ -578,9 +590,12 @@ void VideoDownloaderEngine::startDownload(
 		args.append(u"--audio-format"_q);
 		args.append(u"m4a"_q);
 	}
-	if (QFileInfo(_ffmpegPath).isAbsolute()) {
+	if (!_ffmpegPath.isEmpty()) {
+		const auto absoluteFfmpeg = QFileInfo(_ffmpegPath).isAbsolute()
+			? _ffmpegPath
+			: QFileInfo(_ffmpegPath).absoluteFilePath();
 		args.append(u"--ffmpeg-location"_q);
-		args.append(_ffmpegPath);
+		args.append(absoluteFfmpeg);
 	}
 	if (multiAudio) {
 		args.append(u"--audio-multistreams"_q);
@@ -736,8 +751,11 @@ void VideoDownloaderEngine::processNextPlaylistItem() {
 	if (st.videoFormatId == u"bestaudio"_q) {
 		args << u"-x"_q << u"--audio-format"_q << u"m4a"_q;
 	}
-	if (QFileInfo(_ffmpegPath).isAbsolute()) {
-		args << u"--ffmpeg-location"_q << _ffmpegPath;
+	if (!_ffmpegPath.isEmpty()) {
+		const auto absoluteFfmpeg = QFileInfo(_ffmpegPath).isAbsolute()
+			? _ffmpegPath
+			: QFileInfo(_ffmpegPath).absoluteFilePath();
+		args << u"--ffmpeg-location"_q << absoluteFfmpeg;
 	}
 	if (multiAudio) {
 		args.append(u"--audio-multistreams"_q);

@@ -104,6 +104,9 @@ public:
 		const QString &ffmpegPath);
 	~VideoDownloaderEngine();
 
+	void setYtDlpPath(const QString &path);
+	void setFfmpegPath(const QString &path);
+
 	void fetchInfo(const QString &url, const QString &browserCookies, const QString &cookiesFile = QString());
 	void fetchPlaylistInfo(const QString &url, const QString &browserCookies, const QString &cookiesFile = QString());
 	void updateYtDlp();

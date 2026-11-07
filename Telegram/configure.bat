@@ -3,7 +3,7 @@
 setlocal enabledelayedexpansion
 set "FullScriptPath=%~dp0"
 
-python %FullScriptPath%configure.py %*
+python "%FullScriptPath%configure.py" %*
 if %errorlevel% neq 0 goto error
 
 exit /b

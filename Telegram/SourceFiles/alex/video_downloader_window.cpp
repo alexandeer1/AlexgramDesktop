@@ -360,7 +360,11 @@ void DepsStatusWidget::setToolReady(ToolRow &row, const QString &name) {
 
 void DepsStatusWidget::setToolMissing(ToolRow &row, const QString &name) {
 	row.iconLabel->setText(u"❌"_q);
-	row.statusLabel->setText(name + u" is not installed. Click Install to download it automatically."_q);
+	if (name == u"FFmpeg"_q) {
+		row.statusLabel->setText(name + u" is missing.\n"_q + _manager->ffmpegManualInstallInstructions());
+	} else {
+		row.statusLabel->setText(name + u" is not installed. Click Install to download it automatically."_q);
+	}
 	row.statusLabel->setStyleSheet(u"color: #ff6b6b; font-size: 11px;"_q);
 	row.progressBar->hide();
 	row.installBtn->show();
@@ -1663,6 +1667,8 @@ void VideoDownloaderWindow::setupConnections() {
 
 void VideoDownloaderWindow::ensureEngine() {
 	if (_engine) {
+		_engine->setYtDlpPath(_manager->ytDlpPath());
+		_engine->setFfmpegPath(_manager->resolvedFfmpegPath());
 		return;
 	}
 	_engine = std::make_unique<VideoDownloaderEngine>(
