@@ -640,7 +640,7 @@ mac:
 stage('lzma', """
 win:
     git clone https://github.com/desktop-app/lzma.git
-    python $TDESKTOP_DIR\\fix_toolset.py
+    python "$TDESKTOP_DIR\\fix_toolset.py"
     cd lzma\\C\\Util\\LzmaLib
     SET "ToolsetProp="
 winarm:

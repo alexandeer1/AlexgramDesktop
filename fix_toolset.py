@@ -46,9 +46,13 @@ if __name__ == "__main__":
     fix_in_dir('.')
     
     # Also scan and fix external libraries
-    libs_dir = 'D:\\Libraries'
-    if os.path.exists(libs_dir):
-        print(f"Scanning and fixing toolsets in {libs_dir}...")
-        fix_in_dir(libs_dir)
-    else:
-        print(f"Libraries directory not found at {libs_dir}")
+    candidates = [
+        os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'Libraries')),
+        r'D:\D drive\Libraries',
+        r'D:\Libraries',
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            print(f"Scanning and fixing toolsets in {candidate}...")
+            fix_in_dir(candidate)
+            break
