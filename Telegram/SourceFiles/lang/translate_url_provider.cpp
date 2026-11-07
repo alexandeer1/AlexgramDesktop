@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "lang/translate_helper.h"
 #include "spellcheck/platform/platform_language.h"
 #include "ui/text/text_entity.h"
+#include "ui/text/text_html_tags.h"
 
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
@@ -237,7 +238,6 @@ public:
 			url.replace(u"%q"_q, query);
 			requestUrl = QUrl(url);
 		}
-
 		if (!requestUrl.isValid()) {
 			done(TranslateProviderResult{
 				.error = TranslateProviderError::Unknown,

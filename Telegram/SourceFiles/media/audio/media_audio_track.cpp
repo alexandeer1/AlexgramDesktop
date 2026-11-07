@@ -308,8 +308,10 @@ void Track::reattachToDevice() {
 }
 
 Track::~Track() {
-  detachFromDevice();
-  _instance->unregisterTrack(this);
+	finish();
+	detachFromDevice();
+	_instance->unregisterTrack(this);
+
 }
 
 Instance::Instance()

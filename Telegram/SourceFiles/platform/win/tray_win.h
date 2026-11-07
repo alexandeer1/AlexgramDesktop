@@ -77,4 +77,6 @@ private:
 void RefreshTaskbarThemeValue();
 void ClearTrayLogoCache();
 
+[[nodiscard]] std::optional<bool> IsDarkTaskbar();
+
 } // namespace Platform

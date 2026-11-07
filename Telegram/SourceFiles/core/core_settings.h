@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings_proxy.h"
 #include "media/media_common.h"
 #include "dialogs/ui/dialogs_quick_action.h"
+#include "ui/widgets/chat_filters_tabs_mode.h"
 #include "window/themes/window_themes_embedded.h"
 #include "ui/chat/attach/attach_send_files_way.h"
 #include "base/flags.h"
@@ -154,7 +155,7 @@ public:
 	}
 
 	[[nodiscard]] QByteArray serialize() const;
-	void addFromSerialized(const QByteArray &serialized);
+	void addFromSerialized(const QByteArray &serialized, int writerVersion);
 
 	[[nodiscard]] bool adaptiveForWide() const {
 		return _adaptiveForWide.current();
@@ -532,6 +533,12 @@ public:
 	[[nodiscard]] rpl::producer<bool> cornerReplyValue() const {
 		return _cornerReply.value();
 	}
+	void setPullToNextChannel(bool value) {
+		_pullToNextChannel = value;
+	}
+	[[nodiscard]] bool pullToNextChannel() const {
+		return _pullToNextChannel.current();
+	}
 
 	void setShowTranslateButton(bool value) {
 		_showTranslateButton = value;
@@ -856,12 +863,8 @@ public:
 	[[nodiscard]] rpl::producer<QString> customDeviceModelChanges() const {
 		return _customDeviceModel.changes();
 	}
-	[[nodiscard]] rpl::producer<QString> customDeviceModelValue() const {
-		return _customDeviceModel.value();
-	}
 	[[nodiscard]] QString deviceModel() const;
 	[[nodiscard]] rpl::producer<QString> deviceModelChanges() const;
-	[[nodiscard]] rpl::producer<QString> deviceModelValue() const;
 
 	void setPlayerRepeatMode(Media::RepeatMode mode) {
 		_playerRepeatMode = mode;
@@ -1021,6 +1024,11 @@ public:
 	[[nodiscard]] bool chatFiltersHorizontal() const;
 	[[nodiscard]] rpl::producer<bool> chatFiltersHorizontalChanges() const;
 	void setChatFiltersHorizontal(bool value);
+
+	[[nodiscard]] Ui::ChatsFiltersTabsMode chatFiltersTabsMode() const;
+	[[nodiscard]] auto chatFiltersTabsModeValue() const
+	-> rpl::producer<Ui::ChatsFiltersTabsMode>;
+	void setChatFiltersTabsMode(Ui::ChatsFiltersTabsMode value);
 
 	[[nodiscard]] Media::VideoQuality videoQuality() const;
 	void setVideoQuality(Media::VideoQuality quality);
@@ -1286,6 +1294,13 @@ public:
 		_notificationsVolume = value;
 	}
 
+	[[nodiscard]] int mediaGridZoomStep() const {
+		return _mediaGridZoomStep;
+	}
+	void setMediaGridZoomStep(int value) {
+		_mediaGridZoomStep = value;
+	}
+
 	template <typename Type, typename Other>
 	void writePref(std::string_view key, Other &&value) {
 		writePrefImpl<Type>(key, std::forward<Other>(value));
@@ -1382,6 +1397,7 @@ private:
 	rpl::variable<bool> _showTranslateButton = true;
 	rpl::variable<bool> _showTranslatedIcon = true;
 	rpl::variable<bool> _cornerReaction = true;
+	rpl::variable<bool> _pullToNextChannel = true;
 	rpl::variable<bool> _spellcheckerEnabled = true;
 	PlaybackSpeed _videoPlaybackSpeed;
 	rpl::variable<PlaybackSpeed> _voicePlaybackSpeed;
@@ -1450,6 +1466,8 @@ private:
 	rpl::variable<int> _ivZoom = 0;
 	Media::VideoQuality _videoQuality;
 	rpl::variable<bool> _chatFiltersHorizontal = false;
+	rpl::variable<Ui::ChatsFiltersTabsMode> _chatFiltersTabsMode
+		= Ui::ChatsFiltersTabsMode::Default;
 	base::flat_map<QByteArray, QByteArray> _prefs;
 
 	bool _tabbedReplacedWithInfo = false; // per-window
@@ -1467,6 +1485,8 @@ private:
 		= Dialogs::Ui::QuickDialogAction::Disabled;
 
 	ushort _notificationsVolume = 100;
+
+	int _mediaGridZoomStep = 0;
 
 	QByteArray _photoEditorBrush;
 

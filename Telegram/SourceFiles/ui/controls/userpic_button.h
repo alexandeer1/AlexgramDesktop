@@ -28,6 +28,9 @@ struct Update;
 enum class Error;
 struct Information;
 } // namespace Streaming
+namespace Encode {
+struct VideoSource;
+} // namespace Encode
 } // namespace Media
 
 namespace style {
@@ -91,7 +94,11 @@ public:
 			DocumentId documentId = 0;
 			std::vector<QColor> colors;
 		} markup;
+
+		std::shared_ptr<Media::Encode::VideoSource> video;
 	};
+
+	void setVideoAllowed(bool allowed);
 
 	// Role::OpenPhoto
 	void switchChangePhotoOverlay(
@@ -109,6 +116,10 @@ public:
 	[[nodiscard]] QImage takeResultImage() {
 		return std::move(_result);
 	}
+	[[nodiscard]] auto takeResultVideo()
+	-> std::shared_ptr<Media::Encode::VideoSource> {
+		return std::move(_resultVideo);
+	}
 
 	void showCustom(QImage &&image);
 	void showSource(Source source);
@@ -117,9 +128,6 @@ public:
 	void showUploadProgress();
 
 	[[nodiscard]] PopupMenu *showChangePhotoMenu();
-
-	void overrideHasPersonalPhoto(bool has);
-	[[nodiscard]] rpl::producer<> resetPersonalRequests() const;
 
 protected:
 	void paintEvent(QPaintEvent *e) override;
@@ -166,7 +174,7 @@ private:
 	void choosePhotoLocally();
 	[[nodiscard]] bool canSuggestPhoto(not_null<UserData*> user) const;
 	[[nodiscard]] bool hasPersonalPhotoLocally() const;
-	[[nodiscard]] auto makeResetToOriginalAction()
+	[[nodiscard]] auto makeResetToOriginalAction(not_null<UserData*> user)
 		-> base::unique_qptr<Menu::ItemBase>;
 
 	const style::UserpicButton &_st;
@@ -186,6 +194,7 @@ private:
 	InMemoryKey _userpicUniqueKey;
 	Animations::Simple _a_appearance;
 	QImage _result;
+	std::shared_ptr<Media::Encode::VideoSource> _resultVideo;
 	QImage _ellipseMask;
 	std::array<QImage, 4> _roundingCorners;
 	std::unique_ptr<Media::Streaming::Instance> _streamed;
@@ -196,6 +205,7 @@ private:
 	bool _showSavedMessagesOnSelf = false;
 	bool _showMyNotesOnSelf = false;
 	bool _canOpenPhoto = false;
+	bool _videoAllowed = false;
 	bool _cursorInChangeOverlay = false;
 	bool _changeOverlayEnabled = false;
 	Animations::Simple _changeOverlayShown;
@@ -203,8 +213,6 @@ private:
 	rpl::event_stream<ChosenImage> _chosenImages;
 
 	Source _source = Source::Custom;
-	std::optional<bool> _overrideHasPersonalPhoto;
-	rpl::event_stream<> _resetPersonalRequests;
 	rpl::lifetime _sourceLifetime;
 
 	std::unique_ptr<UploadProgressOverlay> _uploadOverlay;

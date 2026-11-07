@@ -69,6 +69,13 @@ public:
 
 	void updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline);
 
+	[[nodiscard]] bool requestingDifference() const {
+		return _ptsWaiter.requesting();
+	}
+	[[nodiscard]] bool handlingChannelDifference() const {
+		return _handlingChannelDifference;
+	}
+
 private:
 	enum class ChannelDifferenceRequest {
 		Unknown,
@@ -100,9 +107,6 @@ private:
 	void getDifferenceByPts();
 	void getDifferenceAfterFail();
 
-	[[nodiscard]] bool requestingDifference() const {
-		return _ptsWaiter.requesting();
-	}
 	void getChannelDifference(
 		not_null<ChannelData*> channel,
 		ChannelDifferenceRequest from = ChannelDifferenceRequest::Unknown);

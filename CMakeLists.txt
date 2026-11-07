@@ -4,11 +4,10 @@
 # For license and copyright information please follow this link:
 # https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 3.25...3.31)
 
 # Set MSVC debug information format to ProgramDatabase (/Zi) for Debug only to avoid parallel locks and save Release memory
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:ProgramDatabase> CACHE STRING "MSVC debug information format" FORCE)
-
 
 # Workaround some linking errors in GCC due to static library order.
 if (POLICY CMP0156)
@@ -37,7 +36,6 @@ project(Telegram
 
 if (APPLE)
     enable_language(OBJC OBJCXX)
-    set(QT_NO_PRIVATE_MODULE_WARNING ON)
 endif()
 
 if (configuration_types_init
@@ -89,10 +87,10 @@ include(cmake/validate_d3d_compiler.cmake)
 include(cmake/target_prepare_qrc.cmake)
 
 include(cmake/options.cmake)
+
 include(cmake/external/qt/package.cmake)
 
 set(desktop_app_skip_libs
-    dispatch
     glibmm
     variant
 )

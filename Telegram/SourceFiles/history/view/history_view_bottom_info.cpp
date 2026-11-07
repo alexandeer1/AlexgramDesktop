@@ -18,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/ui_integration.h"
 #include "lang/lang_keys.h"
 #include "history/history_item_components.h"
+#include "history/history_item_helpers.h"
 #include "history/history_item.h"
 #include "history/history.h"
 #include "history/view/media/history_view_media.h"
@@ -69,6 +70,20 @@ namespace {
 		}
 	}
 	return map.back().text;
+}
+
+[[nodiscard]] QString FormatEditedDate(QDateTime sent, QDateTime edited) {
+	const auto today = QDateTime::currentDateTime().date();
+	const auto time = QLocale().toString(edited.time(), QLocale::ShortFormat);
+	if (sent.date() == today && edited.date() == today) {
+		return tr::lng_edited_at(tr::now, lt_time, time);
+	}
+	return tr::lng_edited_on(
+		tr::now,
+		lt_date,
+		langDayOfMonthShort(edited.date()),
+		lt_time,
+		time);
 }
 
 } // namespace
@@ -258,9 +273,14 @@ void BottomInfo::paint(
 		int outerWidth,
 		bool unread,
 		bool inverted,
+		bool leftToRight,
 		const PaintContext &context) const {
 	const auto st = context.st;
 	const auto stm = context.messageStyle();
+	// RTL mirrors icons around outer width; this one leaves an icon in place.
+	const auto outer = [&](int left, const style::icon &icon) {
+		return leftToRight ? (2 * left + icon.width()) : outerWidth;
+	};
 
 	auto right = position.x() + width();
 	const auto firstLineBottom = position.y() + st::msgDateFont->height;
@@ -279,7 +299,7 @@ void BottomInfo::paint(
 		icon.paint(
 			p,
 			QPoint(right, firstLineBottom) + st::historySendStatePosition,
-			outerWidth);
+			outer(right + st::historySendStatePosition.x(), icon));
 		right -= st::historySendStateSpace;
 	}
 
@@ -301,7 +321,18 @@ void BottomInfo::paint(
 			p,
 			right,
 			firstLineBottom + st::historySilentTop,
-			outerWidth);
+			outer(right, icon));
+	}
+	if (_data.flags & Data::Flag::Ephemeral) {
+		const auto &icon = inverted
+			? st->historyEphemeralInvertedIcon()
+			: stm->historyEphemeralIcon;
+		right -= st::historyEphemeralStateWidth;
+		icon.paint(
+			p,
+			right,
+			firstLineBottom + st::historyEphemeralStateTop,
+			outer(right, icon));
 	}
 
 	if (_data.flags & Data::Flag::Pinned) {
@@ -313,7 +344,7 @@ void BottomInfo::paint(
 			p,
 			right,
 			firstLineBottom + st::historyPinTop,
-			outerWidth);
+			outer(right, icon));
 	}
 	if (!_views.isEmpty()) {
 		const auto viewsWidth = _views.maxWidth();
@@ -328,7 +359,7 @@ void BottomInfo::paint(
 			p,
 			right,
 			firstLineBottom + st::historyViewsTop,
-			outerWidth);
+			outer(right, icon));
 	}
 	if (!_replies.isEmpty()) {
 		const auto repliesWidth = _replies.maxWidth();
@@ -343,7 +374,7 @@ void BottomInfo::paint(
 			p,
 			right,
 			firstLineBottom + st::historyViewsTop,
-			outerWidth);
+			outer(right, icon));
 	}
 	if ((_data.flags & Data::Flag::Sending)
 		&& !(_data.flags & Data::Flag::OutLayout)) {
@@ -355,7 +386,7 @@ void BottomInfo::paint(
 			p,
 			right,
 			firstLineBottom + st::historyViewsTop,
-			outerWidth);
+			outer(right, icon));
 	}
 	if (_effect) {
 		auto left = position.x();
@@ -416,7 +447,7 @@ void BottomInfo::paintEffect(
 		x += width + add;
 		widthLeft -= width + add;
 	}
-	if (!animations.empty()) {
+	if (!animations.empty() && context.reactionInfo) {
 		const auto now = context.now;
 		context.reactionInfo->effectPaint = [
 			now,
@@ -466,7 +497,15 @@ void BottomInfo::layoutDateText() {
 		&& Core::App().settings().showEditedIcon();
 	const auto showTranslatedIcon = (_data.flags & Data::Flag::Translated)
 		&& Core::App().settings().showTranslatedIcon();
-	const auto edited = ((_data.flags & Data::Flag::Edited) && !showEditedIcon)
+	const auto updated = (_data.flags & Data::Flag::Updated);
+	const auto editedPrimary = !updated
+		&& (_data.flags & Data::Flag::EditedPrimary)
+		&& !(_data.flags & Data::Flag::ForwardedDate);
+	const auto edited = editedPrimary
+		? QString()
+		: updated
+		? (tr::lng_ephemeral_updated(tr::now) + ' ')
+		: ((_data.flags & Data::Flag::Edited) && !showEditedIcon)
 		? (tr::lng_edited(tr::now) + ' ')
 		: (_data.flags & Data::Flag::EstimateDate)
 		? (tr::lng_approximate(tr::now) + ' ')
@@ -483,10 +522,13 @@ void BottomInfo::layoutDateText() {
 			timeFormat.replace(u"m"_q, u"m:ss"_q);
 		}
 	}
-	const auto dateStr = edited + ((_data.flags & Data::Flag::ForwardedDate)
+	const auto dateStr = editedPrimary
+		? FormatEditedDate(_data.date, _data.editedDate)
+		: edited + ((_data.flags
+			& (Data::Flag::ForwardedDate | Data::Flag::FullDate))
 		? Ui::FormatDateTimeSavedFrom(_data.date)
 		: QLocale().toString(_data.date.time(), timeFormat));
-	
+
 	auto finalDateStr = dateStr;
 	if (Core::App().settings().showMessageId() && _data.msgId) {
 		finalDateStr += u" | "_q + QString::number(_data.msgId.bare);
@@ -662,6 +704,9 @@ QSize BottomInfo::countOptimalSize() {
 	if (_data.flags & Data::Flag::Silent) {
 		width += st::historySilentWidth;
 	}
+	if (_data.flags & Data::Flag::Ephemeral) {
+		width += st::historyEphemeralStateWidth;
+	}
 	_effectMaxWidth = countEffectMaxWidth();
 	width += _effectMaxWidth;
 	const auto dateHeight = (_data.flags & Data::Flag::Sponsored)
@@ -737,6 +782,8 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	}
 	if (message->context() == Context::ShortcutMessages) {
 		result.flags |= Flag::Shortcut;
+	} else if (message->context() == Context::MediaEditor) {
+		result.flags |= Flag::FullDate;
 	}
 	if (!item->isPost()
 		|| !item->hasRealFromId()
@@ -747,8 +794,15 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 			}
 		}
 	}
-	if (message->displayedEditDate()) {
+	if (const auto editedDate = message->displayedEditDate()) {
 		result.flags |= Flag::Edited;
+		if (item->history()->session().messagePrimaryEditedDate()) {
+			result.flags |= Flag::EditedPrimary;
+			result.editedDate = base::unixtime::parse(editedDate);
+		}
+	}
+	if (IsAnchoredEphemeral(item)) {
+		result.flags |= Flag::Updated;
 	}
 	if (const auto views = item->Get<HistoryMessageViews>()) {
 		if (views->views.count >= 0) {
@@ -763,6 +817,12 @@ BottomInfo::Data BottomInfoDataFromMessage(not_null<Message*> message) {
 	}
 	if (item->isSending() || item->hasFailed()) {
 		result.flags |= Flag::Sending;
+	}
+	if (item->isEphemeral()
+		&& !message->hasBubble()
+		&& (!message->media()
+			|| !message->media()->drawsOwnEphemeralBadge())) {
+		result.flags |= Flag::Ephemeral;
 	}
 	if (!item->history()->peer->isUser()) {
 		const auto mine = PaidInformation{

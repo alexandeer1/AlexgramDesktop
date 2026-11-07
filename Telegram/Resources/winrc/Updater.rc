@@ -35,8 +35,13 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 //
 
 VS_VERSION_INFO VERSIONINFO
+<<<<<<< HEAD
  FILEVERSION 6,9,2,0
  PRODUCTVERSION 6,9,2,0
+=======
+ FILEVERSION 7,4,1,0
+ PRODUCTVERSION 7,4,1,0
+>>>>>>> upstream/dev
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -53,11 +58,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Alexgram FZ-LLC"
             VALUE "FileDescription", "Alexgram Desktop Updater"
-            VALUE "FileVersion", "6.9.2.0"
+            VALUE "FileVersion", "7.4.1.0"
             VALUE "LegalCopyright", "Copyright (C) 2014-2026"
             VALUE "ProductName", "Alexgram Desktop"
-            VALUE "ProductVersion", "6.9.2.0"
-5        END
+            VALUE "ProductVersion", "7.4.1.0"
+        END
     END
     BLOCK "VarFileInfo"
     BEGIN
