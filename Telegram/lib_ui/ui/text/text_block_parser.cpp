@@ -13,13 +13,31 @@
 #include "styles/style_basic.h"
 
 #include <QtCore/QUrl>
-#include <private/qfixed_p.h>
 
 namespace Ui::Text {
 namespace {
 
 constexpr auto kStringLinkIndexShift = uint16(0x8000);
 constexpr auto kMaxDiacAfterSymbol = 2;
+
+[[nodiscard]] bool IsIndexedLinkData(const QString &data) {
+	const auto prefix = u"internal:index"_q;
+	return (data.size() == prefix.size() + 1) && data.startsWith(prefix);
+}
+
+[[nodiscard]] std::vector<uint16> UnregisteredSkippedIndices(
+		std::vector<uint16> skipped,
+		const std::vector<uint16> &registered,
+		int linksCount) {
+	skipped.erase(ranges::remove_if(skipped, [&](uint16 index) {
+		return !index
+			|| (index > linksCount)
+			|| ranges::binary_search(registered, index);
+	}), end(skipped));
+	ranges::sort(skipped);
+	const auto till = ranges::unique(skipped);
+	return std::vector<uint16>(begin(skipped), till);
+}
 
 [[nodiscard]] TextWithEntities PrepareRichFromRich(
 		const TextWithEntities &text,
@@ -203,6 +221,9 @@ void BlockParser::createBlock(int skipBack) {
 			custom->width());
 	}
 	const auto push = [&](auto &&factory, auto &&...args) {
+		if (_internalIndex) {
+			_internalBlocks.push_back(int(_tBlocks.size()));
+		}
 		_tBlocks.push_back(factory({
 			.position = uint16(_blockStart),
 			.flags = _flags,
@@ -292,6 +313,7 @@ void BlockParser::finishEntities() {
 		while (!list.empty()) {
 			if (list.back().type() == StartedEntity::Type::CustomEmoji) {
 				createBlock();
+				_customEmojiData = QString();
 			} else if (const auto flags = list.back().flags()) {
 				if (_flags & (*flags)) {
 					createBlock();
@@ -395,9 +417,7 @@ bool BlockParser::checkEntities() {
 		const auto entityData = _waitingEntity->data();
 		const auto [dateValue, dateFlags] = DeserializeFormattedDateData(
 			entityData);
-		const auto customText = (dateFlags != FormattedDateFlags())
-			&& _context.formattedDateFactory;
-		if (customText) {
+		if (isReplacedEntity(*_waitingEntity)) {
 			createBlock();
 
 			const auto result = _context.formattedDateFactory(
@@ -418,13 +438,11 @@ bool BlockParser::checkEntities() {
 				formatted.size());
 			_tText.append(formatted);
 			_ptr = entityEnd;
-			_internals.push_back({
+			_internalIndex = pushInternal({
 				.text = formatted,
 				.data = entityData,
 				.type = EntityType::FormattedDate,
 			});
-
-			_internalIndex = _internals.size();
 			_flags |= TextBlockFlag::FormattedDate;
 			createBlock();
 			_internalIndex = 0;
@@ -432,12 +450,11 @@ bool BlockParser::checkEntities() {
 		} else {
 			flags = TextBlockFlag::FormattedDate;
 
-			_internals.push_back({
+			internalIndex = pushInternal({
 				.text = QString(entityBegin, entityLength),
 				.data = entityData,
 				.type = EntityType::FormattedDate,
 			});
-			internalIndex = _internals.size();
 		}
 	} else if ((entityType == EntityType::Code) // #TODO entities
 		|| (entityType == EntityType::Pre)) {
@@ -459,8 +476,10 @@ bool BlockParser::checkEntities() {
 
 		// TODO: remove trimming.
 		if (isSingleLine && (entityType == EntityType::Code)) {
-			_internals.push_back({ .text = text, .type = entityType });
-			internalIndex = _internals.size();
+			internalIndex = pushInternal({
+				.text = text,
+				.type = entityType,
+			});
 		}
 	} else if (entityType == EntityType::Blockquote) {
 		flags = TextBlockFlag::Blockquote;
@@ -472,15 +491,31 @@ bool BlockParser::checkEntities() {
 		|| entityType == EntityType::Email
 		|| entityType == EntityType::Phone
 		|| entityType == EntityType::BankCard
+		|| entityType == EntityType::TonAddress
 		|| entityType == EntityType::Mention
 		|| entityType == EntityType::Hashtag
 		|| entityType == EntityType::Cashtag
 		|| entityType == EntityType::BotCommand) {
-		pushSimpleUrl(entityType);
+		if (!hasReplacedPart(*_waitingEntity)) {
+			pushSimpleUrl(entityType);
+		} else if (entityType == EntityType::Url) {
+			const auto data = QString(entityBegin, entityLength);
+			// A raw internal: url stays rejected, not a confirmed custom one.
+			if (data.startsWith(u"internal:"_q, Qt::CaseInsensitive)) {
+				pushSimpleUrl(entityType);
+			} else {
+				link.type = EntityType::CustomUrl;
+				link.data = data;
+				link.text = data;
+			}
+		}
 	} else if (entityType == EntityType::CustomUrl) {
 		const auto url = _waitingEntity->data();
 		const auto text = QString(entityBegin, entityLength);
-		if (url == text) {
+		// An indexed link stays custom even when it shows its own data.
+		if (url == text
+			&& !IsIndexedLinkData(url)
+			&& !hasReplacedPart(*_waitingEntity)) {
 			pushSimpleUrl(EntityType::Url);
 		} else {
 			pushComplexUrl();
@@ -533,25 +568,35 @@ bool BlockParser::checkEntities() {
 }
 
 bool BlockParser::processCustomIndex(uint16 index) {
-	auto &url = _links[index - 1].data;
-	if (url.isEmpty()) {
+	auto &link = _links[index - 1];
+
+	// Only a link built by the app, not a plain url that displays
+	// "internal:index" as its text, may choose its own index.
+	if (link.type != EntityType::CustomUrl
+		|| !IsIndexedLinkData(link.data)) {
 		return false;
 	}
-	if (url.startsWith("internal:index")) {
-		const auto customIndex = uint16(url.back().unicode());
-		// if (customIndex != index) {
-			url = QString();
-			_linksIndexes.push_back(customIndex);
-			return true;
-		// }
+	const auto customIndex = uint16(link.data.back().unicode());
+	link.data = QString();
+	_linksIndexes.push_back(customIndex);
+	_customLinkIndices.emplace(index, customIndex);
+	return true;
+}
+
+uint16 BlockParser::pushInternal(EntityLinkData &&data) {
+	// Blocks keep the index in uint16, where zero means no link.
+	if (_internals.size() >= 0xFFFF) {
+		return 0;
 	}
-	return false;
+	_internals.push_back(std::move(data));
+	return uint16(_internals.size());
 }
 
 void BlockParser::skipPassedEntities() {
 	while (_waitingEntity != _entitiesEnd
 		&& _start + _waitingEntity->offset() + _waitingEntity->length() <= _ptr) {
-		++_waitingEntity;
+		skipWaitingEntity();
+		skipBadEntities();
 	}
 }
 
@@ -560,13 +605,23 @@ void BlockParser::skipBadEntities() {
 		while (_waitingEntity != _entitiesEnd
 			&& (isLinkEntity(*_waitingEntity)
 				|| isInvalidEntity(*_waitingEntity))) {
-			++_waitingEntity;
+			skipWaitingEntity();
 		}
 	} else {
 		while (_waitingEntity != _entitiesEnd && isInvalidEntity(*_waitingEntity)) {
-			++_waitingEntity;
+			skipWaitingEntity();
 		}
 	}
+}
+
+void BlockParser::skipWaitingEntity() {
+	if (_waitingEntity->type() == EntityType::CustomUrl) {
+		const auto data = _waitingEntity->data();
+		if (IsIndexedLinkData(data)) {
+			_skippedLinkIndices.push_back(uint16(data.back().unicode()));
+		}
+	}
+	++_waitingEntity;
 }
 
 void BlockParser::parseCurrentChar() {
@@ -677,8 +732,7 @@ void BlockParser::parseEmojiFromCurrent() {
 }
 
 bool BlockParser::isInvalidEntity(const EntityInText &entity) const {
-	const auto length = entity.length();
-	return (_start + entity.offset() + length > _end) || (length <= 0);
+	return !entity.validForText(_end - _start);
 }
 
 bool BlockParser::isLinkEntity(const EntityInText &entity) const {
@@ -693,14 +747,48 @@ bool BlockParser::isLinkEntity(const EntityInText &entity) const {
 		EntityType::MentionName,
 		EntityType::Phone,
 		EntityType::BankCard,
+		EntityType::TonAddress,
 		EntityType::BotCommand
 	};
 	return ranges::find(urls, type) != std::end(urls);
 }
 
+bool BlockParser::isReplacedEntity(const EntityInText &entity) const {
+	return EntityReplacesText(entity)
+		&& ((entity.type() != EntityType::FormattedDate)
+			|| _context.formattedDateFactory);
+}
+
+void BlockParser::collectReplacedRanges() {
+	// WHY: skipBadEntities() admitted the first waiting entity against the
+	// untrimmed length before trimSourceRange() shortened _end, and traversal
+	// renders it without revalidating, so collect it against that same length.
+	const auto originalLength = int(_source.text.size());
+	const auto trimmedLength = int(_end - _start);
+	for (auto i = _source.entities.begin(); i != _entitiesEnd; ++i) {
+		const auto &entity = *i;
+		const auto length = (i == _waitingEntity)
+			? originalLength
+			: trimmedLength;
+		if (entity.validForText(length) && isReplacedEntity(entity)) {
+			_replacedRanges.add(
+				entity.offset(),
+				entity.offset() + entity.length());
+		}
+	}
+	_replacedRanges.prepare();
+}
+
+bool BlockParser::hasReplacedPart(const EntityInText &entity) const {
+	return _replacedRanges.overlaps(
+		entity.offset(),
+		entity.offset() + entity.length());
+}
+
 void BlockParser::parse(const TextParseOptions &options) {
 	skipBadEntities();
-	trimSourceRange();
+	trimSourceRange(options);
+	collectReplacedRanges();
 
 	_tText.resize(0);
 	if (_t->_extended) {
@@ -712,24 +800,29 @@ void BlockParser::parse(const TextParseOptions &options) {
 		_t->insertModifications(0, -(_ptr - _start));
 	}
 
+	const auto full = [&] {
+		return (_tText.size() >= 0x8000); // 32k max
+	};
 	for (; _ptr <= _end; ++_ptr) {
-		while (checkEntities()) {
+		while (!full() && checkEntities()) {
+		}
+		if (full()) {
+			break;
 		}
 		parseCurrentChar();
 		parseEmojiFromCurrent();
-
-		if (_tText.size() >= 0x8000) {
-			break; // 32k max
-		}
 	}
 	createBlock();
 	finalize(options);
 }
 
-void BlockParser::trimSourceRange() {
-	const auto firstMonospaceOffset = EntityInText::FirstMonospaceOffset(
-		_source.entities,
-		_end - _start);
+void BlockParser::trimSourceRange(const TextParseOptions &options) {
+	const auto firstMonospaceOffset
+		= (options.flags & TextParseKeepLeadingSpaces)
+		? 0
+		: EntityInText::FirstMonospaceOffset(
+			_source.entities,
+			_end - _start);
 
 	while (_ptr != _end && IsTrimmed(*_ptr) && _ptr != _start + firstMonospaceOffset) {
 		++_ptr;
@@ -752,22 +845,41 @@ void BlockParser::trimSourceRange() {
 // }
 
 void BlockParser::finalize(const TextParseOptions &options) {
+	ranges::sort(_linksIndexes);
 	auto links = (_maxLinkIndex || _maxShiftedLinkIndex)
 		? &_t->ensureExtended()->links
 		: nullptr;
 	if (links) {
 		links->resize(_maxLinkIndex + _maxShiftedLinkIndex);
 	}
-	auto counterCustomIndex = uint16(0);
-	auto currentIndex = uint16(0); // Current the latest index of _t->_links.
+	auto currentIndex = 0; // Current the latest index of _t->_links.
 	struct {
 		uint16 internal = 0;
+		uint16 internalUsed = 0;
 		uint16 lnk = 0;
+		uint16 lnkUsed = 0;
 	} lastHandlerIndex;
-	const auto avoidIntersectionsWithCustom = [&] {
-		while (ranges::contains(_linksIndexes, currentIndex)) {
-			currentIndex++;
+	const auto ensureLinksSize = [&](uint16 size) {
+		if (!links) {
+			links = &_t->ensureExtended()->links;
 		}
+		// Never shrink: blocks before this one may already hold larger
+		// indices, for example custom ones from "internal:index" links.
+		if (links->size() < size) {
+			links->resize(size);
+		}
+	};
+	auto registered = begin(_linksIndexes);
+	const auto avoidIntersectionsWithCustom = [&] {
+		for (; registered != end(_linksIndexes); ++registered) {
+			if (*registered > currentIndex) {
+				break;
+			} else if (*registered == currentIndex) {
+				++currentIndex;
+			}
+		}
+		// The links limit allows 0x7FFF registered, the 32k cap 0x8000 more.
+		Assert(currentIndex <= 0xFFFF);
 	};
 	auto isolatedEmojiCount = 0;
 	_t->_hasCustomEmoji = false;
@@ -790,7 +902,14 @@ void BlockParser::finalize(const TextParseOptions &options) {
 		}
 		spacesCheckFrom = uint16(-1);
 	};
-	for (auto &block : _tBlocks) {
+	auto internalBlock = begin(_internalBlocks);
+	for (auto blockIndex = 0; blockIndex != int(_tBlocks.size()); ++blockIndex) {
+		auto &block = _tBlocks[blockIndex];
+		const auto isInternal = (internalBlock != end(_internalBlocks))
+			&& (*internalBlock == blockIndex);
+		if (isInternal) {
+			++internalBlock;
+		}
 		const auto type = block->type();
 		const auto custom = (type == TextBlockType::CustomEmoji)
 			? static_cast<CustomEmoji*>(
@@ -838,62 +957,58 @@ void BlockParser::finalize(const TextParseOptions &options) {
 			}
 		}
 		const auto shiftedIndex = block->linkIndex();
-		auto useCustomIndex = false;
-		if (shiftedIndex <= kStringLinkIndexShift) {
-			const auto isInternal = shiftedIndex
-				&& (IsMono(block->flags())
-					|| (block->flags() & TextBlockFlag::FormattedDate));
-			if (isInternal) {
-				const auto internalIndex = shiftedIndex;
+		if (isInternal) {
+			// Recorded when the block was created: the flags alone can't
+			// tell, a Pre block inside a custom link has a link index.
+			const auto internalIndex = shiftedIndex;
 
-				if (lastHandlerIndex.internal == internalIndex) {
-					block->setLinkIndex(currentIndex);
-					continue;
-				} else {
-					currentIndex++;
-				}
-				avoidIntersectionsWithCustom();
-				block->setLinkIndex(currentIndex);
-				const auto handler = Integration::Instance().createLinkHandler(
-					_internals[internalIndex - 1],
-					_context);
-				if (!links) {
-					links = &_t->ensureExtended()->links;
-				}
-				links->resize(currentIndex);
-				if (handler) {
-					_t->setLink(currentIndex, handler);
-				}
-				lastHandlerIndex.internal = internalIndex;
+			if (lastHandlerIndex.internal == internalIndex) {
+				block->setLinkIndex(lastHandlerIndex.internalUsed);
 				continue;
-			} else if (shiftedIndex) {
-				useCustomIndex = true;
 			} else {
-				continue;
+				currentIndex++;
 			}
+			avoidIntersectionsWithCustom();
+			const auto usedIndex = uint16(currentIndex);
+			block->setLinkIndex(usedIndex);
+			const auto handler = Integration::Instance().createLinkHandler(
+				_internals[internalIndex - 1],
+				_context);
+			ensureLinksSize(usedIndex);
+			if (handler) {
+				_t->setLink(usedIndex, handler);
+			}
+			lastHandlerIndex.internal = internalIndex;
+			lastHandlerIndex.internalUsed = usedIndex;
+			continue;
+		} else if (!shiftedIndex) {
+			continue;
 		}
-		const auto usedIndex = [&] {
-			return useCustomIndex
-				? _linksIndexes[counterCustomIndex - 1]
-				: currentIndex;
-		};
+		const auto useCustomIndex = (shiftedIndex <= kStringLinkIndexShift);
 		const auto realIndex = useCustomIndex
 			? shiftedIndex
-			: (shiftedIndex - kStringLinkIndexShift);
+			: uint16(shiftedIndex - kStringLinkIndexShift);
 		if (lastHandlerIndex.lnk == realIndex) {
-			block->setLinkIndex(usedIndex());
+			// Not currentIndex: an internal block in between moves it on.
+			block->setLinkIndex(lastHandlerIndex.lnkUsed);
 			continue; // Optimization.
-		} else {
-			(useCustomIndex ? counterCustomIndex : currentIndex)++;
 		}
 		if (!useCustomIndex) {
+			currentIndex++;
 			avoidIntersectionsWithCustom();
 		}
+		const auto usedIndex = [&] {
+			if (!useCustomIndex) {
+				return uint16(currentIndex);
+			}
+			// Looked up by the link, not counted: a custom link that got
+			// no block of its own would shift all the following ones.
+			const auto i = _customLinkIndices.find(realIndex);
+			return (i != end(_customLinkIndices)) ? i->second : uint16(0);
+		};
 		block->setLinkIndex(usedIndex());
 
-		if (links) {
-			links->resize(std::max(usedIndex(), uint16(links->size())));
-		}
+		ensureLinksSize(usedIndex());
 		const auto handler = Integration::Instance().createLinkHandler(
 			_links[realIndex - 1],
 			_context);
@@ -901,6 +1016,21 @@ void BlockParser::finalize(const TextParseOptions &options) {
 			_t->setLink(usedIndex(), handler);
 		}
 		lastHandlerIndex.lnk = realIndex;
+		lastHandlerIndex.lnkUsed = usedIndex();
+	}
+	// The 32k cap can stop the parsing with entities still waiting.
+	while (_waitingEntity != _entitiesEnd) {
+		skipWaitingEntity();
+	}
+	if (links && !_skippedLinkIndices.empty()) {
+		auto skipped = UnregisteredSkippedIndices(
+			std::move(_skippedLinkIndices),
+			_linksIndexes,
+			int(links->size()));
+		if (!skipped.empty()) {
+			_t->_extended->skippedLinkIndices
+				= std::make_unique<std::vector<uint16>>(std::move(skipped));
+		}
 	}
 	const auto hasSpoiler = (_t->_extended && _t->_extended->spoiler);
 	if (!_t->_hasCustomEmoji || hasSpoiler) {

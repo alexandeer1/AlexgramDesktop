@@ -11,6 +11,7 @@
 #include <QtGui/QGuiApplication>
 #include <QtGui/QPainter>
 #include <QtCore/QDir>
+#include <QtCore/QFileInfo>
 
 namespace codegen {
 namespace emoji {
@@ -26,6 +27,26 @@ common::ProjectInfo Project = {
 	"empty",
 	false, // forceReGenerate
 };
+
+std::vector<QString> OldDataPaths(const Options &options) {
+	if (options.writeImages.isEmpty()) {
+		return {};
+	}
+	auto result = options.oldDataPaths;
+	for (auto &path : result) {
+		path = QFileInfo(path).absoluteFilePath();
+	}
+	const auto directory = QDir(QFileInfo(options.dataPath).absolutePath()
+		+ "/emoji_old");
+	const auto files = directory.entryList({ "*.txt" }, QDir::Files, QDir::Name);
+	for (const auto &file : files) {
+		const auto path = directory.absoluteFilePath(file);
+		if (std::find(result.begin(), result.end(), path) == result.end()) {
+			result.push_back(path);
+		}
+	}
+	return result;
+}
 
 QRect computeSourceRect(const QImage &image) {
 	auto size = image.width();
@@ -143,7 +164,7 @@ uint32 countCrc32(const void *data, std::size_t size) {
 
 Generator::Generator(const Options &options) : project_(Project)
 , writeImages_(options.writeImages)
-, data_(PrepareData(options.dataPath, options.oldDataPaths))
+, data_(PrepareData(options.dataPath, OldDataPaths(options)))
 , replaces_(PrepareReplaces(options.replacesPath)) {
 	QDir dir(options.outputPath);
 	if (!dir.mkpath(".")) {
@@ -181,13 +202,14 @@ constexpr auto kEmojiSize = 72;
 constexpr auto kEmojiFontSize = 72;
 constexpr auto kEmojiShiftTop = 67 - 4;
 constexpr auto kScaleFromLarge = true;
-constexpr auto kLargeEmojiSize = 180;
+constexpr auto kLargeEmojiSize = 181;
+constexpr auto kLargeEmojiSizeAndroid = 209;
 constexpr auto kLargeEmojiFontSizeMac = 180;
 constexpr auto kLargeEmojiShiftTopMac = 167 - 9;
 constexpr auto kEmojiShiftLeftMac = 0;
 constexpr auto kLargeEmojiFontSizeAndroid = 178;
-constexpr auto kLargeEmojiShiftTopAndroid = 140;
-constexpr auto kEmojiShiftLeftAndroid = -4;
+constexpr auto kLargeEmojiShiftTopAndroid = 165;
+constexpr auto kEmojiShiftLeftAndroid = -7;
 
 enum class ImageType {
 	Mac,
@@ -197,7 +219,7 @@ enum class ImageType {
 };
 
 [[nodiscard]] ImageType GuessImageType(QString tag) {
-	if (tag.indexOf("NotoColorEmoji") >= 0) {
+	if (tag.indexOf("NotoColorEmoji") >= 0 || tag.indexOf("Noto-COLR") >= 0) {
 		return ImageType::Android;
 	} else if (tag.indexOf("twemoji") >= 0) {
 		return ImageType::Twemoji;
@@ -374,7 +396,11 @@ QImage Generator::generateImage(int imageIndex) {
 	auto emojiCount = int(data_.list.size());
 	auto columnsCount = kEmojiInRow;
 
-	auto sourceSize = kScaleFromLarge ? kLargeEmojiSize : kEmojiSize;
+	const auto sourceSize = !kScaleFromLarge
+		? kEmojiSize
+		: (type == ImageType::Android)
+		? kLargeEmojiSizeAndroid
+		: kLargeEmojiSize;
 
 	auto font = QGuiApplication::font();
 	auto base = writeImages_;
@@ -399,6 +425,8 @@ QImage Generator::generateImage(int imageIndex) {
 			: (type == ImageType::Mac)
 			? kLargeEmojiFontSizeMac
 			: kLargeEmojiFontSizeAndroid);
+		// A missing glyph must stay missing. Otherwise macOS paints Apple Color Emoji.
+		font.setStyleStrategy(QFont::NoFontMerging);
 		if (QFontInfo(font).family() != family) {
 			return QImage();
 		}

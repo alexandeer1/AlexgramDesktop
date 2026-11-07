@@ -8,6 +8,8 @@
 
 #include "ui/ui_utility.h"
 
+#include <QAccessible>
+
 namespace Ui {
 
 QMargins VerticalLayout::getMargins() const {
@@ -16,17 +18,17 @@ QMargins VerticalLayout::getMargins() const {
 		auto &top = _rows.front();
 		auto topMargin = top.widget->getMargins().top();
 		result.setTop(
-			qMax(topMargin - top.margin.top(), 0));
+			std::max(topMargin - top.margin.top(), 0));
 		auto &bottom = _rows.back();
 		auto bottomMargin = bottom.widget->getMargins().bottom();
 		result.setBottom(
-			qMax(bottomMargin - bottom.margin.bottom(), 0));
+			std::max(bottomMargin - bottom.margin.bottom(), 0));
 		for (auto &row : _rows) {
 			auto margins = row.widget->getMargins();
-			result.setLeft(qMax(
+			result.setLeft(std::max(
 				margins.left() - row.margin.left(),
 				result.left()));
-			result.setRight(qMax(
+			result.setRight(std::max(
 				margins.right() - row.margin.right(),
 				result.right()));
 		}
@@ -52,6 +54,13 @@ void VerticalLayout::reorderRows(int oldIndex, int newIndex) {
 
 	base::reorder(_rows, oldIndex, newIndex);
 	resizeToWidth(width());
+
+	// The accessible (visual) child order changed - tell screen readers. A
+	// subclass that exposes an accessibility role (so a custom accessible
+	// interface is built for it) reports children in visual order via
+	// accessibilityChildWidgets(); see Window::TabListLayout.
+	auto event = QAccessibleEvent(this, QAccessible::ObjectReorder);
+	QAccessible::updateAccessibility(&event);
 }
 
 int VerticalLayout::resizeGetHeight(int newWidth) {
@@ -208,6 +217,9 @@ void VerticalLayout::childWidthUpdated(RpWidget *child) {
 	const auto it = ranges::find_if(_rows, [child](const Row &row) {
 		return (row.widget == child);
 	});
+	if (it == _rows.end()) {
+		return;
+	}
 	const auto &row = *it;
 	const auto margins = getMargins();
 	const auto top = child->y()
@@ -221,6 +233,9 @@ void VerticalLayout::childHeightUpdated(RpWidget *child) {
 	auto it = ranges::find_if(_rows, [child](const Row &row) {
 		return (row.widget == child);
 	});
+	if (it == _rows.end()) {
+		return;
+	}
 
 	const auto width = this->width();
 	const auto margins = getMargins();
@@ -247,7 +262,9 @@ void VerticalLayout::removeChild(RpWidget *child) {
 		return (row.widget == child);
 	});
 	auto end = _rows.end();
-	Assert(it != end);
+	if (it == end) {
+		return;
+	}
 
 	const auto width = this->width();
 	const auto margins = getMargins();
@@ -273,9 +290,18 @@ void VerticalLayout::removeChild(RpWidget *child) {
 }
 
 void VerticalLayout::clear() {
-	while (!_rows.empty()) {
-		removeChild(_rows.front().widget.data());
+	for (auto &row : base::take(_rows)) {
+		delete row.widget.data();
 	}
+	resize(width(), 0);
+}
+
+void VerticalLayout::detachRows() {
+	for (auto &row : base::take(_rows)) {
+		const auto widget = row.widget.release();
+		widget->hide();
+	}
+	resize(width(), 0);
 }
 
 } // namespace Ui

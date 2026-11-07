@@ -23,6 +23,8 @@ public:
 		LoopTrack,
 		LoopPlaylist,
 		Shuffle,
+		SkipBackward,
+		SkipForward,
 		None,
 	};
 
@@ -61,6 +63,7 @@ public:
 	void setThumbnail(const QImage &thumbnail);
 	void setDuration(int duration);
 	void setPosition(int position);
+	void setPlaybackRate(float64 rate);
 	void setVolume(float64 volume);
 	void clearThumbnail();
 	void clearMetadata();

@@ -17,14 +17,14 @@ add_library(external_ada STATIC IMPORTED GLOBAL)
 add_library(desktop-app::external_ada ALIAS external_ada)
 
 if (WIN32)
-    set(ada_lib_loc ${libs_loc}/ada/out/singleheader)
+    set(ada_lib_loc ${libs_loc}/ada/out/src)
     target_include_directories(external_ada SYSTEM
     INTERFACE
-        ${ada_lib_loc}
+        ${libs_loc}/ada/include
     )
     set_target_properties(external_ada PROPERTIES
-        IMPORTED_LOCATION "${ada_lib_loc}/Release/ada-singleheader-lib.lib"
-        IMPORTED_LOCATION_DEBUG "${ada_lib_loc}/Debug/ada-singleheader-lib.lib"
+        IMPORTED_LOCATION "${ada_lib_loc}/Release/ada.lib"
+        IMPORTED_LOCATION_DEBUG "${ada_lib_loc}/Debug/ada.lib"
     )
 elseif (APPLE)
     target_include_directories(external_ada SYSTEM

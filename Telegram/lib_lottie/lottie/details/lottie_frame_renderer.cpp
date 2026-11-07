@@ -14,7 +14,6 @@
 #include "base/assertion.h"
 
 #include <QPainter>
-#include <rlottie.h>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/algorithm/count_if.hpp>
 
@@ -188,7 +187,12 @@ SharedState::SharedState(
 	const FrameRequest &request)
 : _provider(std::move(provider)) {
 	if (_provider->valid()) {
-		init(_provider->construct(_token, request), request);
+		// A shared provider can be destroyed by a failing render() on another
+		// thread between valid() and construct(), and then there is no cover.
+		auto cover = _provider->construct(_token, request);
+		if (!cover.isNull()) {
+			init(std::move(cover), request);
+		}
 	}
 }
 
@@ -202,7 +206,9 @@ void SharedState::init(QImage cover, const FrameRequest &request) {
 	_frames[0].request = request;
 	_frames[0].sizeRounding = sizeRounding();
 	_frames[0].original = std::move(cover);
-	_framesCount = _provider->information().framesCount;
+	const auto information = _provider->information();
+	_framesCount = information.framesCount;
+	_frameRate = information.frameRate;
 }
 
 void SharedState::start(
@@ -287,7 +293,13 @@ auto SharedState::renderNextFrame(const FrameRequest &request)
 }
 
 crl::time SharedState::countFrameDisplayTime(int index) const {
-	const auto rate = _provider->information().frameRate;
+	// Snapshotted in init(): the provider's information() is written by
+	// the render queue while this runs on the main thread, so reading it
+	// here could observe a zero rate.
+	const auto rate = _frameRate;
+	if (!rate) {
+		return _started + _delay;
+	}
 	return _started
 		+ _delay
 		+ crl::time(1000) * (_skippedFrames + index) / rate;
@@ -314,7 +326,11 @@ not_null<const Frame*> SharedState::getFrame(int index) const {
 }
 
 Information SharedState::information() const {
-	return _provider->information();
+	// Without init() the provider information doesn't describe this state:
+	// a shared provider keeps reporting the metadata it read once, while
+	// there are no frames here at all. Report nothing, so that the caller
+	// treats the animation as failed instead of painting a null frame.
+	return _framesCount ? _provider->information() : Information();
 }
 
 not_null<Frame*> SharedState::frameForPaint() {
@@ -327,6 +343,10 @@ not_null<Frame*> SharedState::frameForPaint() {
 
 int SharedState::framesCount() const {
 	return _framesCount;
+}
+
+int SharedState::frameRate() const {
+	return _frameRate;
 }
 
 crl::time SharedState::nextFrameDisplayTime() const {

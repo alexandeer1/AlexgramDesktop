@@ -15,6 +15,10 @@ Available Availability() {
 	return WebKitGTK::Availability();
 }
 
+bool HiddenSupported() {
+	return WebKitGTK::HiddenSupported();
+}
+
 bool SupportsEmbedAfterCreate() {
 	return true;
 }
@@ -35,6 +39,13 @@ std::string GenerateStorageToken() {
 }
 
 void ClearStorageDataByToken(const std::string &token) {
+}
+
+bool DeferTemporaryStorageRemoval(const QString &path) {
+	return false;
+}
+
+void ClearStaleTemporaryStorage() {
 }
 
 } // namespace Webview

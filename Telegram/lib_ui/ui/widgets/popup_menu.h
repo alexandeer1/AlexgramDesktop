@@ -13,6 +13,7 @@
 #include "ui/widgets/shadow.h"
 #include "ui/round_rect.h"
 #include "ui/rp_widget.h"
+#include "ui/ui_touch_forward.h"
 #include "base/object_ptr.h"
 #include "base/unique_qptr.h"
 
@@ -100,6 +101,7 @@ public:
 	bool prepareGeometryFor(const QPoint &p);
 	void popupPrepared();
 	void hideMenu(bool fast = false);
+	void refreshAnimationCache();
 	void setTopShift(int topShift);
 	void setForceWidth(int forceWidth);
 	void setForcedOrigin(PanelAnimation::Origin origin);
@@ -153,8 +155,11 @@ protected:
 	void mousePressEvent(QMouseEvent *e) override;
 
 	bool eventFilter(QObject *o, QEvent *e) override;
+	bool focusNextPrevChild(bool next) override;
 
 private:
+	struct SubmenuAim;
+
 	void paintBg(QPainter &p);
 	void hideFast();
 	void setOrigin(PanelAnimation::Origin origin);
@@ -162,6 +167,7 @@ private:
 	void hideAnimated();
 
 	QImage grabForPanelAnimation();
+	void prepareShowAnimation();
 	void startShowAnimation();
 	void startOpacityAnimation(bool hiding);
 	void prepareCache();
@@ -204,6 +210,12 @@ private:
 		not_null<PopupMenu*> submenu,
 		int actionTop,
 		TriggeredSource source);
+	[[nodiscard]] QAction *activeSubmenuAction() const;
+	[[nodiscard]] not_null<SubmenuAim*> submenuAim();
+	[[nodiscard]] bool insideSubmenuAim(QPoint position) const;
+	void watchMouseMoves();
+	void handleMouseMoved(QPoint globalPosition);
+	void clearSubmenuAim();
 	bool prepareGeometryFor(
 		const QPoint &p,
 		PopupMenu *parent,
@@ -233,6 +245,9 @@ private:
 
 	QPointer<PopupMenu> _activeSubmenu;
 
+	// Filled in only while a submenu of this menu is shown.
+	std::unique_ptr<SubmenuAim> _submenuAim;
+
 	std::optional<VerticalOrigin> _forcedVerticalOrigin;
 	PanelAnimation::Origin _origin = PanelAnimation::Origin::TopLeft;
 	std::optional<PanelAnimation::Origin> _forcedOrigin;
@@ -251,7 +266,9 @@ private:
 	bool _deleteLater = false;
 	bool _reactivateParent = true;
 	bool _grabbingForPanelAnimation = false;
+	bool _refreshingAnimationCache = false;
 
+	TouchForward _touchForward;
 	int _touchBeginCounter = 0;
 	int _topShift = 0;
 	bool _clearLastSeparator = true;
@@ -284,5 +301,20 @@ private:
 	void startSwitchAnimation(not_null<SwitchState*> raw, float64 from);
 
 };
+
+// Where to show a context menu for the given event: at the mouse cursor for
+// a mouse-invoked one, on the anchor for a keyboard-invoked one - the mouse
+// may sit nowhere near the control then (or outside the window altogether),
+// and the position Qt puts into the keyboard event is no help either, it is
+// synthesized from the input method rect, which plain controls leave empty.
+// The rect is in the anchor's coordinates and defaults to its whole area -
+// pass one to anchor on a painted element inside the anchor widget.
+[[nodiscard]] QPoint ContextMenuPosition(
+	not_null<QWidget*> anchor,
+	not_null<QContextMenuEvent*> e);
+[[nodiscard]] QPoint ContextMenuPosition(
+	not_null<QWidget*> anchor,
+	not_null<QContextMenuEvent*> e,
+	QRect rect);
 
 } // namespace Ui

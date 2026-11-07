@@ -6,6 +6,7 @@
 //
 #include "ui/widgets/scroll_area.h"
 
+#include "ui/widgets/scroll_math.h"
 #include "ui/painter.h"
 #include "ui/ui_utility.h"
 #include "base/qt/qt_common_adapters.h"
@@ -14,12 +15,12 @@
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QApplication>
 #include <QtGui/QGuiApplication>
+#include <QtGui/QScreen>
 #include <QtGui/QWindow>
 
 namespace Ui {
-namespace {
 
-[[nodiscard]] int ComputeScrollTo(
+int ComputeScrollTo(
 		int toFrom,
 		int toTill,
 		int toMin,
@@ -55,8 +56,6 @@ namespace {
 	}
 	return scToFrom;
 }
-
-} // namespace
 
 // flick scroll taken from http://qt-project.org/doc/qt-4.8/demos-embedded-anomaly-src-flickcharm-cpp.html
 
@@ -107,14 +106,32 @@ void ScrollBar::recountSize() {
 	setGeometry(_vertical
 		? QRect(
 			style::RightToLeft() ? 0 : (area()->width() - _st->width),
-			_st->deltat,
+			_st->deltat + _topSkip,
 			_st->width,
-			area()->height() - _st->deltat - _st->deltab)
+			std::max(
+				area()->height() - _st->deltat - _st->deltab - _topSkip - _bottomSkip,
+				0))
 		: QRect(
 			_st->deltat,
 			area()->height() - _st->width,
 			area()->width() - _st->deltat - _st->deltab,
 			_st->width));
+}
+
+void ScrollBar::setTopSkip(int skip) {
+	if (_topSkip != skip) {
+		_topSkip = skip;
+		recountSize();
+		updateBar(true);
+	}
+}
+
+void ScrollBar::setBottomSkip(int skip) {
+	if (_bottomSkip != skip) {
+		_bottomSkip = skip;
+		recountSize();
+		updateBar(true);
+	}
 }
 
 void ScrollBar::updateBar(bool force) {
@@ -430,8 +447,16 @@ ScrollArea::ScrollArea(
 void ScrollArea::touchDeaccelerate(int32 elapsed) {
 	int32 x = _touchSpeed.x();
 	int32 y = _touchSpeed.y();
-	_touchSpeed.setX((x == 0) ? x : (x > 0) ? qMax(0, x - elapsed) : qMin(0, x + elapsed));
-	_touchSpeed.setY((y == 0) ? y : (y > 0) ? qMax(0, y - elapsed) : qMin(0, y + elapsed));
+	_touchSpeed.setX((x == 0)
+		? x
+		: (x > 0)
+		? std::max(0, x - elapsed)
+		: std::min(0, x + elapsed));
+	_touchSpeed.setY((y == 0)
+		? y
+		: (y > 0)
+		? std::max(0, y - elapsed)
+		: std::min(0, y + elapsed));
 }
 
 void ScrollArea::scrolled() {
@@ -479,12 +504,12 @@ void ScrollArea::innerResized() {
 
 int ScrollArea::scrollWidth() const {
 	QWidget *w(widget());
-	return w ? qMax(w->width(), width()) : width();
+	return w ? std::max(w->width(), width()) : width();
 }
 
 int ScrollArea::scrollHeight() const {
 	QWidget *w(widget());
-	return w ? qMax(w->height(), height()) : height();
+	return w ? std::max(w->height(), height()) : height();
 }
 
 int ScrollArea::scrollLeftMax() const {
@@ -534,8 +559,14 @@ void ScrollArea::touchUpdateSpeed() {
 
 			// fingers are inacurates, we ignore small changes to avoid stopping the autoscroll because
 			// of a small horizontal offset when scrolling vertically
-			const int newSpeedY = (qAbs(pixelsPerSecond.y()) > kFingerAccuracyThreshold) ? pixelsPerSecond.y() : 0;
-			const int newSpeedX = (qAbs(pixelsPerSecond.x()) > kFingerAccuracyThreshold) ? pixelsPerSecond.x() : 0;
+			const int newSpeedY = (std::abs(pixelsPerSecond.y())
+				> kFingerAccuracyThreshold)
+				? pixelsPerSecond.y()
+				: 0;
+			const int newSpeedX = (std::abs(pixelsPerSecond.x())
+				> kFingerAccuracyThreshold)
+				? pixelsPerSecond.x()
+				: 0;
 			if (_touchScrollState == TouchScrollState::Auto) {
 				const int oldSpeedY = _touchSpeed.y();
 				const int oldSpeedX = _touchSpeed.x();
@@ -589,9 +620,32 @@ bool ScrollArea::viewportEvent(QEvent *e) {
 	if (filterOutTouchEvent(e)) {
 		return true;
 	} else if (e->type() == QEvent::Wheel) {
-		if (_customWheelProcess
-			&& _customWheelProcess(static_cast<QWheelEvent*>(e))) {
+		const auto ev = static_cast<QWheelEvent*>(e);
+		if (_customWheelProcess && _customWheelProcess(ev)) {
 			return true;
+		}
+		if (_wheelDirectionLocked || _crossAxisWheelProcess) {
+			const auto phase = ev->phase();
+			const auto delta = ScrollDeltaF(ev);
+			const auto locked = _wheelDirectionLocked
+				? _wheelDirectionLock.update(phase, delta)
+				: std::nullopt;
+			if (!_wheelDirectionLocked || phase == Qt::NoScrollPhase) {
+				if (std::abs(delta.x()) > std::abs(delta.y())
+					&& _crossAxisWheelProcess
+					&& _crossAxisWheelProcess(delta.toPoint(), phase)) {
+					return true;
+				}
+			} else if (locked == Qt::Horizontal) {
+				// Accept the event only if the cross-axis process consumed
+				// it: accepting a phased wheel event locks the rest of the
+				// gesture onto this widget, starving the widgets under the
+				// cursor (like swipe handlers) of the ScrollUpdate stream.
+				return _crossAxisWheelProcess
+					&& _crossAxisWheelProcess(
+						{ int(base::SafeRound(delta.x())), 0 },
+						phase);
+			}
 		}
 	}
 	return QScrollArea::viewportEvent(e);
@@ -710,6 +764,8 @@ void ScrollArea::touchEvent(QTouchEvent *e) {
 		_touchMaybePressing = false;
 		_touchScrollState = TouchScrollState::Manual;
 		_touchTimer.cancel();
+		_touchScrollTimer.cancel();
+		touchResetSpeed();
 	} break;
 	}
 }
@@ -740,8 +796,8 @@ bool ScrollArea::touchScroll(const QPoint &delta) {
 	const auto topMax = scrollTopMax();
 	const auto left = scrollLeft();
 	const auto leftMax = scrollLeftMax();
-	const auto xAbs = qAbs(delta.x());
-	const auto yAbs = qAbs(delta.y());
+	const auto xAbs = std::abs(delta.x());
+	const auto yAbs = std::abs(delta.y());
 	const auto direction = (leftMax <= 0 || yAbs > xAbs)
 		? Qt::Vertical
 		: Qt::Horizontal;
@@ -763,8 +819,12 @@ void ScrollArea::resizeEvent(QResizeEvent *e) {
 	QScrollArea::resizeEvent(e);
 	_horizontalBar->recountSize();
 	_verticalBar->recountSize();
-	_topShadow->setGeometry(QRect(0, 0, width(), qAbs(_st.topsh)));
-	_bottomShadow->setGeometry(QRect(0, height() - qAbs(_st.bottomsh), width(), qAbs(_st.bottomsh)));
+	_topShadow->setGeometry(QRect(0, 0, width(), std::abs(_st.topsh)));
+	_bottomShadow->setGeometry(QRect(
+		0,
+		height() - std::abs(_st.bottomsh),
+		width(),
+		std::abs(_st.bottomsh)));
 	_geometryChanged.fire({});
 }
 
@@ -880,6 +940,14 @@ void ScrollArea::rangeChanged(int oldMax, int newMax, bool vertical) {
 void ScrollArea::updateBars() {
 	_horizontalBar->updateBar(true);
 	_verticalBar->updateBar(true);
+}
+
+void ScrollArea::setVerticalBarTopSkip(int skip) {
+	_verticalBar->setTopSkip(skip);
+}
+
+void ScrollArea::setVerticalBarBottomSkip(int skip) {
+	_verticalBar->setBottomSkip(skip);
 }
 
 bool ScrollArea::focusNextPrevChild(bool next) {

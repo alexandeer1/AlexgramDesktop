@@ -8,7 +8,6 @@
 
 #include "base/platform/base_platform_info.h"
 #include "ui/integration.h"
-#include "ui/platform/ui_platform_utility.h"
 #include "ui/style/style_core.h"
 
 #include <QtWidgets/QApplication>
@@ -22,7 +21,6 @@ namespace Ui {
 namespace {
 
 constexpr auto kDefaultWheelScrollLines = 3;
-constexpr auto kMagicScrollMultiplier = 2.5;
 
 class WidgetCreator : public QWidget {
 public:
@@ -151,6 +149,23 @@ QImage GrabWidgetToImage(not_null<QWidget*> target, QRect rect, QColor bg) {
 	return result;
 }
 
+QPixmap GrabOpaque(not_null<QWidget*> target, QRect rect, QColor bg) {
+	SendPendingMoveResizeEvents(target);
+	if (rect.isNull()) {
+		rect = target->rect();
+	}
+
+	const auto ratio = style::DevicePixelRatio();
+	auto result = QImage(rect.size() * ratio, QImage::Format_RGB32);
+	result.setDevicePixelRatio(ratio);
+	result.fill(bg);
+	{
+		QPainter p(&result);
+		RenderWidget(p, target, QPoint(), rect);
+	}
+	return QPixmap::fromImage(std::move(result), Qt::ColorOnly);
+}
+
 void RenderWidget(
 		QPainter &painter,
 		not_null<QWidget*> source,
@@ -209,39 +224,6 @@ QPixmap PixmapFromImage(QImage &&image) {
 	return QPixmap::fromImage(std::move(image), Qt::ColorOnly);
 }
 
-bool IsContentVisible(
-		not_null<QWidget*> widget,
-		const QRect &rect) {
-	Expects(widget->window()->windowHandle());
-
-	const auto activeOrNotOverlapped = [&] {
-		if (const auto active = widget->isActiveWindow()) {
-			return active;
-		} else if (Integration::Instance().screenIsLocked()) {
-			return false;
-		}
-
-		const auto mappedRect = rect.isNull()
-			? QRect(
-				widget->mapTo(widget->window(), QPoint()),
-				widget->size())
-			: QRect(
-				widget->mapTo(widget->window(), rect.topLeft()),
-				rect.size());
-
-		const auto overlapped = Platform::IsOverlapped(
-			widget->window(),
-			mappedRect);
-
-		return overlapped.has_value() && !*overlapped;
-	}();
-
-	return activeOrNotOverlapped
-		&& widget->isVisible()
-		&& !widget->window()->isMinimized()
-		&& widget->window()->windowHandle()->isExposed();
-}
-
 int WheelDirection(not_null<QWheelEvent*> e) {
 	// Only a mouse wheel is accepted.
 	constexpr auto step = static_cast<int>(QWheelEvent::DefaultDeltasPerStep);
@@ -289,9 +271,15 @@ QPointF ScrollDeltaF(not_null<QWheelEvent*> e, bool touch) {
 			style::ConvertScaleExact(point.x()),
 			style::ConvertScaleExact(point.y()));
 	};
+#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
+	using QInputDevice::Capability::PixelScroll;
+	if (touch || e->device()->capabilities().testFlag(PixelScroll)) {
+#else // Qt >= 6.2.0
 	if (!e->pixelDelta().isNull()) {
+#endif // Qt < 6.2.0
 		return convert(e->pixelDelta())
-			* ((::Platform::IsWayland() && !touch)
+			* ((::Platform::IsWayland()
+				&& e->source() != Qt::MouseEventSynthesizedByApplication)
 				? kMagicScrollMultiplier
 				: 1.);
 	}
@@ -301,6 +289,38 @@ QPointF ScrollDeltaF(not_null<QWheelEvent*> e, bool touch) {
 
 QPoint ScrollDelta(not_null<QWheelEvent*> e, bool touch) {
 	return ScrollDeltaF(e, touch).toPoint();
+}
+
+std::optional<Qt::Orientation> ScrollDirectionLock::update(
+		Qt::ScrollPhase phase,
+		QPointF delta) {
+	const auto axis = [&] {
+		return (std::abs(delta.x()) > std::abs(delta.y()))
+			? Qt::Horizontal
+			: Qt::Vertical;
+	};
+	switch (phase) {
+	case Qt::NoScrollPhase:
+		reset();
+		return std::nullopt;
+	case Qt::ScrollBegin:
+		reset();
+		if (!delta.isNull()) {
+			_locked = axis();
+		}
+		return _locked;
+	case Qt::ScrollEnd:
+		return base::take(_locked);
+	default:
+		if (!_locked && !delta.isNull()) {
+			_locked = axis();
+		}
+		return _locked;
+	}
+}
+
+void ScrollDirectionLock::reset() {
+	_locked = std::nullopt;
 }
 
 QColor BlendColors(QColor color1, QColor color2, float64 ratio) {

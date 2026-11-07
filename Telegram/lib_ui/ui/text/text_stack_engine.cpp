@@ -9,10 +9,6 @@
 #include "ui/text/text_block.h"
 #include "styles/style_basic.h"
 
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-#include <private/qharfbuzz_p.h>
-#endif // Qt < 6.0.0
-
 namespace Ui::Text {
 namespace {
 
@@ -139,9 +135,6 @@ void StackEngine::itemize() {
 				}
 			} else {
 				for (auto i = from - _offset, count = till - _offset; i != count; ++i) {
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-					_analysis[i].script = hbscript_to_script(script_to_hbscript(_analysis[i].script)); // retain the old behavior
-#endif // Qt < 6.0.0
 					if (chars[i] == QChar::LineFeed) {
 						_analysis[i].flags = QScriptAnalysis::LineOrParagraphSeparator;
 					} else {
@@ -184,8 +177,19 @@ void StackEngine::itemize() {
 				// which fall in the same block, but have different flags.
 			} else if ((*startBlock)->type() != TextBlockType::Text
 				&& m_analysis[i].flags == m_analysis[start].flags) {
-				// Otherwise, only text blocks may have arbitrary items.
-				Assert(i - start < kMaxItemLength);
+				// A non-text block always maps to a single item and can't
+				// be split into kMaxItemLength chunks like text is: each
+				// Object item paints its block and advances by objectWidth,
+				// so an additional item would draw and count it twice.
+				//
+				// Unlimited length is fine here: Object items are never
+				// really shaped (QTextEngine::shape() just reserves a
+				// single glyph for them), and the space tail of an emoji
+				// block shapes to one glyph per character, so the 16-bit
+				// per-item glyph counts can't overflow with the 32k text
+				// length limit. A several-thousand-characters Object item
+				// is real, e.g. a formula custom emoji covers the whole
+				// formula source in a rich message summary text.
 				continue;
 			} else if (m_analysis[i].bidiLevel == m_analysis[start].bidiLevel
 				&& m_analysis[i].flags == m_analysis[start].flags

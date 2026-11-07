@@ -127,6 +127,10 @@ not_null<RpWidget*> BasicWindowHelper::body() {
 	return _window;
 }
 
+RpWidget *BasicWindowHelper::titleWidget() {
+	return nullptr;
+}
+
 QMargins BasicWindowHelper::frameMargins() {
 	return nativeFrameMargins();
 }
@@ -146,6 +150,11 @@ auto BasicWindowHelper::hitTestRequests() const
 
 rpl::producer<HitTestResult> BasicWindowHelper::systemButtonOver() const {
 	return rpl::never<HitTestResult>();
+}
+
+auto BasicWindowHelper::systemCommandRequests() const
+-> rpl::producer<not_null<SystemCommandRequest*>> {
+	return rpl::never<not_null<SystemCommandRequest*>>();
 }
 
 rpl::producer<HitTestResult> BasicWindowHelper::systemButtonDown() const {
@@ -492,6 +501,10 @@ void DefaultWindowHelper::updateRoundingOverlay() {
 
 not_null<RpWidget*> DefaultWindowHelper::body() {
 	return _body;
+}
+
+RpWidget *DefaultWindowHelper::titleWidget() {
+	return _title.get();
 }
 
 QMargins DefaultWindowHelper::frameMargins() {

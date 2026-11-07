@@ -6,9 +6,13 @@
 //
 #include "spellcheck/spellcheck_utils.h"
 #include "spellcheck/platform/platform_spellcheck.h"
+#include "ui/text/text.h"
 
 #include <QtCore/QStringList>
 #include <QTextBoundaryFinder>
+
+#include <memory>
+#include <mutex>
 
 namespace Spellchecker {
 namespace {
@@ -20,8 +24,17 @@ struct SubtagScript {
 
 // https://chromium.googlesource.com/chromium/src/+/refs/heads/master/third_party/blink/renderer/platform/text/locale_to_script_mapping.cc
 
-std::vector<QChar::Script> SupportedScripts;
+using ScriptsList = std::vector<QChar::Script>;
+
+// Immutable snapshot, read from async word checks.
+std::mutex SupportedScriptsMutex;
+auto SupportedScripts = std::make_shared<const ScriptsList>();
 rpl::event_stream<> SupportedScriptsEventStream;
+
+[[nodiscard]] std::shared_ptr<const ScriptsList> SupportedScriptsSnapshot() {
+	std::lock_guard lock(SupportedScriptsMutex);
+	return SupportedScripts;
+}
 
 constexpr auto kFactor = 1000;
 
@@ -30,6 +43,10 @@ constexpr auto kAcuteAccentChars = {
 	QChar(714),	QChar(779),	QChar(733),
 	QChar(758),	QChar(791),	QChar(719),
 };
+
+// Normalize U+2019 to U+0027 so "don't" is one token (same length).
+constexpr auto kApostrophe = QChar(0x0027);
+constexpr auto kTypographicApostrophe = QChar(0x2019);
 
 constexpr auto kUnspellcheckableScripts = {
 	QChar::Script_Katakana,
@@ -231,27 +248,35 @@ bool IsWordSkippable(QStringView word, bool checkSupportedScripts) {
 		return true;
 	}
 	const auto wordScript = WordScript(word);
-	if (checkSupportedScripts
-		&& !ranges::contains(SupportedScripts, wordScript)) {
-		return true;
+	if (checkSupportedScripts) {
+		const auto scripts = SupportedScriptsSnapshot();
+		if (!ranges::contains(*scripts, wordScript)) {
+			return true;
+		}
 	}
 	return ranges::any_of(word, [&](QChar c) {
 		return (c.script() != wordScript)
 			&& !IsAcuteAccentChar(c)
-			&& (c.unicode() != '\'') // Patched Qt to make it a non-separator.
+			&& (c != kApostrophe) // Patched Qt to make it a non-separator.
+			&& (c != kTypographicApostrophe) // Normalized to the plain one.
 			&& (c.unicode() != '_'); // This is not a word separator.
 	});
 }
 
 void UpdateSupportedScripts(std::vector<QString> languages) {
 	// It should be called at least once from Platform::Spellchecker::Init().
-	SupportedScripts = ranges::views::all(
+	auto scripts = ranges::views::all(
 		languages
 	) | ranges::views::transform(
 		LocaleToScriptCode
 	) | ranges::views::unique | ranges::views::filter(
 		IsSpellcheckableScripts
 	) | ranges::to_vector;
+	{
+		std::lock_guard lock(SupportedScriptsMutex);
+		SupportedScripts = std::make_shared<const ScriptsList>(
+			std::move(scripts));
+	}
 	SupportedScriptsEventStream.fire({});
 }
 
@@ -268,13 +293,17 @@ MisspelledWords RangesFromText(
 		return ranges;
 	}
 
-	auto finder = QTextBoundaryFinder(QTextBoundaryFinder::Word, text);
+	const auto normalized = NormalizeApostrophes(text);
+
+	auto finder = QTextBoundaryFinder(
+		QTextBoundaryFinder::Word,
+		normalized);
 
 	const auto isEnd = [&] {
 		return (finder.toNextBoundary() == -1);
 	};
 
-	while (finder.position() < text.length()) {
+	while (finder.position() < normalized.length()) {
 		if (!finder.boundaryReasons().testFlag(
 				QTextBoundaryFinder::StartOfItem)) {
 			if (isEnd()) {
@@ -292,7 +321,7 @@ MisspelledWords RangesFromText(
 		if (length < 1) {
 			continue;
 		}
-		if (!filterCallback(text.mid(start, length))) {
+		if (!filterCallback(normalized.mid(start, length))) {
 			ranges.push_back(std::make_pair(start, length));
 		}
 
@@ -301,6 +330,51 @@ MisspelledWords RangesFromText(
 		}
 	}
 	return ranges;
+}
+
+MisspelledWord WordAtPosition(Fn<QChar(int)> at, int length, int position) {
+	if (!length) {
+		return { 0, 0 };
+	}
+	position = std::clamp(position, 0, length);
+	const auto separator = [&](int index) {
+		return Ui::Text::IsWordSeparator(at, length, index);
+	};
+
+	// Standing inside a word means the whole of that word.
+	if (position < length && !separator(position)) {
+		auto from = position;
+		while (from > 0 && !separator(from - 1)) {
+			--from;
+		}
+		auto till = position;
+		while (till < length && !separator(till)) {
+			++till;
+		}
+		return { from, till - from };
+	}
+
+	// Standing between words means the one on the left, the way
+	// QTextCursor::WordUnderCursor answers.
+	auto till = position;
+	while (till > 0 && separator(till - 1)) {
+		--till;
+	}
+	if (!till) {
+		return { position, 0 };
+	}
+	auto from = till;
+	while (from > 0 && !separator(from - 1)) {
+		--from;
+	}
+	return { from, till - from };
+}
+
+QString NormalizeApostrophes(const QString &word) {
+	if (!word.contains(kTypographicApostrophe)) {
+		return word;
+	}
+	return QString(word).replace(kTypographicApostrophe, kApostrophe);
 }
 
 bool CheckSkipAndSpell(const QString &word) {

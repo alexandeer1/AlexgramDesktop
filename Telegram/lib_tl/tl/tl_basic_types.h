@@ -550,6 +550,9 @@ public:
 			return false;
 		}
 		auto count = Reader<Prime>::Get(from, end);
+		if (!Reader<Prime>::Has(count, from, end)) {
+			return false;
+		}
 
 		auto vector = QVector<T>(count, T());
 		for (auto &item : vector) {

@@ -94,20 +94,52 @@ void BlockquoteClickHandler::onClick(ClickContext context) const {
 }
 
 CustomEmojiClickHandler::CustomEmojiClickHandler(
-	not_null<CustomEmojiData*> data)
-: _data(data) {
+	const std::shared_ptr<CustomEmojiData> &data,
+	QString entityData)
+: _data(data)
+, _entityData(std::move(entityData)) {
 }
 
 void CustomEmojiClickHandler::onClick(ClickContext context) const {
 	if (context.button != Qt::LeftButton) {
 		return;
 	}
-	if (_data->predicate && !_data->predicate(_data->entityData)) {
+	const auto data = _data.lock();
+	if (!data) {
 		return;
 	}
-	if (_data->callback) {
-		_data->callback(_data->entityData, context);
+	if (data->pressedLink.get() == this) {
+		data->pressedLink = nullptr;
 	}
+	if (data->predicate && !data->predicate(_entityData)) {
+		return;
+	}
+	if (data->callback) {
+		data->callback(_entityData, context);
+	}
+}
+
+const QString &CustomEmojiClickHandler::entityData() const {
+	return _entityData;
+}
+
+QString CustomEmojiClickHandler::tooltip() const {
+	return texts().tooltip;
+}
+
+QString CustomEmojiClickHandler::copyToClipboardText() const {
+	return texts().copyText;
+}
+
+QString CustomEmojiClickHandler::copyToClipboardContextItemText() const {
+	return texts().copyContextItemText;
+}
+
+CustomEmojiLinkTexts CustomEmojiClickHandler::texts() const {
+	const auto data = _data.lock();
+	return (data && data->texts)
+		? data->texts(_entityData)
+		: CustomEmojiLinkTexts();
 }
 
 } // namespace Ui::Text

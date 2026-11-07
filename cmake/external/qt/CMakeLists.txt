@@ -13,14 +13,15 @@ if (DESKTOP_APP_USE_PACKAGED)
     target_link_libraries(external_qt
     INTERFACE
         Qt::Core
-        Qt::CorePrivate
         Qt::Gui
-        Qt::GuiPrivate
         Qt::Widgets
-        Qt::WidgetsPrivate
         Qt::Network
         Qt::Svg
     )
+
+    if (NOT DESKTOP_APP_DISABLE_PRIVATE_QT_API)
+        target_link_libraries(external_qt INTERFACE Qt::CorePrivate Qt::GuiPrivate)
+    endif()
 
     if (TARGET Qt::OpenGL)
         target_link_libraries(external_qt INTERFACE Qt::OpenGL)
@@ -64,10 +65,8 @@ INTERFACE
     $<$<TARGET_EXISTS:Qt::WaylandCompositor>:${qt_loc}/include/QtWaylandCompositor>
     ${qt_loc}/include/QtCore/${QT_VERSION}
     ${qt_loc}/include/QtGui/${QT_VERSION}
-    ${qt_loc}/include/QtWidgets/${QT_VERSION}
     ${qt_loc}/include/QtCore/${QT_VERSION}/QtCore
     ${qt_loc}/include/QtGui/${QT_VERSION}/QtGui
-    ${qt_loc}/include/QtWidgets/${QT_VERSION}/QtWidgets
 )
 
 target_compile_definitions(external_qt
@@ -98,7 +97,7 @@ if (WIN32)
     )
 else()
     set(qt_lib_prefix lib)
-    if (APPLE)
+    if (APPLE AND NOT DESKTOP_APP_RELEASE_QT)
         set(qt_lib_suffix $<$<CONFIG:Debug>:_debug>.a)
     else()
         set(qt_lib_suffix .a)
@@ -215,9 +214,26 @@ if (WIN32)
             D3D12
             SetupAPI
             Shcore
-            Synchronization
-            WindowsApp
+            uiautomationcore
         )
+        if (DESKTOP_APP_WIN7_BASELINE)
+            # WindowsApp.lib and Synchronization.lib are Windows 10 only,
+            # their imports come from real homes and from delayed api sets.
+            target_link_libraries(external_qt
+            INTERFACE
+                ncrypt
+                Secur32
+                WinHttp
+                runtimeobject
+                ${libs_loc}/tg_angle/out/$<IF:$<CONFIG:Debug>,Debug,Release>/tg_angle.lib
+            )
+        else()
+            target_link_libraries(external_qt
+            INTERFACE
+                Synchronization
+                WindowsApp
+            )
+        endif()
     else()
         target_link_libraries(external_qt
         INTERFACE

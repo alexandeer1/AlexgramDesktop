@@ -80,7 +80,7 @@ elseif (WIN32)
     PRIVATE
         ${libs_loc}/libavif/$<IF:$<CONFIG:Debug>,Debug,Release>/avif.lib
         ${libs_loc}/libheif/libheif/$<IF:$<CONFIG:Debug>,Debug,Release>/heif.lib
-        ${libs_loc}/libde265/libde265/$<IF:$<CONFIG:Debug>,Debug,Release>/libde265.lib
+        desktop-app::external_ffmpeg
         ${libs_loc}/dav1d/builddir-$<IF:$<CONFIG:Debug>,debug,release>/src/libdav1d.a
         ${libs_loc}/libjxl/lib/$<IF:$<CONFIG:Debug>,Debug,Release>/jxl.lib
         ${libs_loc}/libjxl/lib/$<IF:$<CONFIG:Debug>,Debug,Release>/jxl_cms.lib
@@ -107,7 +107,7 @@ elseif (APPLE)
     PRIVATE
         ${libs_loc}/local/lib/libavif.a
         ${libs_loc}/local/lib/libheif.a
-        ${libs_loc}/local/lib/libde265.a
+        desktop-app::external_ffmpeg
         ${libs_loc}/local/lib/libdav1d.a
         ${libs_loc}/local/lib/libjxl.a
         ${libs_loc}/local/lib/libjxl_cms.a

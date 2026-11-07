@@ -25,6 +25,7 @@ using WindowTitleHitTestFlags = base::flags<WindowTitleHitTestFlag>;
 namespace Platform {
 
 struct HitTestRequest;
+struct SystemCommandRequest;
 enum class HitTestResult;
 class DefaultTitleWidget;
 
@@ -39,6 +40,7 @@ public:
 
 	virtual void initInWindow(not_null<RpWindow*> window);
 	[[nodiscard]] virtual not_null<RpWidget*> body();
+	[[nodiscard]] virtual RpWidget *titleWidget();
 	[[nodiscard]] virtual QMargins frameMargins();
 	[[nodiscard]] virtual int additionalContentPadding() const;
 	[[nodiscard]] virtual auto additionalContentPaddingValue() const
@@ -49,6 +51,8 @@ public:
 		-> rpl::producer<HitTestResult>;
 	[[nodiscard]] virtual auto systemButtonDown() const
 		-> rpl::producer<HitTestResult>;
+	[[nodiscard]] virtual auto systemCommandRequests() const
+		-> rpl::producer<not_null<SystemCommandRequest*>>;
 	virtual void overrideSystemButtonOver(HitTestResult button);
 	virtual void overrideSystemButtonDown(HitTestResult button);
 	virtual void setTitle(const QString &title);
@@ -94,6 +98,7 @@ public:
 	explicit DefaultWindowHelper(not_null<RpWidget*> window);
 
 	not_null<RpWidget*> body() override;
+	RpWidget *titleWidget() override;
 	QMargins frameMargins() override;
 	void setTitle(const QString &title) override;
 	void setTitleStyle(const style::WindowTitle &st) override;

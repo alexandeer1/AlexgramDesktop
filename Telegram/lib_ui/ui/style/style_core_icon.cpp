@@ -29,7 +29,7 @@ namespace {
 base::flat_map<const IconMask*, QImage> IconMasks;
 QMutex IconMasksMutex;
 
-base::flat_map<QPair<const IconMask*, uint32>, QPixmap> iconPixmaps;
+base::flat_map<std::pair<const IconMask*, uint32>, QPixmap> iconPixmaps;
 base::flat_set<IconData*> iconData;
 
 [[nodiscard]] QImage CreateIconMask(
@@ -43,7 +43,7 @@ base::flat_set<IconData*> iconData;
 		reinterpret_cast<const char*>(mask->data()),
 		mask->size());
 	if (data.startsWith("SVG:")) {
-		auto size = QSize();
+		auto size = mask->rendered();
 		data = QByteArray::fromRawData(
 			data.constData() + 4,
 			data.size() - 4);
@@ -59,7 +59,9 @@ base::flat_set<IconData*> iconData;
 			stream >> width >> height;
 			Assert(stream.status() == QDataStream::Ok);
 
-			size = QSize(width, height);
+			if (size.isEmpty()) {
+				size = QSize(width, height);
+			}
 			data = QByteArray::fromRawData(
 				data.constData() + 8,
 				data.size() - 8);
@@ -165,7 +167,8 @@ MonoIcon::MonoIcon(const MonoIcon &other, const style::palette &palette)
 , _color(
 	palette.colorAtIndex(
 		style::main_palette::indexOfColor(other._color)))
-, _padding(other._padding) {
+, _padding(other._padding)
+, _ownPixmap(true) {
 }
 
 MonoIcon::MonoIcon(const IconMask *mask, Color color, QMargins padding)
@@ -205,7 +208,7 @@ void MonoIcon::paint(QPainter &p, const QPoint &pos, int outerw) const {
 		: (pos.x() + _padding.left());
 	const auto partPosY = pos.y() + _padding.top();
 
-	ensureLoaded();
+	ensureColorized();
 	if (_pixmap.isNull()) {
 		p.fillRect(QRect(QPoint(partPosX, partPosY), inner()), _color);
 	} else {
@@ -216,7 +219,7 @@ void MonoIcon::paint(QPainter &p, const QPoint &pos, int outerw) const {
 void MonoIcon::fill(QPainter &p, const QRect &rect) const {
 	Expects(_padding.isNull());
 
-	ensureLoaded();
+	ensureColorized();
 	if (_pixmap.isNull()) {
 		p.fillRect(rect, _color);
 	} else {
@@ -383,6 +386,13 @@ void MonoIcon::ensureLoaded() const {
 	}
 }
 
+void MonoIcon::ensureColorized() const {
+	ensureLoaded();
+	if (!_pixmap.isNull() && ColorKey(_color->c) != _pixmapColorKey) {
+		createCachedPixmap();
+	}
+}
+
 void MonoIcon::ensureColorizedImage(QColor color) const {
 	if (_colorizedImage.isNull()) {
 		_colorizedImage = QImage(
@@ -393,20 +403,29 @@ void MonoIcon::ensureColorizedImage(QColor color) const {
 }
 
 void MonoIcon::createCachedPixmap() const {
-	auto key = qMakePair(_mask, ColorKey(_color->c));
-	auto j = iconPixmaps.find(key);
-	if (j == end(iconPixmaps)) {
-		auto image = colorizeImage(_maskImage, _color);
-		j = iconPixmaps.emplace(
-			key,
-			QPixmap::fromImage(std::move(image))).first;
+	const auto colorKey = ColorKey(_color->c);
+	_pixmapColorKey = colorKey;
+	if (_ownPixmap) {
+		_pixmap = QPixmap::fromImage(colorizeImage(_maskImage, _color));
+	} else {
+		const auto key = std::make_pair(_mask, colorKey);
+		auto j = iconPixmaps.find(key);
+		if (j == end(iconPixmaps)) {
+			auto image = colorizeImage(_maskImage, _color);
+			j = iconPixmaps.emplace(
+				key,
+				QPixmap::fromImage(std::move(image))).first;
+		}
+		_pixmap = j->second;
 	}
-	_pixmap = j->second;
 	_size = (_pixmap.size() / DevicePixelRatio()).grownBy(_padding);
 }
 
 IconData::IconData(const IconData &other, const style::palette &palette) {
-	created();
+	// Deliberately not created(): this copy belongs to that one palette copy,
+	// which resets it itself. Registering it would put a background thread
+	// building an isolated palette into the process-wide icon registry.
+	// The parts keep out of the pixmap cache too, see MonoIcon::_ownPixmap.
 	_parts.reserve(other._parts.size());
 	for (const auto &part : other._parts) {
 		_parts.push_back(MonoIcon(part, palette));
@@ -414,11 +433,14 @@ IconData::IconData(const IconData &other, const style::palette &palette) {
 }
 
 void IconData::created() {
+	_registered = true;
 	iconData.emplace(this);
 }
 
 IconData::~IconData() {
-	iconData.remove(this);
+	if (_registered) {
+		iconData.remove(this);
+	}
 }
 
 void IconData::fill(QPainter &p, const QRect &rect) const {

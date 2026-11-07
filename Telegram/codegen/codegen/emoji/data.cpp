@@ -178,8 +178,14 @@ void append(Id &id, uint32 code) {
 	return result;
 }
 
-[[nodiscard]] map<Id, InputId> FillDoubleVariatedIds(const InputData &data) {
-	auto result = map<Id, InputId>();
+struct DoubleColorTemplates {
+	InputId same;
+	InputId different;
+};
+
+[[nodiscard]] map<Id, DoubleColorTemplates> FillDoubleVariatedIds(
+		const InputData &data) {
+	auto result = map<Id, DoubleColorTemplates>();
 	for (const auto &[original, same, different] : data.doubleColored) {
 		auto variatedId = Id();
 		if (original.size() < 1) {
@@ -189,9 +195,9 @@ void append(Id &id, uint32 code) {
 			logDataError() << "colored string should have at least two characters.";
 			return {};
 		}
-		if (same.size() == 2) {
-			// original: 1
-			// same: original + color
+		if (std::count(same.begin(), same.end(), ColorMask) == 1) {
+			// original: base + optional gender suffix
+			// same: original with color after the base
 			if (same[1] != ColorMask) {
 				logDataError() << "color code should appear at index 1.";
 				return {};
@@ -201,9 +207,16 @@ void append(Id &id, uint32 code) {
 			} else if (same[0] == kPostfix) {
 				logDataError() << "postfix in double colored is not supported.";
 				return {};
-			} else {
-				append(variatedId, same[0]);
 			}
+			auto uncolored = same;
+			uncolored.erase(uncolored.begin() + 1);
+			if (uncolored != original) {
+				logDataError()
+					<< "Same-tone emoji does not match its original: "
+					<< InputIdToString(original).toStdString();
+				return {};
+			}
+			variatedId = BareIdFromInput(original);
 			if (different.size() == 5) {
 				// different: some1 + color1 + sep + some2 + color2
 				if (std::count(different.begin(), different.end(), kJoiner) != 1
@@ -270,7 +283,13 @@ void append(Id &id, uint32 code) {
 			}
 			variatedId = BareIdFromInput(original);
 		}
-		result.emplace(variatedId, different);
+		auto sameTemplate = (original.size() == 1)
+			? InputId{ original.front(), ColorMask }
+			: same;
+		result.emplace(variatedId, DoubleColorTemplates{
+			std::move(sameTemplate),
+			different,
+		});
 	}
 	return result;
 }
@@ -287,7 +306,7 @@ void appendCategory(
 		Data &result,
 		const InputCategory &category,
 		const set<Id> &variatedIds,
-		const map<Id, InputId> &doubleVariatedIds,
+		const map<Id, DoubleColorTemplates> &doubleVariatedIds,
 		const set<Id> &postfixRequiredIds) {
 	result.categories.emplace_back();
 	for (auto &id : category) {
@@ -385,8 +404,7 @@ void appendCategory(
 		} else if (const auto d = doubleVariatedIds.find(bareId); d != end(doubleVariatedIds)) {
 			//result.list[it->second].doubleVariated = true;
 
-			const auto baseId = bareId;
-			const auto &different = d->second;
+			const auto &[same, different] = d->second;
 			if (different.size() < 4
 				|| different[1] != Colors[0]
 				|| different[different.size() - 1] != Colors[1]) {
@@ -398,18 +416,20 @@ void appendCategory(
 				for (auto color2 : Colors) {
 					auto colored = Emoji();
 					//colored.colored = true;
-					if (color1 == color2 && baseId.size() == 2) {
-						colored.id = baseId;
-						append(colored.id, color1);
-					} else {
-						auto copy = different;
-						copy[1] = color1;
-						copy[copy.size() - 1] = color2;
-						for (const auto code : copy) {
-							append(colored.id, code);
+					const auto &pattern = (color1 == color2)
+						? same
+						: different;
+					colored.postfixed = (pattern.back() == kPostfix);
+					for (const auto code : pattern) {
+						if (code != kPostfix) {
+							append(colored.id, (code == Colors[0])
+								? color1
+								: (code == Colors[1])
+								? color2
+								: code);
 						}
 					}
-					auto bareColoredId = colored.id.replace(QChar(kPostfix), QString());
+					const auto bareColoredId = colored.id;
 					if (addOne(bareColoredId, std::move(colored)) == result.map.end()) {
 						return;
 					}
@@ -685,13 +705,14 @@ bool CheckOldInCurrent(
 bool CheckOldInCurrent(
 		const InputData &data,
 		const std::set<Id> &variatedIds,
-		const std::vector<QString> &oldDataPaths) {
+		const std::vector<QString> &oldDataPaths,
+		std::set<Id> &oldEmoji) {
 	if (!CheckOldInCurrent(data, GetDataOld1(), variatedIds)
 		|| !CheckOldInCurrent(data, GetDataOld2(), variatedIds)) {
 		return false;
 	}
 	for (const auto &path : oldDataPaths) {
-		const auto old = ReadData(path);
+		const auto old = ReadData(path, &oldEmoji);
 		if (old.colored.empty() || old.doubleColored.empty()) {
 			return false;
 		} else if (!CheckOldInCurrent(data, old, variatedIds)) {
@@ -718,7 +739,8 @@ Data PrepareData(const QString &dataPath, const std::vector<QString> &oldDataPat
 		return Data();
 	}
 
-	if (!CheckOldInCurrent(input, variatedIds, oldDataPaths)) {
+	auto oldEmoji = std::set<Id>();
+	if (!CheckOldInCurrent(input, variatedIds, oldDataPaths, oldEmoji)) {
 		return Data();
 	}
 
@@ -749,6 +771,21 @@ Data PrepareData(const QString &dataPath, const std::vector<QString> &oldDataPat
 
 	fillReplaces(result);
 	if (result.list.empty()) {
+		return Data();
+	}
+
+	auto oldEmojiFound = true;
+	for (const auto &emoji : oldEmoji) {
+		auto bare = emoji;
+		bare.remove(QChar(kPostfix));
+		if (!result.map.contains(bare)) {
+			logDataError()
+				<< "Historical emoji not found in generated map: "
+				<< emoji.toStdString();
+			oldEmojiFound = false;
+		}
+	}
+	if (!oldEmojiFound) {
 		return Data();
 	}
 

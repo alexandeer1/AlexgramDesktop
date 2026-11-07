@@ -17,6 +17,14 @@ FrameProviderShared::FrameProviderShared(
 	_mutex.lockForWrite();
 	factory(crl::guard(this, [=](std::unique_ptr<FrameProvider> shared) {
 		_shared = std::move(shared);
+		if (_shared) {
+			// Copied once, under the write lock: information() must not hand
+			// out a reference into _shared, which a failing render() on
+			// another thread can destroy the moment the read lock is
+			// released - before the caller has copied from it.
+			_information = _shared->information();
+			_sizeRounding = _shared->sizeRounding();
+		}
 		_mutex.unlock();
 	}));
 }
@@ -25,6 +33,11 @@ QImage FrameProviderShared::construct(
 		std::unique_ptr<FrameProviderToken> &token,
 		const FrameRequest &request) {
 	QWriteLocker lock(&_mutex);
+	if (!_shared) {
+		// valid() was checked without holding the lock, so a failing render()
+		// on another thread could have destroyed the provider since then.
+		return QImage();
+	}
 	token = createToken();
 	if (token) {
 		token->exclusive = !_constructed;
@@ -35,10 +48,8 @@ QImage FrameProviderShared::construct(
 }
 
 const Information &FrameProviderShared::information() {
-	static auto empty = Information();
-
 	QReadLocker lock(&_mutex);
-	return _shared ? _shared->information() : empty;
+	return _information;
 }
 
 bool FrameProviderShared::valid() {
@@ -48,14 +59,14 @@ bool FrameProviderShared::valid() {
 
 int FrameProviderShared::sizeRounding() {
 	QReadLocker lock(&_mutex);
-	Assert(_shared != nullptr);
-	return _shared->sizeRounding();
+
+	// Constant for a provider and copied once, so it stays available after
+	// a failing render() has destroyed the provider on another thread.
+	return _sizeRounding;
 }
 
 std::unique_ptr<FrameProviderToken> FrameProviderShared::createToken() {
-	Expects(_shared != nullptr);
-
-	return _shared->createToken();
+	return _shared ? _shared->createToken() : nullptr;
 }
 
 bool FrameProviderShared::render(

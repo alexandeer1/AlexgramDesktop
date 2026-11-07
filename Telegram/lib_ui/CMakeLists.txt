@@ -99,8 +99,14 @@ PRIVATE
     ui/rhi/rhi_shader.h
     ui/rhi/rhi_surface.cpp
     ui/rhi/rhi_surface.h
+    ui/image/image_blur_simd.h
+    ui/image/image_blur_simd_generic.h
+    ui/image/image_blur_simd_neon.h
+    ui/image/image_blur_simd_sse2.h
     ui/image/image_prepare.cpp
     ui/image/image_prepare.h
+    ui/image/svg_safety.cpp
+    ui/image/svg_safety.h
     ui/layers/box_content.cpp
     ui/layers/box_content.h
     ui/layers/box_layer_widget.cpp
@@ -121,6 +127,8 @@ PRIVATE
     ui/paint/blobs.h
     ui/paint/blobs_linear.cpp
     ui/paint/blobs_linear.h
+    ui/platform/linux/ui_font_settings_linux.cpp
+    ui/platform/linux/ui_font_settings_linux.h
     ui/platform/linux/ui_window_linux.cpp
     ui/platform/linux/ui_window_linux.h
     ui/platform/linux/ui_window_title_linux.cpp
@@ -192,6 +200,9 @@ PRIVATE
     ui/text/text_isolated_emoji.h
     ui/text/text_renderer.cpp
     ui/text/text_renderer.h
+    ui/text/text_shaper.h
+    ui/text/text_shaper_pango.cpp
+    ui/text/text_shaper_qt.cpp
     ui/text/text_stack_engine.cpp
     ui/text/text_stack_engine.h
     ui/text/text_utilities.cpp
@@ -211,8 +222,6 @@ PRIVATE
     ui/widgets/box_content_divider.h
     ui/widgets/buttons.cpp
     ui/widgets/buttons.h
-    ui/widgets/call_button.cpp
-    ui/widgets/call_button.h
     ui/widgets/checkbox.cpp
     ui/widgets/checkbox.h
     ui/widgets/dropdown_menu.cpp
@@ -255,6 +264,8 @@ PRIVATE
     ui/widgets/menu/menu_toggle.h
     ui/widgets/elastic_scroll.cpp
     ui/widgets/elastic_scroll.h
+    ui/widgets/kinetic_scroller.cpp
+    ui/widgets/kinetic_scroller.h
     ui/widgets/pill_tabs.cpp
     ui/widgets/pill_tabs.h
     ui/widgets/popup_menu.cpp
@@ -265,6 +276,7 @@ PRIVATE
     ui/widgets/separate_panel.h
     ui/widgets/scroll_area.cpp
     ui/widgets/scroll_area.h
+    ui/widgets/scroll_math.h
     ui/widgets/side_bar_button.cpp
     ui/widgets/side_bar_button.h
     ui/widgets/shadow.cpp
@@ -326,7 +338,10 @@ PRIVATE
     ui/screen_reader_mode.cpp
     ui/screen_reader_mode.h
     ui/ui_rpl_filter.h
+    ui/ui_touch_forward.cpp
+    ui/ui_touch_forward.h
     ui/ui_utility.cpp
+    ui/ui_fixed.h
     ui/ui_utility.h
 
     ui/ui_pch.h
@@ -336,9 +351,36 @@ PRIVATE
     emoji_suggestions/emoji_suggestions_helper.h
 )
 
+if (QT_VERSION_MAJOR LESS 6 OR DESKTOP_APP_DISABLE_PRIVATE_QT_API)
+    remove_target_sources(lib_ui ${src_loc}
+        ui/widgets/kinetic_scroller.cpp
+    )
+endif()
+
 if (DESKTOP_APP_USE_PACKAGED_FONTS)
     target_compile_definitions(lib_ui PRIVATE LIB_UI_USE_PACKAGED_FONTS)
     remove_target_sources(lib_ui ${src_loc} fonts/fonts.qrc)
+endif()
+
+if (DESKTOP_APP_USE_PANGO)
+    remove_target_sources(lib_ui ${src_loc}
+        ui/text/text_bidi_algorithm.h
+        ui/text/text_shaper_qt.cpp
+        ui/text/text_stack_engine.cpp
+        ui/text/text_stack_engine.h
+    )
+    target_link_libraries(lib_ui PRIVATE $<LINK_ONLY:desktop-app::external_pango>)
+    set_source_files_properties(${src_loc}/ui/text/text_shaper_pango.cpp
+    PROPERTIES
+        INCLUDE_DIRECTORIES "$<TARGET_PROPERTY:desktop-app::external_pango,INTERFACE_INCLUDE_DIRECTORIES>"
+        COMPILE_OPTIONS "$<TARGET_PROPERTY:desktop-app::external_pango,INTERFACE_COMPILE_OPTIONS>"
+    )
+else()
+    remove_target_sources(lib_ui ${src_loc}
+        ui/platform/linux/ui_font_settings_linux.cpp
+        ui/platform/linux/ui_font_settings_linux.h
+        ui/text/text_shaper_pango.cpp
+    )
 endif()
 
 target_include_directories(lib_ui
@@ -357,8 +399,12 @@ PRIVATE
     desktop-app::external_xxhash
 )
 
-if (WIN32 AND QT_VERSION LESS 6)
+if (WIN32 AND (QT_VERSION LESS 6 OR DESKTOP_APP_WIN7_BASELINE))
     target_link_libraries(lib_ui PRIVATE desktop-app::external_angle)
+endif()
+
+if (WIN32 AND NOT QT_VERSION LESS 6 AND DESKTOP_APP_WIN7_BASELINE)
+    target_compile_definitions(lib_ui PUBLIC DESKTOP_APP_QT6_ANGLE)
 endif()
 
 target_prepare_qrc(lib_ui)

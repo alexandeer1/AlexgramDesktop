@@ -12,28 +12,34 @@
 namespace crl::details {
 
 thread_policy::thread_policy() {
-	std::thread([=] { run(); }).detach();
+	std::thread([this] { run(); }).detach();
+}
+
+thread_policy::~thread_policy() {
+	// WHY: a wake can finish after its job destroys the owner, so keep
+	// the semaphore alive until every actual wake has returned.
+	while (_waking.load(std::memory_order_acquire)) {
+		std::this_thread::yield();
+	}
 }
 
 void thread_policy::run() {
 	toggle_fp_exceptions(true);
 
-	while (true) {
-		if (!_list.process()) {
-			break;
+	_semaphore.acquire();
+	while (_list.process()) {
+		if (_list.try_idle()) {
+			_semaphore.acquire();
 		}
-		_queued.clear();
-
-		std::unique_lock<std::mutex> lock(_mutex);
-		_variable.wait(lock, [=] { return !_list.empty(); });
 	}
 }
 
 void thread_policy::wake_async() const {
-	if (!_queued.test_and_set()) {
-		std::unique_lock<std::mutex> lock(_mutex);
-		_variable.notify_one();
-	}
+	_waking.fetch_add(1);
+	const auto guard = details::finally([&] {
+		_waking.fetch_sub(1, std::memory_order_release);
+	});
+	_semaphore.release();
 }
 
 } // namespace crl::details

@@ -8,6 +8,7 @@
 
 #include "base/platform/base_platform_info.h"
 #include "base/invoke_queued.h"
+#include "base/weak_qptr.h"
 #include "ui/image/image_prepare.h"
 #include "ui/platform/ui_platform_utility.h"
 #include "ui/widgets/shadow.h"
@@ -18,17 +19,90 @@
 #include "ui/painter.h"
 #include "ui/integration.h"
 #include "ui/screen_reader_mode.h"
+#include "base/timer.h"
 #include "ui/ui_utility.h"
 
 #include <QtGui/QtEvents>
+#include <QtGui/QCursor>
 #include <QtGui/QPainter>
 #include <QtGui/QScreen>
 #include <QtGui/QWindow>
 #include <QtWidgets/QApplication>
-#include <private/qapplication_p.h>
+
+#ifndef DESKTOP_APP_DISABLE_PRIVATE_QT_API
 #include <qpa/qplatformwindow_p.h>
+#endif // !DESKTOP_APP_DISABLE_PRIVATE_QT_API
 
 namespace Ui {
+namespace {
+
+constexpr auto kSubmenuAimDelay = crl::time(300);
+
+[[nodiscard]] bool PointInTriangle(
+		QPoint point,
+		QPoint apex,
+		QPoint from,
+		QPoint till) {
+	const auto side = [](QPoint a, QPoint b, QPoint c) {
+		return (int64(a.x()) - c.x()) * (int64(b.y()) - c.y())
+			- (int64(b.x()) - c.x()) * (int64(a.y()) - c.y());
+	};
+	const auto first = side(point, apex, from);
+	const auto second = side(point, from, till);
+	const auto third = side(point, till, apex);
+	const auto negative = (first < 0) || (second < 0) || (third < 0);
+	const auto positive = (first > 0) || (second > 0) || (third > 0);
+	return !negative || !positive;
+}
+
+struct ChildState {
+	QPointer<QWidget> widget;
+	bool hidden = false;
+	bool transparentForMouse = false;
+};
+
+[[nodiscard]] std::vector<ChildState> MakeChildrenTransparentForMouse(
+		not_null<QWidget*> parent) {
+	auto result = std::vector<ChildState>();
+	for (const auto child : parent->children()) {
+		const auto widget = qobject_cast<QWidget*>(child);
+		if (widget && !widget->isWindow()) {
+			result.push_back({
+				.widget = widget,
+				.hidden = widget->isHidden(),
+				.transparentForMouse = widget->testAttribute(
+					Qt::WA_TransparentForMouseEvents),
+			});
+			widget->setAttribute(Qt::WA_TransparentForMouseEvents);
+		}
+	}
+	return result;
+}
+
+void RestoreChildren(const std::vector<ChildState> &states) {
+	for (const auto &state : states) {
+		if (const auto widget = state.widget.data()) {
+			if (widget->isHidden() != state.hidden) {
+				widget->setVisible(!state.hidden);
+			}
+			widget->setAttribute(
+				Qt::WA_TransparentForMouseEvents,
+				state.transparentForMouse);
+		}
+	}
+}
+
+} // namespace
+
+struct PopupMenu::SubmenuAim {
+	explicit SubmenuAim(Fn<void()> callback) : timer(std::move(callback)) {
+	}
+
+	QAction *action = nullptr;
+	QPoint apex;
+	base::Timer timer;
+	bool aiming = false;
+};
 
 PopupMenu::PopupMenu(QWidget *parent, const style::PopupMenu &st)
 : RpWidget(parent)
@@ -61,7 +135,7 @@ PopupMenu::PopupMenu(QWidget *parent, QMenu *menu, const style::PopupMenu &st)
 		if (const auto submenu = action->menu()) {
 			_submenus.emplace(
 				action,
-				base::make_unique_q<PopupMenu>(parentWidget(), submenu, st)
+				base::make_unique_q<PopupMenu>(this, submenu, st)
 			).first->second->deleteOnHide(false);
 		}
 	}
@@ -118,7 +192,7 @@ not_null<PopupMenu*> PopupMenu::ensureSubmenu(
 	}
 	const auto result = _submenus.emplace(
 		action,
-		base::make_unique_q<PopupMenu>(parentWidget(), st)
+		base::make_unique_q<PopupMenu>(this, st)
 	).first->second.get();
 	result->deleteOnHide(false);
 	return result;
@@ -250,7 +324,14 @@ not_null<QAction*> PopupMenu::addAction(
 		action,
 		base::unique_qptr<PopupMenu>(submenu.release())
 	).first->second.get();
-	saved->setParent(parentWidget());
+	// Reparent under the menu itself (like ensureSubmenu and the QMenu
+	// constructor do), so the submenu window gets this menu's window as
+	// its transient parent, but keep the window flags: the single-argument
+	// QWidget::setParent() resets them, which strips the Qt::Popup type set
+	// in init() and demotes the submenu to a plain child widget. Such a widget
+	// has no windowHandle() after createWinId(), so prepareGeometryFor() can't
+	// show it.
+	saved->setParent(this, saved->windowFlags());
 	saved->deleteOnHide(false);
 	return action;
 }
@@ -349,12 +430,104 @@ void PopupMenu::paintBg(QPainter &p) {
 }
 
 void PopupMenu::handleActivated(const Menu::CallbackData &data) {
-	if (data.source == TriggeredSource::Mouse) {
-		if (!popupSubmenuFromAction(data)) {
-			if (const auto currentSubmenu = base::take(_activeSubmenu)) {
-				currentSubmenu->hideMenu(true);
-			}
+	if (data.source != TriggeredSource::Mouse || _submenus.empty()) {
+		return;
+	} else if (!popupSubmenuFromAction(data)) {
+		clearSubmenuAim();
+		if (const auto currentSubmenu = base::take(_activeSubmenu)) {
+			currentSubmenu->hideMenu(true);
 		}
+	}
+}
+
+QAction *PopupMenu::activeSubmenuAction() const {
+	return (_activeSubmenu && _submenuAim) ? _submenuAim->action : nullptr;
+}
+
+not_null<PopupMenu::SubmenuAim*> PopupMenu::submenuAim() {
+	if (!_submenuAim) {
+		_submenuAim = std::make_unique<SubmenuAim>([=] {
+			if (isHidden() || _hiding) {
+				return;
+			}
+			// Pointer stopped while aiming, let hovered item win.
+			_submenuAim->aiming = false;
+			_menu->setMouseSelectionFrozen(false);
+			_menu->handleMouseMove(_menu->lastMouseGlobal());
+		});
+		watchMouseMoves();
+	}
+	return _submenuAim.get();
+}
+
+void PopupMenu::watchMouseMoves() {
+	_menu->setMouseMovedCallback([=](QPoint globalPosition) {
+		handleMouseMoved(globalPosition);
+	});
+}
+
+void PopupMenu::handleMouseMoved(QPoint globalPosition) {
+	if (_parent
+		&& QRect(mapToGlobal(_inner.topLeft()), _inner.size()).contains(
+			globalPosition)) {
+		// Pointer reached this submenu, not aiming at it anymore.
+		_parent->clearSubmenuAim();
+	}
+	if (!_activeSubmenu || !_submenuAim) {
+		return;
+	}
+	const auto aim = _submenuAim.get();
+	const auto owner = aim->action
+		? _menu->itemForAction(aim->action)
+		: nullptr;
+	if (owner
+		&& QRect(owner->mapToGlobal(QPoint()), owner->size()).contains(
+			globalPosition)) {
+		aim->apex = globalPosition;
+		aim->aiming = true;
+		aim->timer.cancel();
+		_menu->setMouseSelectionFrozen(false);
+	} else if (aim->aiming
+		&& !QGuiApplication::mouseButtons()
+		&& insideSubmenuAim(globalPosition)) {
+		_menu->setMouseSelectionFrozen(true);
+		aim->timer.callOnce(kSubmenuAimDelay);
+	} else {
+		clearSubmenuAim();
+	}
+}
+
+bool PopupMenu::insideSubmenuAim(QPoint position) const {
+	const auto submenu = QRect(
+		_activeSubmenu->mapToGlobal(_activeSubmenu->inner().topLeft()),
+		_activeSubmenu->inner().size());
+	if (submenu.isEmpty()) {
+		return false;
+	}
+	const auto mine = QRect(mapToGlobal(_inner.topLeft()), _inner.size());
+	const auto opensRight = (submenu.center().x() >= mine.center().x());
+	const auto edge = opensRight ? submenu.left() : submenu.right();
+	const auto beyond = opensRight
+		? (position.x() >= edge)
+		: (position.x() <= edge);
+	if (beyond && !mine.contains(position)) {
+		// Menus overlap by shadow width, last pixels belong to this menu.
+		// Compositor owned positions may overlap much more than that.
+		return (position.y() >= submenu.top())
+			&& (position.y() <= submenu.bottom());
+	}
+	return PointInTriangle(
+		position,
+		_submenuAim->apex,
+		QPoint(edge, submenu.top()),
+		QPoint(edge, submenu.bottom()));
+}
+
+void PopupMenu::clearSubmenuAim() {
+	if (_submenuAim) {
+		_submenuAim->aiming = false;
+		_submenuAim->timer.cancel();
+		_menu->setMouseSelectionFrozen(false);
 	}
 }
 
@@ -395,6 +568,7 @@ void PopupMenu::popupSubmenu(
 		not_null<PopupMenu*> submenu,
 		int actionTop,
 		TriggeredSource source) {
+	clearSubmenuAim();
 	if (auto currentSubmenu = base::take(_activeSubmenu)) {
 		currentSubmenu->hideMenu(true);
 	}
@@ -410,8 +584,18 @@ void PopupMenu::popupSubmenu(
 				geometry().topLeft() + p,
 				this,
 				_menu->itemForAction(action))) {
+			// showPrepared() reaches the platform window, deep enough for
+			// the owner to destroy us from inside it.
+			const auto weak = base::make_weak(this);
 			_activeSubmenu->showPrepared(source);
+			if (!weak) {
+				return;
+			}
 			_menu->setChildShownAction(action);
+			const auto aim = submenuAim();
+			aim->action = action;
+			aim->aiming = (source == TriggeredSource::Mouse);
+			aim->apex = _menu->lastMouseGlobal();
 		} else {
 			_activeSubmenu = nullptr;
 		}
@@ -425,6 +609,8 @@ void PopupMenu::forwardKeyPress(not_null<QKeyEvent*> e) {
 }
 
 bool PopupMenu::handleKeyPress(int key) {
+	// Keyboard takes over, pending mouse aim must not switch items.
+	clearSubmenuAim();
 	if (_activeSubmenu) {
 		_activeSubmenu->handleKeyPress(key);
 		return true;
@@ -509,29 +695,16 @@ bool PopupMenu::eventFilter(QObject *o, QEvent *e) {
 		|| type == QEvent::TouchUpdate
 		|| type == QEvent::TouchEnd) {
 		if (o == windowHandle() && isActiveWindow()) {
-			const auto event = static_cast<QTouchEvent*>(e);
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 			e->setAccepted(
-				QApplicationPrivate::translateRawTouchEvent(
-					this,
-					event->device(),
-					event->touchPoints(),
-					event->timestamp()));
-#elif QT_VERSION < QT_VERSION_CHECK(6, 2, 0) // Qt < 6.0.0
-			e->setAccepted(
-				QApplicationPrivate::translateRawTouchEvent(
-					this,
-					event->pointingDevice(),
-					const_cast<QList<QEventPoint> &>(event->points()),
-					event->timestamp()));
-#else // Qt < 6.2.0
-			e->setAccepted(
-				QApplicationPrivate::translateRawTouchEvent(this, event));
-#endif
+				_touchForward.handle(this, static_cast<QTouchEvent*>(e)));
 			return e->isAccepted();
 		}
 	}
 	return false;
+}
+
+bool PopupMenu::focusNextPrevChild(bool next) {
+	return !_refreshingAnimationCache && RpWidget::focusNextPrevChild(next);
 }
 
 void PopupMenu::hideMenu(bool fast) {
@@ -559,6 +732,10 @@ void PopupMenu::childHiding(PopupMenu *child) {
 		_activeSubmenu = nullptr;
 	}
 	if (!_activeSubmenu) {
+		clearSubmenuAim();
+		if (_submenuAim) {
+			_submenuAim->action = nullptr;
+		}
 		_menu->setChildShownAction(nullptr);
 	}
 	if (!_hiding && !isHidden()) {
@@ -676,13 +853,58 @@ void PopupMenu::startOpacityAnimation(bool hiding) {
 
 void PopupMenu::showStarted() {
 	if (isHidden()) {
+		// Same as in showPrepared(): show() can end with this menu gone.
+		const auto weak = base::make_weak(this);
 		show();
-		startShowAnimation();
+		if (weak) {
+			startShowAnimation();
+		}
 		return;
 	} else if (!_hiding) {
 		return;
 	}
 	startOpacityAnimation(false);
+}
+
+void PopupMenu::refreshAnimationCache() {
+	if (isHidden()) {
+		return;
+	} else if (!_showAnimation && !_a_opacity.animating()) {
+		update();
+		return;
+	}
+	_refreshingAnimationCache = true;
+	const auto children = MakeChildrenTransparentForMouse(this);
+	if (_showAnimation) {
+		prepareShowAnimation();
+	}
+	if (_a_opacity.animating()) {
+		auto opacityAnimation = base::take(_a_opacity);
+		const auto hiding = base::take(_hiding);
+		prepareCache();
+		_hiding = hiding;
+		_a_opacity = base::take(opacityAnimation);
+	}
+	RestoreChildren(children);
+	_refreshingAnimationCache = false;
+	update();
+}
+
+void PopupMenu::prepareShowAnimation() {
+	auto opacityAnimation = base::take(_a_opacity);
+	showChildren();
+	auto cache = grabForPanelAnimation();
+	_a_opacity = base::take(opacityAnimation);
+
+	const auto pixelRatio = style::DevicePixelRatio();
+	_showAnimation = std::make_unique<PanelAnimation>(_st.animation, _origin);
+	_showAnimation->setFinalImage(std::move(cache), QRect(_inner.topLeft() * pixelRatio, _inner.size() * pixelRatio), _st.radius);
+	if (_useTransparency) {
+		_showAnimation->setCornerMasks(Images::CornersMask(_st.radius));
+	} else {
+		_showAnimation->setSkipShadow(true);
+	}
+	_showAnimation->start();
 }
 
 void PopupMenu::startShowAnimation() {
@@ -692,20 +914,7 @@ void PopupMenu::startShowAnimation() {
 		return;
 	}
 	if (!_a_show.animating()) {
-		auto opacityAnimation = base::take(_a_opacity);
-		showChildren();
-		auto cache = grabForPanelAnimation();
-		_a_opacity = base::take(opacityAnimation);
-
-		const auto pixelRatio = style::DevicePixelRatio();
-		_showAnimation = std::make_unique<PanelAnimation>(_st.animation, _origin);
-		_showAnimation->setFinalImage(std::move(cache), QRect(_inner.topLeft() * pixelRatio, _inner.size() * pixelRatio), _st.radius);
-		if (_useTransparency) {
-			_showAnimation->setCornerMasks(Images::CornersMask(_st.radius));
-		} else {
-			_showAnimation->setSkipShadow(true);
-		}
-		_showAnimation->start();
+		prepareShowAnimation();
 	}
 	_animatePhase = AnimatePhase::StartShow;
 	hideChildren();
@@ -755,7 +964,12 @@ QImage PopupMenu::grabForPanelAnimation() {
 		p.fillRect(_inner, _st.menu.itemBg);
 		for (const auto child : children()) {
 			if (const auto widget = qobject_cast<QWidget*>(child)) {
-				RenderWidget(p, widget, widget->pos());
+				// Submenus are windows of their own, they are not a part
+				// of what this menu paints, and their pos() is meaningless
+				// in our coordinates.
+				if (!widget->isWindow()) {
+					RenderWidget(p, widget, widget->pos());
+				}
 			}
 		}
 		_grabbingForPanelAnimation = false;
@@ -856,6 +1070,9 @@ bool PopupMenu::prepareGeometryFor(
 	}
 
 	_parent = parent;
+	if (_parent) {
+		watchMouseMoves();
+	}
 	const auto screen = QGuiApplication::screenAt(p);
 
 	createWinId();
@@ -900,7 +1117,7 @@ bool PopupMenu::prepareGeometryFor(
 			0),
 		_padding.top() - _topShift);
 	auto r = screen ? screen->availableGeometry() : QRect();
-#if QT_VERSION >= QT_VERSION_CHECK(6, 11, 0) && defined QT_FEATURE_wayland && QT_CONFIG(wayland)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 11, 0) && defined QT_FEATURE_wayland && QT_CONFIG(wayland) && !defined DESKTOP_APP_DISABLE_PRIVATE_QT_API
 	using namespace QNativeInterface::Private;
 	if (const auto native
 			= windowHandle()->nativeInterface<QWaylandWindow>()) {
@@ -933,7 +1150,7 @@ bool PopupMenu::prepareGeometryFor(
 			? QWaylandWindow::SubMenu
 			: QWaylandWindow::Menu);
 	}
-#endif // Qt >= 6.11.0 && wayland
+#endif // Qt >= 6.11.0 && wayland && !DESKTOP_APP_DISABLE_PRIVATE_QT_API
 	const auto parentWidth = _parent ? _parent->inner().width() : 0;
 	if (style::RightToLeft()) {
 		const auto badLeft = !r.isNull() && w.x() - width() < r.x() - _margins.left();
@@ -996,7 +1213,15 @@ void PopupMenu::showPrepared(TriggeredSource source) {
 	if (::Platform::IsWindows()) {
 		ForceFullRepaintSync(this);
 	}
+	// show() goes all the way into the platform window, deep enough for the
+	// owner to destroy this menu from inside it - a QCocoaWindow freed inside
+	// its own setVisible() is the reported shape - so nothing below may touch
+	// the menu without checking that it is still there.
+	const auto weak = base::make_weak(this);
 	show();
+	if (!weak) {
+		return;
+	}
 	Platform::ShowOverAll(this);
 	raise();
 	activateWindow();
@@ -1353,6 +1578,21 @@ PopupMenu::~PopupMenu() {
 	if (_destroyedCallback) {
 		_destroyedCallback();
 	}
+}
+
+QPoint ContextMenuPosition(
+		not_null<QWidget*> anchor,
+		not_null<QContextMenuEvent*> e) {
+	return ContextMenuPosition(anchor, e, anchor->rect());
+}
+
+QPoint ContextMenuPosition(
+		not_null<QWidget*> anchor,
+		not_null<QContextMenuEvent*> e,
+		QRect rect) {
+	return (e->reason() == QContextMenuEvent::Keyboard)
+		? anchor->mapToGlobal(rect.center())
+		: QCursor::pos();
 }
 
 } // namespace Ui

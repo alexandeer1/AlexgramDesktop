@@ -49,6 +49,14 @@ not_null<const RpWidget*> RpWindow::body() const {
 	return _helper->body().get();
 }
 
+RpWidget *RpWindow::titleWidget() {
+	return _helper->titleWidget();
+}
+
+const RpWidget *RpWindow::titleWidget() const {
+	return _helper->titleWidget();
+}
+
 QMargins RpWindow::frameMargins() const {
 	return _helper->frameMargins();
 }
@@ -72,6 +80,11 @@ rpl::producer<Platform::HitTestResult> RpWindow::systemButtonOver() const {
 
 rpl::producer<Platform::HitTestResult> RpWindow::systemButtonDown() const {
 	return _helper->systemButtonDown();
+}
+
+auto RpWindow::systemCommandRequests() const
+-> rpl::producer<not_null<Platform::SystemCommandRequest*>> {
+	return _helper->systemCommandRequests();
 }
 
 void RpWindow::overrideSystemButtonOver(Platform::HitTestResult button) {

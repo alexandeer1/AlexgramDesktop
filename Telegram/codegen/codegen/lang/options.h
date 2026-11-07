@@ -15,6 +15,10 @@ namespace lang {
 struct Options {
 	QString outputPath = ".";
 	QString inputPath;
+
+	QString sourcesPath;
+
+	bool subsetsOnly = false;
 };
 
 // Parsing failed if inputPath is empty in the result.

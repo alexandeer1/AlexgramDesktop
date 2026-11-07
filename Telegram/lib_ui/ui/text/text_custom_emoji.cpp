@@ -7,6 +7,7 @@
 #include "ui/text/text_custom_emoji.h"
 
 #include "ui/style/style_core.h"
+#include "ui/style/style_core_palette.h"
 #include "ui/text/text.h"
 #include "ui/text/text_utilities.h"
 #include "ui/emoji_config.h"
@@ -70,6 +71,10 @@ QString ShiftedEmoji::replacementText() {
 	return _wrapped->replacementText();
 }
 
+EntitiesInText ShiftedEmoji::replacementEntities() {
+	return _wrapped->replacementEntities();
+}
+
 CustomEmojiSemantics ShiftedEmoji::semantics() {
 	return _wrapped->semantics();
 }
@@ -112,6 +117,10 @@ std::optional<CustomEmojiVerticalMetrics> FirstFrameEmoji::vertical(
 
 QString FirstFrameEmoji::replacementText() {
 	return _wrapped->replacementText();
+}
+
+EntitiesInText FirstFrameEmoji::replacementEntities() {
+	return _wrapped->replacementEntities();
 }
 
 CustomEmojiSemantics FirstFrameEmoji::semantics() {
@@ -162,6 +171,10 @@ std::optional<CustomEmojiVerticalMetrics> LimitedLoopsEmoji::vertical(
 
 QString LimitedLoopsEmoji::replacementText() {
 	return _wrapped->replacementText();
+}
+
+EntitiesInText LimitedLoopsEmoji::replacementEntities() {
+	return _wrapped->replacementEntities();
 }
 
 CustomEmojiSemantics LimitedLoopsEmoji::semantics() {
@@ -268,8 +281,12 @@ bool PaletteDependentCustomEmoji::readyInDefaultState() {
 
 void PaletteDependentCustomEmoji::validateFrame() {
 	const auto version = style::PaletteVersion();
-	if (_frame.isNull() || _paletteVersion != version) {
+	const auto identity = style::main_palette::CurrentOverrideIdentity();
+	if (_frame.isNull()
+		|| _paletteVersion != version
+		|| _paletteIdentity != identity) {
 		_paletteVersion = version;
+		_paletteIdentity = identity;
 		_frame = _factory();
 	}
 }

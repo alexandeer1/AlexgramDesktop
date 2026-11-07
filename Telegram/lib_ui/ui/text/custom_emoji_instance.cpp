@@ -8,6 +8,7 @@
 
 #include "ui/effects/animation_value.h"
 #include "ui/effects/frame_generator.h"
+#include "ui/style/style_core_palette.h"
 #include "ui/dynamic_image.h"
 #include "ui/ui_utility.h"
 #include "ui/painter.h"
@@ -21,7 +22,7 @@ namespace Ui::CustomEmoji {
 namespace {
 
 constexpr auto kMaxFrames = 180;
-constexpr auto kCacheVersion = 1;
+constexpr auto kCacheVersion = 2;
 constexpr auto kPreloadFrames = 3;
 
 struct CacheHeader {
@@ -174,7 +175,8 @@ std::optional<Cache> Cache::FromSerialized(
 	auto header = CacheHeader();
 	memcpy(&header, serialized.data(), sizeof(header));
 	const auto size = header.size;
-	if (size != requestedSize
+	if (header.version != kCacheVersion
+		|| size != requestedSize
 		|| header.frames <= 0
 		|| header.frames >= kMaxFrames
 		|| header.length <= 0
@@ -809,9 +811,13 @@ void Instance::decrementUsage(not_null<Object*> object) {
 	});
 }
 
-Object::Object(not_null<Instance*> instance, Fn<void()> repaint)
+Object::Object(
+	not_null<Instance*> instance,
+	Fn<void()> repaint,
+	int width)
 : _instance(instance)
-, _repaint(std::move(repaint)) {
+, _repaint(std::move(repaint))
+, _width(width) {
 }
 
 Object::~Object() {
@@ -819,7 +825,7 @@ Object::~Object() {
 }
 
 int Object::width() {
-	return st::emojiSize + 2 * st::emojiPadding;
+	return _width;
 }
 
 QString Object::entityData() {
@@ -970,10 +976,16 @@ void PaintIconEmoji(
 	const auto ratio = style::DevicePixelRatio();
 	const auto full = size * ratio;
 	const auto invalid = (cache.frame.size() != full);
+	const auto version = style::PaletteVersion();
+	const auto identity = emoji->useIconColor
+		? style::main_palette::CurrentOverrideIdentity()
+		: 0;
 	if (invalid
 		|| (emoji->useIconColor
-			&& cache.paletteVersion != style::PaletteVersion())) {
-		cache.paletteVersion = style::PaletteVersion();
+			&& (cache.paletteVersion != version
+				|| cache.paletteIdentity != identity))) {
+		cache.paletteVersion = version;
+		cache.paletteIdentity = identity;
 		if (invalid) {
 			cache.frame = QImage(full, QImage::Format_ARGB32_Premultiplied);
 		}

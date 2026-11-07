@@ -13,19 +13,22 @@
 #include <QtCore/QAbstractNativeEventFilter>
 
 #include <windows.h>
-#include <wrl/client.h>
-#include <Shobjidl.h>
 
 #include "base/event_filter.h"
 #include <QTimer>
 #include <QScreen>
 
-using namespace Microsoft::WRL;
-
 namespace Ui::Platform {
 
 bool IsApplicationActive() {
 	return QApplication::activeWindow() != nullptr;
+}
+
+bool IsMaximizedNatively(not_null<QWidget*> window) {
+	const auto handle = window->windowHandle();
+	return (handle && handle->handle())
+		? (IsZoomed(reinterpret_cast<HWND>(handle->winId())) != FALSE)
+		: window->isMaximized();
 }
 
 void IgnoreAllActivation(not_null<QWidget*> widget) {
@@ -41,77 +44,6 @@ void IgnoreAllActivation(not_null<QWidget*> widget) {
 		GWL_EXSTYLE,
 		style | WS_EX_NOACTIVATE | WS_EX_APPWINDOW);
 	ShowWindow(handle, SW_SHOW);
-}
-
-std::optional<bool> IsOverlapped(
-		not_null<QWidget*> widget,
-		const QRect &rect) {
-	const auto handle = HWND(widget->winId());
-	Expects(handle != nullptr);
-
-	ComPtr<IVirtualDesktopManager> virtualDesktopManager;
-	HRESULT hr = CoCreateInstance(
-		CLSID_VirtualDesktopManager,
-		nullptr,
-		CLSCTX_ALL,
-		IID_PPV_ARGS(&virtualDesktopManager));
-
-	if (SUCCEEDED(hr)) {
-		BOOL isCurrent;
-		hr = virtualDesktopManager->IsWindowOnCurrentVirtualDesktop(
-			handle,
-			&isCurrent);
-		if (SUCCEEDED(hr) && !isCurrent) {
-			return true;
-		}
-	}
-
-	const auto nativeRect = [&] {
-		const auto topLeft = [&] {
-			const auto qpoints = rect.topLeft()
-				* widget->windowHandle()->devicePixelRatio();
-			POINT result{
-				qpoints.x(),
-				qpoints.y(),
-			};
-			ClientToScreen(handle, &result);
-			return result;
-		}();
-		const auto bottomRight = [&] {
-			const auto qpoints = rect.bottomRight()
-				* widget->windowHandle()->devicePixelRatio();
-			POINT result{
-				qpoints.x(),
-				qpoints.y(),
-			};
-			ClientToScreen(handle, &result);
-			return result;
-		}();
-		return RECT{
-			topLeft.x,
-			topLeft.y,
-			bottomRight.x,
-			bottomRight.y,
-		};
-	}();
-
-	std::vector<HWND> visited;
-	for (auto curHandle = handle;
-		curHandle != nullptr && !ranges::contains(visited, curHandle);
-		curHandle = GetWindow(curHandle, GW_HWNDPREV)) {
-		visited.push_back(curHandle);
-		if (curHandle == handle) {
-			continue;
-		}
-		RECT testRect, intersection;
-		if (IsWindowVisible(curHandle)
-			&& GetWindowRect(curHandle, &testRect)
-			&& IntersectRect(&intersection, &nativeRect, &testRect)) {
-			return true;
-		}
-	}
-
-	return false;
 }
 
 void ShowWindowMenu(not_null<QWidget*> widget, const QPoint &point) {

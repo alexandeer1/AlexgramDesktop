@@ -16,6 +16,8 @@
 
 namespace {
 
+constexpr auto kSkipSeconds = 15;
+
 using Command = base::Platform::SystemMediaControls::Command;
 
 using ::Platform::Q2NSString;
@@ -124,6 +126,17 @@ struct RemoteCommand {
 	[center.changePlaybackPositionCommand
 		addTarget:self
 		action:@selector(onSeek:)];
+
+	center.skipForwardCommand.preferredIntervals = @[ @(kSkipSeconds) ];
+	center.skipBackwardCommand.preferredIntervals = @[ @(kSkipSeconds) ];
+	center.skipForwardCommand.enabled = true;
+	center.skipBackwardCommand.enabled = true;
+	[center.skipForwardCommand
+		addTarget:self
+		action:@selector(onSkipForward:)];
+	[center.skipBackwardCommand
+		addTarget:self
+		action:@selector(onSkipBackward:)];
 }
 
 - (void)clearCommands {
@@ -141,6 +154,8 @@ struct RemoteCommand {
 	[center.nextTrackCommand removeTarget:self];
 	[center.previousTrackCommand removeTarget:self];
 	[center.changePlaybackPositionCommand removeTarget:self];
+	[center.skipForwardCommand removeTarget:self];
+	[center.skipBackwardCommand removeTarget:self];
 }
 
 - (rpl::producer<Command>)commandRequests {
@@ -163,6 +178,22 @@ struct RemoteCommand {
 		MPChangePlaybackPositionCommandEvent*)event {
 	base::Integration::Instance().enterFromEventLoop([&] {
 		self->_seekRequests.fire(event.positionTime * 1000);
+	});
+
+	return MPRemoteCommandHandlerStatusSuccess;
+}
+
+- (MPRemoteCommandHandlerStatus)onSkipForward:(MPRemoteCommandEvent*)event {
+	base::Integration::Instance().enterFromEventLoop([&] {
+		self->_commandRequests.fire_copy(Command::SkipForward);
+	});
+
+	return MPRemoteCommandHandlerStatusSuccess;
+}
+
+- (MPRemoteCommandHandlerStatus)onSkipBackward:(MPRemoteCommandEvent*)event {
+	base::Integration::Instance().enterFromEventLoop([&] {
+		self->_commandRequests.fire_copy(Command::SkipBackward);
 	});
 
 	return MPRemoteCommandHandlerStatusSuccess;
@@ -193,6 +224,7 @@ struct SystemMediaControls::Private {
 	const not_null<NSMutableDictionary*> info;
 	const not_null<CommandHandler*> commandHandler;
 	bool enabled = false;
+	float64 playbackRate = 1.;
 };
 
 SystemMediaControls::SystemMediaControls()
@@ -250,6 +282,13 @@ void SystemMediaControls::setPlaybackStatus(
 		SystemMediaControls::PlaybackStatus status) {
 	[MPNowPlayingInfoCenter defaultCenter].playbackState =
 		ConvertPlaybackStatus(status);
+	const auto rate = (status == PlaybackStatus::Playing)
+		? _private->playbackRate
+		: 0.;
+	[_private->info
+		setObject:[NSNumber numberWithDouble:rate]
+		forKey:MPNowPlayingInfoPropertyPlaybackRate];
+	updateDisplay();
 }
 
 void SystemMediaControls::setLoopStatus(LoopStatus status) {
@@ -301,6 +340,17 @@ void SystemMediaControls::setPosition(int position) {
 		forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
 }
 
+void SystemMediaControls::setPlaybackRate(float64 rate) {
+	_private->playbackRate = rate;
+	const auto center = [MPNowPlayingInfoCenter defaultCenter];
+	if (center.playbackState == MPNowPlayingPlaybackStatePlaying) {
+		[_private->info
+			setObject:[NSNumber numberWithDouble:rate]
+			forKey:MPNowPlayingInfoPropertyPlaybackRate];
+		updateDisplay();
+	}
+}
+
 void SystemMediaControls::setVolume(float64 volume) {
 }
 
@@ -334,9 +384,7 @@ void SystemMediaControls::clearMetadata() {
 void SystemMediaControls::updateDisplay() {
 	[[MPNowPlayingInfoCenter defaultCenter]
 		performSelectorOnMainThread:@selector(setNowPlayingInfo:)
-		withObject:((_private->enabled && _private->duration())
-			? _private->info
-			: nil)
+		withObject:(_private->enabled ? _private->info : nil)
 		waitUntilDone:false];
 }
 
@@ -348,7 +396,9 @@ auto SystemMediaControls::commandRequests() const
 rpl::producer<float64> SystemMediaControls::seekRequests() const {
 	return (
 		[_private->commandHandler seekRequests]
-	) | rpl::map([=](int position) {
+	) | rpl::filter([=] {
+		return (_private->duration() > 0.);
+	}) | rpl::map([=](int position) {
 		return float64(position) / (_private->duration() * 1000);
 	});
 }

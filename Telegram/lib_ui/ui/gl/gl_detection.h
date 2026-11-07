@@ -8,12 +8,15 @@
 
 #include "base/flags.h"
 
-// ANGLE is used only on Windows with Qt < 6.
-#if defined Q_OS_WIN && QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+// ANGLE is used on Windows with Qt < 6 and with an ANGLE-enabled Qt 6.
+#if defined Q_OS_WIN \
+	&& (QT_VERSION < QT_VERSION_CHECK(6, 0, 0) \
+		|| defined DESKTOP_APP_QT6_ANGLE)
 #define DESKTOP_APP_USE_ANGLE
-#endif // Q_OS_WIN && Qt < 6
+#endif // Q_OS_WIN && (Qt < 6 || DESKTOP_APP_QT6_ANGLE)
 
 class QOpenGLContext;
+class QWidget;
 
 namespace Ui::GL {
 
@@ -31,15 +34,19 @@ struct Capabilities {
 struct RhiCapabilities {
 	bool supported = false;
 	bool compute = false;
+	bool vulkan = false;
 };
 
 extern const char kOptionUseQtRhi[];
+extern const char kOptionForceANGLE[];
+extern const char kOptionEnableVulkanRhi[];
 
 [[nodiscard]] Capabilities CheckCapabilities(QWidget *widget = nullptr);
 [[nodiscard]] Backend ChooseBackendDefault(Capabilities capabilities);
 
 [[nodiscard]] bool WidgetsRhiEnabled();
 [[nodiscard]] bool WidgetsRhiSupported();
+[[nodiscard]] bool WidgetsRhiVulkan();
 [[nodiscard]] RhiCapabilities CheckRhiCapabilities();
 
 void ForceDisable(bool disable);
@@ -47,6 +54,7 @@ void ForceDisable(bool disable);
 void DetectLastCheckCrash();
 [[nodiscard]] bool LastCrashCheckFailed();
 void CrashCheckFinish();
+void CrashCheckFirstFrame(not_null<QWidget*> window);
 
 #ifdef DESKTOP_APP_USE_ANGLE
 enum class ANGLE {

@@ -49,7 +49,6 @@ private:
 	bool writeRefsDefinition();
 	bool writeSetPaletteColor();
 	bool writeVariableInit();
-	bool writePxValuesInit();
 	bool writeFontFamiliesInit();
 	bool writeIconValues();
 	bool writeIconsInit();

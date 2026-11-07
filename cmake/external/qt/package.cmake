@@ -5,6 +5,7 @@
 # https://github.com/desktop-app/legal/blob/master/LEGAL
 
 set(QT_NO_PRIVATE_MODULE_WARNING ON)
+set(DESKTOP_APP_WIN7_BASELINE OFF)
 
 if (NOT DESKTOP_APP_USE_PACKAGED)
     if (DEFINED ENV{QT})
@@ -19,6 +20,12 @@ if (NOT DESKTOP_APP_USE_PACKAGED)
         set(qt_loc ${libs_loc}/Qt-${qt_requested})
 
         if (qt_requested GREATER 6)
+            if (NOT build_winarm)
+                set(DESKTOP_APP_WIN7_BASELINE ON)
+                set(DESKTOP_APP_ANGLE_DIR ${libs_loc}/tg_angle)
+                include(${CMAKE_CURRENT_LIST_DIR}/../angle/qt.cmake)
+            endif()
+
             set(OPENSSL_FOUND 1)
             set(OPENSSL_INCLUDE_DIR ${libs_loc}/openssl3/include)
             set(LIB_EAY_DEBUG ${libs_loc}/openssl3/out.dbg/libcrypto.lib)
@@ -31,8 +38,8 @@ if (NOT DESKTOP_APP_USE_PACKAGED)
             set(JPEG_LIBRARY_RELEASE ${libs_loc}/mozjpeg/Release/jpeg-static.lib)
             set(ZLIB_FOUND 1)
             set(ZLIB_INCLUDE_DIR ${libs_loc}/zlib)
-            set(ZLIB_LIBRARY_DEBUG ${libs_loc}/zlib/Debug/libzsd.lib)
-            set(ZLIB_LIBRARY_RELEASE ${libs_loc}/zlib/Release/libzs.lib)
+            set(ZLIB_LIBRARY_DEBUG ${libs_loc}/zlib/Debug/zlibstaticd.lib)
+            set(ZLIB_LIBRARY_RELEASE ${libs_loc}/zlib/Release/zlibstatic.lib)
             set(WebP_INCLUDE_DIR ${libs_loc}/libwebp/src)
             set(WebP_demux_INCLUDE_DIR ${libs_loc}/libwebp/src)
             set(WebP_mux_INCLUDE_DIR ${libs_loc}/libwebp/src)
@@ -75,8 +82,8 @@ if (QT_VERSION_MAJOR GREATER_EQUAL 6)
     find_package(Qt${QT_VERSION_MAJOR} COMPONENTS OpenGL OpenGLWidgets REQUIRED)
 endif()
 
-if (QT_VERSION VERSION_GREATER_EQUAL 6.10)
-    find_package(Qt${QT_VERSION_MAJOR} COMPONENTS GuiPrivate WidgetsPrivate REQUIRED)
+if (QT_VERSION VERSION_GREATER_EQUAL 6.10 AND NOT DESKTOP_APP_DISABLE_PRIVATE_QT_API)
+    find_package(Qt${QT_VERSION_MAJOR} COMPONENTS GuiPrivate REQUIRED)
 endif()
 
 if (LINUX)

@@ -53,6 +53,7 @@ PRIVATE
     spellcheck/platform/win/spellcheck_win.h
     spellcheck/platform/platform_language.h
     spellcheck/platform/platform_spellcheck.h
+    spellcheck/platform/platform_spellcheck_async.cpp
     spellcheck/third_party/language_cld3.cpp
     spellcheck/third_party/language_cld3.h
     spellcheck/third_party/hunspell_controller.cpp
@@ -114,6 +115,7 @@ endif()
 # We should support both types of spellchecker for Windows.
 if (WIN32 OR NOT system_spellchecker)
     target_link_libraries(lib_spellcheck PRIVATE desktop-app::external_hunspell)
+    target_compile_definitions(lib_spellcheck PRIVATE SPELLCHECK_HAVE_HUNSPELL)
 else()
     remove_target_sources(lib_spellcheck ${src_loc}
         spellcheck/third_party/hunspell_controller.cpp

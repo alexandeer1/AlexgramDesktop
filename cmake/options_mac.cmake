@@ -35,6 +35,8 @@ INTERFACE
     -Wno-missing-field-initializers
     -Wno-sign-compare
     -Wno-shorten-64-to-32
+    # Xcode 27 libc++ warns below macOS 11; keep our lower target building.
+    "-Wno-error=#warnings"
 )
 
 if (DESKTOP_APP_SPECIAL_TARGET)
@@ -43,6 +45,11 @@ if (DESKTOP_APP_SPECIAL_TARGET)
         -g
         -Werror
     )
+    if (NOT CMAKE_GENERATOR STREQUAL Xcode)
+        target_compile_options(common_options INTERFACE
+            $<$<STREQUAL:$<GENEX_EVAL:$<TARGET_PROPERTY:XCODE_ATTRIBUTE_CLANG_DEBUG_INFORMATION_LEVEL>>,line-tables-only>:-gline-tables-only>
+        )
+    endif()
 endif()
 
 target_link_frameworks(common_options

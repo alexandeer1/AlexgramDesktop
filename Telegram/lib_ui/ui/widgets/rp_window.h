@@ -18,6 +18,7 @@ namespace Ui {
 namespace Platform {
 class BasicWindowHelper;
 struct HitTestRequest;
+struct SystemCommandRequest;
 enum class HitTestResult;
 } // namespace Platform
 
@@ -41,6 +42,8 @@ public:
 
 	[[nodiscard]] not_null<RpWidget*> body();
 	[[nodiscard]] not_null<const RpWidget*> body() const;
+	[[nodiscard]] RpWidget *titleWidget();
+	[[nodiscard]] const RpWidget *titleWidget() const;
 	[[nodiscard]] QMargins frameMargins() const;
 
 	// In Windows 11 the window rounding shadow takes about
@@ -57,6 +60,8 @@ public:
 		-> rpl::producer<Platform::HitTestResult>;
 	[[nodiscard]] auto systemButtonDown() const
 		-> rpl::producer<Platform::HitTestResult>;
+	[[nodiscard]] auto systemCommandRequests() const
+		-> rpl::producer<not_null<Platform::SystemCommandRequest*>>;
 	void overrideSystemButtonOver(Platform::HitTestResult button);
 	void overrideSystemButtonDown(Platform::HitTestResult button);
 

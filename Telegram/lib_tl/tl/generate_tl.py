@@ -47,7 +47,28 @@ def addTextSerialize(typeList, typeData, typesDict, idPrefix, primeType, boxed, 
       if (len(conditions)):
         result += '\tauto flag = ' + prefix + name + templateArgument + '::Flags::from_raw(' + flagRawType + '(iflag));\n\n'
       if (len(prms)):
-        result += '\tif (stage) {\n'
+        # Fields that are absent by flags are not logged at all, so their
+        # stages are skipped without writing anything, and the separator
+        # depends on whether some field was already written, not on stage.
+        notFirst = 'stage'
+        if (len(conditions)):
+          notFirst = '!first'
+          result += '\tconst auto first = !stage;\n'
+          result += '\tconst auto absent = [&](int32 index) {\n'
+          result += '\t\tswitch (index) {\n'
+          stage = 0
+          for k in prmsList:
+            if (k in conditions):
+              result += '\t\tcase ' + str(stage) + ': return !(flag & ' + prefix + name + templateArgument + '::Flag::f_' + k + ');\n'
+            stage = stage + 1
+          result += '\t\t}\n'
+          result += '\t\treturn false;\n'
+          result += '\t};\n'
+          result += '\twhile (absent(stage)) {\n'
+          result += '\t\t++stage;\n'
+          result += '\t\t++stages.back();\n'
+          result += '\t}\n\n'
+        result += '\tif (' + notFirst + ') {\n'
         result += '\t\tto.add(",\\n").addSpaces(lev);\n'
         result += '\t} else {\n'
         result += '\t\tto.add("{ ' + name + '");\n'
@@ -67,12 +88,8 @@ def addTextSerialize(typeList, typeData, typesDict, idPrefix, primeType, boxed, 
             flagBitValue = int(conditions[k])
             flagFieldName = hasFlags64 if flagBitValue >= 32 else hasFlags
             flagBitLogged = (flagBitValue - 32) if flagBitValue >= 32 else flagBitValue
-            result += 'if (flag & ' + prefix + name + templateArgument + '::Flag::f_' + k + ') { '
             result += 'to.add("YES [ BY BIT ' + str(flagBitLogged) + ' IN FIELD ' + flagFieldName + ' ]"); '
-            result += '} else { to.add("[ SKIPPED BY BIT ' + str(flagBitLogged) + ' IN FIELD ' + flagFieldName + ' ]"); } '
           else:
-            if (k in conditions):
-              result += 'if (flag & ' + prefix + name + templateArgument + '::Flag::f_' + k + ') { '
             result += 'types.push_back('
             vtypeget = re.match(r'^[Vv]ector<MTP([A-Za-z0-9\._]+)>', v)
             if (vtypeget):
@@ -123,11 +140,6 @@ def addTextSerialize(typeList, typeData, typesDict, idPrefix, primeType, boxed, 
                 result += '0'
               result += '); vtypes.push_back(0'
             result += '); stages.push_back(0); flags.push_back(0); '
-            if (k in conditions):
-              flagBitValue = int(conditions[k])
-              flagFieldName = hasFlags64 if flagBitValue >= 32 else hasFlags
-              flagBitLogged = (flagBitValue - 32) if flagBitValue >= 32 else flagBitValue
-              result += '} else { to.add("[ SKIPPED BY BIT ' + str(flagBitLogged) + ' IN FIELD ' + flagFieldName + ' ]"); } '
           result += 'break;\n'
           stage = stage + 1
         result += '\tdefault: to.add("}"); types.pop_back(); vtypes.pop_back(); stages.pop_back(); flags.pop_back(); break;\n'

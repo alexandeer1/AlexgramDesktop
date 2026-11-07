@@ -21,7 +21,6 @@
 #include <rpl/event_stream.h>
 
 namespace Ui {
-struct ExtendedContextMenu;
 class PopupMenu;
 } // namespace Ui
 
@@ -45,10 +44,6 @@ public:
 	void checkCurrentText();
 	bool enabled();
 
-	auto contextMenuCreated() {
-		return _contextMenuCreated.events();
-	}
-
 	// Windows system spellchecker forces us to perform spell operations
 	// In another thread, so the word check and getting a list of suggestions
 	// Are run asynchronously.
@@ -69,7 +64,9 @@ protected:
 	bool eventFilter(QObject *o, QEvent *e) override;
 
 private:
+#ifdef QT_SPELLCHECK_UNDERLINE_FROM_CHROME
 	void updatePalette();
+#endif // QT_SPELLCHECK_UNDERLINE_FROM_CHROME
 	void setEnabled(bool enabled);
 	void checkText(const QString &text);
 	void showSpellcheckerMenu();
@@ -123,9 +120,6 @@ private:
 	const std::optional<CustomContextMenuItem> _customContextMenuItem;
 
 	rpl::lifetime _lifetime;
-
-	using ContextMenu = Ui::InputField::ExtendedContextMenu;
-	rpl::event_stream<ContextMenu> _contextMenuCreated;
 
 };
 

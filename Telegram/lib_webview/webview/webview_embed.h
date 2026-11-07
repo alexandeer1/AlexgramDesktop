@@ -18,6 +18,7 @@
 #include <QSize>
 
 class QString;
+class QTemporaryDir;
 class QWidget;
 class QWindow;
 
@@ -41,12 +42,15 @@ struct WindowConfig {
 	QColor opaqueBg;
 	StorageId storageId;
 	QString dataProtocolOverride;
+	QString dataRequestRedirectHost;
 	bool safe = false;
+	bool allowThirdPartyCookies = false;
 	WindowMode mode = WindowMode::Embedded;
 	WindowStyle windowStyle = WindowStyle::Default;
 	QMargins windowMargins;
 	QSize initialSize;
 	QString shellMessageToken;
+	QString restrictedOrigin;
 };
 
 class Window final {
@@ -56,9 +60,10 @@ public:
 		WindowConfig config = WindowConfig());
 	~Window();
 
+	[[nodiscard]] bool valid() const;
+
 	// May be nullptr or destroyed any time (in case webview crashed).
 	[[nodiscard]] QWidget *widget() const;
-	[[nodiscard]] void *winId() const;
 	[[nodiscard]] PopupAnchor popupAnchor() const;
 
 	void updateTheme(
@@ -69,22 +74,27 @@ public:
 		QColor scrollBarBgOver);
 	void navigate(const QString &url);
 	void navigateToData(const QString &id);
+	void loadHtml(const QString &html, const QString &baseUrl);
 	void reload();
 	void setMessageHandler(Fn<void(Message)> handler);
 	void setMessageHandler(Fn<void(std::string)> handler);
 	void setMessageHandler(Fn<void(const QJsonDocument&)> handler);
-	void setNavigationStartHandler(Fn<bool(QString,bool)> handler);
+	void setNavigationPolicyHandler(Fn<bool(QString,bool)> handler);
+	void setNavigationStartHandler(Fn<void()> handler);
 	void setNavigationDoneHandler(Fn<void(bool)> handler);
 	void setExternalWindowCloseHandler(Fn<void()> handler);
+	void setFullscreenChangedHandler(Fn<void(bool)> handler);
 	void setDialogHandler(Fn<DialogResult(DialogArgs)> handler);
 	void setAsyncDialogHandler(AsyncDialogHandler handler);
+	void setPermissionHandler(PermissionHandler handler);
 	void setDataRequestHandler(Fn<DataResult(DataRequest)> handler);
 	void init(const QByteArray &js);
 	void eval(const QByteArray &js);
 
 	void focus();
-	void resize(QSize size);
 	void setFullscreen(bool fullscreen);
+	void setInputBlocked(bool blocked);
+	void setVisible(bool visible);
 	void setInteractionHandler(Fn<void()> handler);
 
 	void refreshNavigationHistoryState();
@@ -100,20 +110,27 @@ public:
 private:
 	bool createWebView(QWidget *parent, const WindowConfig &config);
 	[[nodiscard]] Fn<void(Message)> messageHandler() const;
-	[[nodiscard]] Fn<bool(std::string,bool)> navigationStartHandler() const;
+	[[nodiscard]] Fn<bool(std::string,bool)> navigationPolicyHandler() const;
+	[[nodiscard]] Fn<void()> navigationStartHandler() const;
 	[[nodiscard]] Fn<void(bool)> navigationDoneHandler() const;
 	[[nodiscard]] Fn<void()> externalWindowCloseHandler() const;
+	[[nodiscard]] Fn<void(bool)> fullscreenChangedHandler() const;
 	[[nodiscard]] Fn<DialogResult(DialogArgs)> dialogHandler() const;
 	[[nodiscard]] AsyncDialogHandler asyncDialogHandler() const;
+	[[nodiscard]] PermissionHandler permissionHandler() const;
 	[[nodiscard]] Fn<DataResult(DataRequest)> dataRequestHandler() const;
 
+	std::unique_ptr<QTemporaryDir> _temporaryStorage;
 	std::unique_ptr<Interface> _webview;
 	Fn<void(Message)> _messageHandler;
-	Fn<bool(std::string,bool)> _navigationStartHandler;
+	Fn<bool(std::string,bool)> _navigationPolicyHandler;
+	Fn<void()> _navigationStartHandler;
 	Fn<void(bool)> _navigationDoneHandler;
 	Fn<void()> _externalWindowCloseHandler;
+	Fn<void(bool)> _fullscreenChangedHandler;
 	Fn<DialogResult(DialogArgs)> _dialogHandler;
 	AsyncDialogHandler _asyncDialogHandler;
+	PermissionHandler _permissionHandler;
 	Fn<DataResult(DataRequest)> _dataRequestHandler;
 	Fn<void()> _interactionHandler;
 	rpl::lifetime _lifetime;

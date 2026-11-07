@@ -100,6 +100,7 @@ RoundButton {
 	width: pixels;
 	height: pixels;
 	radius: pixels;
+	fullRadius: bool;
 	padding: margins;
 
 	textTop: pixels;
@@ -307,6 +308,7 @@ InputField {
 	placeholderAlign: align;
 	placeholderScale: double;
 	placeholderShift: pixels;
+	placeholderShiftLeft: pixels;
 	placeholderFont: font;
 
 	duration: int;
@@ -489,19 +491,6 @@ MultiSelect {
 	fieldIconSkip: pixels;
 	fieldCancel: CrossButton;
 	fieldCancelSkip: pixels;
-}
-
-CallButton {
-	button: IconButton;
-	bg: color;
-	bgSize: pixels;
-	bgPosition: point;
-	angle: double;
-	outerRadius: pixels;
-	outerBg: color;
-	label: FlatLabel;
-	cornerButtonPosition: point;
-	cornerButtonBorder: pixels;
 }
 
 InnerDropdown {
@@ -1564,7 +1553,7 @@ defaultToast: Toast {
 	padding: margins(19px, 13px, 19px, 12px);
 	margin: margins(13px, 13px, 13px, 13px);
 	maxWidth: 480px;
-	radius: 6px;
+	radius: 8px;
 	durationFadeIn: 200;
 	durationFadeOut: 1000;
 	durationSlide: 160;
@@ -1692,6 +1681,7 @@ callShadow: Shadow {
 
 sideBarButtonLockArcOffset: 2px;
 sideBarButtonLockSize: size(9px, 10px);
+sideBarButtonLockCornerShift: 5px;
 sideBarButtonLockArcHeight: 3px;
 sideBarButtonLockBlockHeight: 5px;
 sideBarButtonLockPenWidth: 3px;

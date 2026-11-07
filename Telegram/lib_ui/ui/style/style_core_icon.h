@@ -19,7 +19,15 @@ namespace internal {
 class IconMask {
 public:
 	template <int N>
-	IconMask(const uchar (&data)[N]) : _data(data), _size(N) {
+	constexpr IconMask(const uchar (&data)[N]) : _data(data), _size(N) {
+		static_assert(N > 0, "invalid image data");
+	}
+
+	template <int N>
+	constexpr IconMask(const uchar (&data)[N], QSize rendered)
+	: _data(data)
+	, _size(N)
+	, _rendered(rendered) {
 		static_assert(N > 0, "invalid image data");
 	}
 
@@ -29,10 +37,14 @@ public:
 	int size() const {
 		return _size;
 	}
+	QSize rendered() const {
+		return _rendered;
+	}
 
 private:
 	const uchar *_data;
 	const int _size;
+	const QSize _rendered;
 
 };
 
@@ -81,6 +93,7 @@ public:
 
 private:
 	void ensureLoaded() const;
+	void ensureColorized() const;
 	void createCachedPixmap() const;
 	void ensureColorizedImage(QColor color) const;
 	[[nodiscard]] QSize inner() const;
@@ -91,6 +104,9 @@ private:
 	mutable QImage _maskImage, _colorizedImage;
 	mutable QPixmap _pixmap; // for pixmaps
 	mutable QSize _size; // for rects
+	mutable uint32 _pixmapColorKey = 0;
+	// withPalette() copies colorize privately, off the shared pixmap cache.
+	bool _ownPixmap = false;
 
 };
 
@@ -172,11 +188,16 @@ private:
 	mutable int _width = -1;
 	mutable int _height = -1;
 
+	// withPalette() copies are bound to one style::palette copy and are only
+	// ever reset through it, so they stay out of the global registry - which
+	// also means they never touch it from whatever thread built them.
+	bool _registered = false;
+
 };
 
 class Icon {
 public:
-	Icon(Qt::Initialization = Qt::Uninitialized) {
+	constexpr Icon(Qt::Initialization = Qt::Uninitialized) {
 	}
 
 	template <typename ... MonoIcons>
@@ -207,6 +228,11 @@ public:
 
 	bool empty() const {
 		return _data->empty();
+	}
+	void reset() const {
+		if (_data) {
+			_data->reset();
+		}
 	}
 
 	int width() const {

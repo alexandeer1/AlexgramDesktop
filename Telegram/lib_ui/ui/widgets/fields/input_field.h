@@ -12,11 +12,11 @@
 #include "ui/rp_widget.h"
 #include "ui/effects/animations.h"
 #include "ui/text/text_entity.h"
-#include "ui/text/text_custom_emoji.h"
 
 #include <rpl/variable.h>
 
 #include <QtGui/QTextCursor>
+#include <QShortcut>
 
 #include <any>
 
@@ -27,6 +27,7 @@ class QContextMenuEvent;
 class Painter;
 
 namespace Ui::Text {
+struct MarkedContext;
 struct QuotePaintCache;
 } // namespace Ui::Text
 
@@ -86,6 +87,8 @@ class CustomFieldObject;
 
 struct MarkdownEnabled {
 	base::flat_set<QString> tagsSubset;
+	bool typedTags = true;
+	bool instantTags = false;
 
 	friend inline bool operator==(
 		const MarkdownEnabled &,
@@ -101,6 +104,8 @@ struct MarkdownEnabledState {
 
 	[[nodiscard]] bool disabled() const;
 	[[nodiscard]] bool enabledForTag(QStringView tag) const;
+	[[nodiscard]] bool typedTagsEnabled() const;
+	[[nodiscard]] bool instantTagsEnabled() const;
 
 	friend inline bool operator==(
 		const MarkdownEnabledState &,
@@ -144,6 +149,19 @@ public:
 		bool closed = false;
 		QString tag;
 	};
+
+	struct TabbedRequest {
+		bool backward = false;
+		bool handled = false;
+
+		// Set when Tab should follow the default focus order instead: in
+		// screen reader mode the buttons and settings around the fields
+		// are Tab stops, and a handler that would only pass the focus on
+		// to another field is expected to leave the request alone. One
+		// that uses Tab for something else - accepting a suggestion -
+		// goes ahead as usual.
+		bool defaultOrder = false;
+	};
 	static const QString kTagBold;
 	static const QString kTagItalic;
 	static const QString kTagUnderline;
@@ -164,6 +182,7 @@ public:
 	static const int kCustomEmojiId; // QTextFormat::Property
 	static const int kCustomEmojiLink; // QTextFormat::Property
 	static const int kQuoteId; // QTextFormat::Property
+	static const int kMisspelledProperty; // QTextFormat::Property
 
 	InputField(
 		QWidget *parent,
@@ -242,22 +261,36 @@ public:
 		Check,
 		Edit,
 	};
+	enum class EditLinkItems : uchar {
+		None,
+		DateOnly,
+		LinkAndDate,
+	};
 	void setEditLinkCallback(
 		Fn<bool(
 			EditLinkSelection selection,
 			TextWithTags text,
 			QString link,
-			EditLinkAction action)> callback);
+			EditLinkAction action)> callback,
+		EditLinkItems items = EditLinkItems::LinkAndDate);
 	void setEditLanguageCallback(
 		Fn<void(QString now, Fn<void(QString)> save)> callback);
 
-	struct ExtendedContextMenu {
-		QMenu *menu = nullptr;
-		std::shared_ptr<QContextMenuEvent> event;
-		Fn<void(not_null<PopupMenu*>)> setupPopupMenu;
+	// A hook gets a chance to customize the popup menu the field is about to
+	// show. It runs synchronously during the menu build; for hooks that need
+	// async data before the menu can be shown (spell checking), call
+	// awaitAsyncWork() and invoke the returned callback once finished - the
+	// menu is shown only after every such callback has fired.
+	struct ContextMenuRequest {
+		not_null<QMenu*> menu;
+		not_null<QContextMenuEvent*> event;
+		Fn<void(Fn<void(not_null<PopupMenu*>)>)> customizePopupMenu;
+		Fn<Fn<void()>()> awaitAsyncWork;
 	};
+	using ContextMenuHook = Fn<void(ContextMenuRequest)>;
 
 	void setPlaceholderColorOverride(const style::color &color);
+	void updatePalette();
 
 	void setDocumentMargin(float64 margin);
 	void setAdditionalMargin(int margin);
@@ -273,7 +306,7 @@ public:
 	[[nodiscard]] bool instantViewEditorTagsEnabled() const {
 		return _instantViewEditorTagsEnabled;
 	}
-	void setExtendedContextMenu(rpl::producer<ExtendedContextMenu> value);
+	void addContextMenuHook(ContextMenuHook hook);
 	void commitInstantReplacement(
 		int from,
 		int till,
@@ -283,6 +316,20 @@ public:
 		EditLinkSelection selection,
 		const TextWithTags &textWithTags,
 		const QString &link);
+	[[nodiscard]] InputFieldTextRange selectionEditMarkdownTagRange(
+		InputFieldTextRange selection,
+		const QString &tag) const;
+	void commitMarkdownTagEdit(
+		InputFieldTextRange range,
+		const QString &tag,
+		const QString &text);
+	[[nodiscard]] bool isMarkdownTagActive(const QString &tag) const;
+	[[nodiscard]] QString selectionMarkdownTagForToggle(
+		const QString &tag) const;
+	void toggleCurrentMarkdownTag(const QString &tag);
+	void clearCurrentMarkdown();
+	[[nodiscard]] bool hasCurrentMarkdownLink() const;
+	void editCurrentMarkdownLink();
 	[[nodiscard]] static bool IsValidMarkdownLink(QStringView link);
 	[[nodiscard]] static bool IsCustomEmojiLink(QStringView link);
 	[[nodiscard]] static QString CustomEmojiLink(QStringView entityData);
@@ -342,6 +389,8 @@ public:
 	void setFocus();
 	void clearFocus();
 	void ensureCursorVisible();
+	Qt::InputMethodHints inputMethodHints() const;
+	void setInputMethodHints(Qt::InputMethodHints hints);
 	not_null<QTextEdit*> rawTextEdit();
 	not_null<const QTextEdit*> rawTextEdit() const;
 
@@ -380,7 +429,7 @@ public:
 
 	[[nodiscard]] rpl::producer<> heightChanges() const;
 	[[nodiscard]] rpl::producer<bool> focusedChanges() const;
-	[[nodiscard]] rpl::producer<not_null<bool*>> tabbed() const;
+	[[nodiscard]] rpl::producer<not_null<TabbedRequest*>> tabbed() const;
 	[[nodiscard]] rpl::producer<> cancelled() const;
 	[[nodiscard]] rpl::producer<> changes() const;
 	[[nodiscard]] rpl::producer<Qt::KeyboardModifiers> submits() const;
@@ -417,10 +466,11 @@ private:
 	};
 
 	void handleContentsChanged();
+	void refreshSpoilerOverlay();
 	void updateRootFrameFormat();
 	bool viewportEventInner(QEvent *e);
 
-	void updatePalette();
+	void applyPaletteColors(bool onlyIfChanged);
 	void refreshPlaceholder(const QString &text);
 	int placeholderSkipWidth() const;
 	[[nodiscard]] QMargins placeholderPaintMargins() const;
@@ -439,14 +489,15 @@ private:
 	void focusOutEventInner(QFocusEvent *e);
 	void setFocused(bool focused);
 	void keyPressEventInner(QKeyEvent *e);
-	void contextMenuEventInner(
-		QContextMenuEvent *e,
-		QMenu *m = nullptr,
-		Fn<void(not_null<PopupMenu*>)> setupPopupMenu = nullptr);
+	void contextMenuEventInner(QContextMenuEvent *e);
 	void dropEventInner(QDropEvent *e);
 	void inputMethodEventInner(QInputMethodEvent *e);
+	void updateInnerInputMethodHints();
 	void paintEventInner(QPaintEvent *e);
 	void paintQuotes(QPaintEvent *e);
+#ifndef QT_SPELLCHECK_UNDERLINE_FROM_CHROME
+	void paintMisspelled(QPaintEvent *e);
+#endif // !QT_SPELLCHECK_UNDERLINE_FROM_CHROME
 
 	void mousePressEventInner(QMouseEvent *e);
 	void mouseReleaseEventInner(QMouseEvent *e);
@@ -519,6 +570,7 @@ private:
 		EditLinkData *outData);
 	void editMarkdownLink(EditLinkSelection selection);
 	void editMarkdownDate(EditLinkSelection selection);
+	[[nodiscard]] EditLinkItems editLinkItems() const;
 
 	void commitInstantReplacement(
 		int from,
@@ -527,13 +579,11 @@ private:
 		const QString &customEmojiData,
 		std::optional<QString> checkOriginal,
 		bool checkIfInMonospace);
-#if 0
 	bool commitMarkdownReplacement(
 		int from,
 		int till,
 		const QString &tag,
 		const QString &edge = QString());
-#endif
 	TextRange insertWithTags(TextRange range, TextWithTags text);
 	TextRange addMarkdownTag(TextRange range, const QString &tag);
 	void removeMarkdownTag(TextRange range, const QString &tag);
@@ -584,6 +634,7 @@ private:
 	int _maxHeight = -1;
 
 	const std::unique_ptr<Inner> _inner;
+	Qt::InputMethodHints _inputMethodHints;
 
 	Fn<bool(
 		EditLinkSelection selection,
@@ -593,6 +644,7 @@ private:
 	Fn<void(QString now, Fn<void(QString)> save)> _editLanguageCallback;
 	TextWithTags _lastTextWithTags;
 	std::vector<MarkdownTag> _lastMarkdownTags;
+	bool _committingMarkdownReplacement = false;
 	QString _lastPreEditText;
 	std::optional<QString> _inputMethodCommit;
 	mutable std::vector<TextRange> _spoilerRangesText;
@@ -632,6 +684,7 @@ private:
 	SubmitSettings _submitSettings = SubmitSettings::Enter;
 	MarkdownEnabledState _markdownEnabledState;
 	MarkdownSet _markdownSet = MarkdownSet::All;
+	EditLinkItems _editLinkItems = EditLinkItems::LinkAndDate;
 	bool _instantViewEditorTagsEnabled = false;
 	bool _undoAvailable = false;
 	bool _redoAvailable = false;
@@ -663,6 +716,7 @@ private:
 	MimeDataHook _mimeDataHook;
 	rpl::event_stream<bool> _menuShownChanges;
 	base::unique_qptr<PopupMenu> _contextMenu;
+	std::vector<ContextMenuHook> _contextMenuHooks;
 
 	QTextCharFormat _defaultCharFormat;
 
@@ -689,10 +743,11 @@ private:
 	rpl::event_stream<MarkdownTag> _markdownTagApplies;
 
 	std::vector<std::unique_ptr<QShortcut>> _markdownShortcuts;
+	QShortcut _pasteShortcut;
 
 	rpl::event_stream<bool> _focusedChanges;
 	rpl::event_stream<> _heightChanges;
-	rpl::event_stream<not_null<bool*>> _tabbed;
+	rpl::event_stream<not_null<TabbedRequest*>> _tabbed;
 	rpl::event_stream<> _cancelled;
 	rpl::event_stream<> _changes;
 	rpl::event_stream<Qt::KeyboardModifiers> _submits;

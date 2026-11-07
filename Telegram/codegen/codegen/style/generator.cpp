@@ -8,6 +8,7 @@
 
 #include "base/crc32hash.h"
 
+#include <algorithm>
 #include <set>
 #include <memory>
 #include <functional>
@@ -449,8 +450,8 @@ public:\n\
 	static constexpr auto kCount = " << (2 + module_.variablesCount()) << ";\n\
 	static int32 Checksum();\n\
 \n\
-	inline const color &transparent() const { return _colors[0]; }; // special color\n\
-	inline const color &white() const { return _colors[1]; }; // special color\n";
+	inline constexpr const color &transparent() const { return _colors[0]; }; // special color\n\
+	inline constexpr const color &white() const { return _colors[1]; }; // special color\n";
 
 	auto indexInPalette = 2;
 	if (!module_.enumVariables([&](const Variable &variable) -> bool {
@@ -460,7 +461,7 @@ public:\n\
 		}
 
 		auto index = (indexInPalette++);
-		header_->stream() << "\tinline const color &" << name << "() const { return _colors[" << index << "]; };\n";
+		header_->stream() << "\tinline constexpr const color &" << name << "() const { return _colors[" << index << "]; };\n";
 		return true;
 	})) return false;
 	const auto count = indexInPalette;
@@ -855,7 +856,7 @@ int GetPaletteIndex(QLatin1String name) {\n\
 
 			auto keyChar = name[checking];
 			auto usedIfForCheckCount = 0;
-			auto minimalLengthCheck = countMinimalLength(i, e, checking);
+			auto minimalLengthCheck = int(countMinimalLength(i, e, checking));
 			for (; checking + usedIfForCheckCount != name.size(); ++usedIfForCheckCount) {
 				if (!canUseIfForCheck(i, e, checking + usedIfForCheckCount)
 					|| countMinimalLength(i, e, checking + usedIfForCheckCount) != minimalLengthCheck) {
@@ -887,7 +888,9 @@ int GetPaletteIndex(QLatin1String name) {\n\
 				for (auto i = 1; i != usedIfForCheckCount; ++i) {
 					checkTypes.push_back(UsedCheckType::UpcomingIf);
 					chars.push_back(keyChar);
-					checkLengthHistory.push_back(qMax(minimalLengthCheck, checkLengthHistory.back()));
+					checkLengthHistory.push_back(std::max(
+						minimalLengthCheck,
+						checkLengthHistory.back()));
 					keyChar = name[checking + i];
 				}
 			} else {
@@ -896,7 +899,9 @@ int GetPaletteIndex(QLatin1String name) {\n\
 			}
 			++tabsUsed;
 			chars.push_back(keyChar);
-			checkLengthHistory.push_back(qMax(minimalLengthCheck, checkLengthHistory.back()));
+			checkLengthHistory.push_back(std::max(
+				minimalLengthCheck,
+				checkLengthHistory.back()));
 		}
 		source_->stream() << tabs(tabsUsed) << "return (size == " << chars.size() << ") ? " << index << " : -1;\n";
 	}
@@ -937,12 +942,9 @@ bool Generator::writeVariableInit() {
 	if (!collectUniqueValues()) {
 		return false;
 	}
-	bool hasUniqueValues = (!pxValues_.isEmpty() || !fontFamilies_.isEmpty() || !iconMasks_.isEmpty());
+	bool hasUniqueValues = (!fontFamilies_.isEmpty() || !iconMasks_.isEmpty());
 	if (hasUniqueValues) {
 		source_->pushNamespace();
-		if (!writePxValuesInit()) {
-			return false;
-		}
 		if (!writeFontFamiliesInit()) {
 			return false;
 		}
@@ -975,8 +977,13 @@ void init_" << baseName_ << "(int scale) {\n\
 	}
 
 	if (!pxValues_.isEmpty() || !fontFamilies_.isEmpty()) {
-		if (!pxValues_.isEmpty()) {
-			source_->stream() << "\tinitPxValues(scale);\n";
+		for (auto i = pxValues_.cbegin(), e = pxValues_.cend(); i != e; ++i) {
+			const auto value = i.key();
+			if (!value) {
+				source_->stream() << "\tconstexpr int " << pxValueName(value) << " = 0;\n";
+			} else {
+				source_->stream() << "\tconst int " << pxValueName(value) << " = ConvertScale(" << value << ", scale);\n";
+			}
 		}
 		if (!fontFamilies_.isEmpty()) {
 			source_->stream() << "\tinitFontFamilies();\n";
@@ -998,25 +1005,6 @@ void init_" << baseName_ << "(int scale) {\n\
 		return true;
 	})) {
 		return false;
-	}
-	source_->stream() << "\
-}\n\n";
-	return true;
-}
-
-bool Generator::writePxValuesInit() {
-	if (pxValues_.isEmpty()) {
-		return true;
-	}
-
-	for (auto i = pxValues_.cbegin(), e = pxValues_.cend(); i != e; ++i) {
-		source_->stream() << "int " << pxValueName(i.key()) << " = " << i.key() << ";\n";
-	}
-	source_->stream() << "\
-void initPxValues(int scale) {\n";
-	for (auto it = pxValues_.cbegin(), e = pxValues_.cend(); it != e; ++it) {
-		auto value = it.key();
-		source_->stream() << "\t" << pxValueName(value) << " = ConvertScale(" << value << ", scale);\n";
 	}
 	source_->stream() << "\
 }\n\n";
@@ -1056,6 +1044,27 @@ QByteArray iconMaskValueSize(int width, int height) {
 	return result;
 }
 
+[[nodiscard]] QString iconMaskSvgPath(const QString &filepath) {
+	if (filepath.startsWith("size://")) {
+		return QString();
+	}
+	const auto fileInfo = QFileInfo(filepath);
+	const auto path = fileInfo.dir().absoluteFilePath(
+		fileInfo.fileName().split('-')[0] + ".svg");
+	return QFileInfo(path).exists() ? path : QString();
+}
+
+[[nodiscard]] QSize iconMaskSizeModifier(const QString &filepath) {
+	auto result = QSize();
+	const auto modifiers = QFileInfo(filepath).fileName().split('-').mid(1);
+	for (const auto &modifierName : modifiers) {
+		if (const auto size = GetSizeModifier(modifierName)) {
+			result = *size;
+		}
+	}
+	return result;
+}
+
 QByteArray iconMaskValueSvg(QString filepath) {
 	QFileInfo fileInfo(filepath);
 	auto directory = fileInfo.dir();
@@ -1075,14 +1084,11 @@ QByteArray iconMaskValueSvg(QString filepath) {
 		common::logError(common::kErrorFileNotOpened, path) << "invalid svg data";
 		return {};
 	}
-	auto size = QSize();
 	for (const auto &modifierName : modifiers) {
 		if (const auto modifier = GetModifier(modifierName)) {
 			common::logError(common::kErrorInternal, filepath) << "modifiers not supported for svg yet";
 			return {};
-		} else if (const auto sizeOverride = GetSizeModifier(modifierName)) {
-			size = *sizeOverride;
-		} else {
+		} else if (!GetSizeModifier(modifierName)) {
 			common::logError(common::kErrorInternal, filepath) << "modifier should be valid here, name: " << modifierName.toStdString();
 			return {};
 		}
@@ -1090,18 +1096,8 @@ QByteArray iconMaskValueSvg(QString filepath) {
 
 	QByteArray result;
 	QLatin1String svgTag("SVG:");
-	QLatin1String sizeTag("SIZE:");
-	result.reserve(svgTag.size()
-		+ (size.isEmpty() ? 0 : (sizeTag.size() + 8))
-		+ bytes.size());
+	result.reserve(svgTag.size() + bytes.size());
 	result.append(svgTag.data(), svgTag.size());
-	if (!size.isEmpty()) {
-		result.append(sizeTag.data(), sizeTag.size());
-
-		QDataStream stream(&result, QIODevice::Append);
-		stream.setVersion(QDataStream::Qt_5_1);
-		stream << qint32(size.width()) << qint32(size.height());
-	}
 	result.append(bytes);
 	return result;
 }
@@ -1188,18 +1184,23 @@ bool Generator::writeIconValues() {
 		return true;
 	}
 
+	// Size variants of one svg share a single embedded copy.
+	auto svgDataOwners = QMap<QString, int>();
 	for (auto i = iconMasks_.cbegin(), e = iconMasks_.cend(); i != e; ++i) {
-		QString filePath = i.key();
-		QByteArray maskData;
-		QFileInfo fileInfo(filePath);
+		const auto filePath = i.key();
+		auto maskData = QByteArray();
 		if (filePath.startsWith("size://")) {
-			QStringList dimensions = filePath.mid(7).split(',');
+			const auto dimensions = filePath.mid(7).split(',');
 			if (dimensions.size() < 2 || dimensions.at(0).toInt() <= 0 || dimensions.at(1).toInt() <= 0) {
 				common::logError(common::kErrorFileNotOpened, filePath) << "bad dimensions";
 				return false;
 			}
 			maskData = iconMaskValueSize(dimensions.at(0).toInt(), dimensions.at(1).toInt());
-		} else if (QFileInfo(fileInfo.dir().absoluteFilePath(fileInfo.fileName().split('-')[0] + ".svg")).exists()) {
+		} else if (const auto svgPath = iconMaskSvgPath(filePath); !svgPath.isEmpty()) {
+			if (svgDataOwners.contains(svgPath)) {
+				continue;
+			}
+			svgDataOwners.insert(svgPath, i.value());
 			maskData = iconMaskValueSvg(filePath);
 		} else {
 			maskData = iconMaskValuePng(filePath);
@@ -1207,9 +1208,21 @@ bool Generator::writeIconValues() {
 		if (maskData.isEmpty()) {
 			return false;
 		}
-		source_->stream() << "const uchar iconMask" << i.value() << "Data[] = " << stringToBinaryArray(std::string(maskData.constData(), maskData.size())) << ";\n";
-		source_->stream() << "IconMask iconMask" << i.value() << "(iconMask" << i.value() << "Data);\n\n";
+		source_->stream() << "const uchar iconMask" << i.value() << "Data[] = " << stringToBinaryArray(std::string(maskData.constData(), maskData.size())) << ";\n\n";
 	}
+	for (auto i = iconMasks_.cbegin(), e = iconMasks_.cend(); i != e; ++i) {
+		const auto filePath = i.key();
+		auto dataIndex = i.value();
+		auto sizeArgument = QString();
+		if (const auto svgPath = iconMaskSvgPath(filePath); !svgPath.isEmpty()) {
+			dataIndex = svgDataOwners.value(svgPath, dataIndex);
+			if (const auto size = iconMaskSizeModifier(filePath); !size.isEmpty()) {
+				sizeArgument = QString(", { %1, %2 }").arg(size.width()).arg(size.height());
+			}
+		}
+		source_->stream() << "IconMask iconMask" << i.value() << "(iconMask" << dataIndex << "Data" << sizeArgument << ");\n";
+	}
+	source_->stream() << "\n";
 	return true;
 }
 

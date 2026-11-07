@@ -13,7 +13,6 @@ def run(project, arguments, buildType=''):
     cmake = ['cmake']
     vsArch = ''
     explicitGenerator = False
-    explicitToolset = ''
     for arg in arguments:
         if arg == 'debug':
             cmake.append('-DCMAKE_BUILD_TYPE=Debug')
@@ -22,49 +21,16 @@ def run(project, arguments, buildType=''):
         elif arg != 'force':
             if arg.startswith('-G'):
                 explicitGenerator = True
-            elif arg.startswith('-T'):
-                explicitToolset = arg
-                continue
             cmake.append(arg)
     if sys.platform == 'win32' and not explicitGenerator:
-        toolset = 'v143'
-        vs_version = os.environ.get('VisualStudioVersion')
-        if vs_version:
-            major = vs_version.split('.')[0]
-            if major == '18':
-                toolset = 'v145'
-            elif major == '17':
-                toolset = 'v143'
-            elif major == '16':
-                toolset = 'v142'
-        else:
-            for path in [
-                r"C:\Program Files (x86)\Microsoft Visual Studio\18",
-                r"C:\Program Files\Microsoft Visual Studio\18"
-            ]:
-                if os.path.exists(path):
-                    toolset = 'v145'
-                    break
-        toolset_arg = toolset
-        if explicitToolset:
-            val = explicitToolset[2:].strip()
-            if val.startswith('host='):
-                toolset_arg = f'{toolset},{val}' if toolset else val
-            else:
-                toolset_arg = val
         if vsArch == 'x64':
             cmake.append('-Ax64')
-            if toolset_arg:
-                cmake.append(f'-T{toolset_arg}')
+            cmake.append('-T v143')
         elif vsArch == 'arm':
             cmake.append('-AARM64')
-            if explicitToolset:
-                if toolset_arg:
-                    cmake.append(f'-T{toolset_arg}')
         else:
             cmake.append('-AWin32') # default
-            if toolset_arg:
-                cmake.append(f'-T{toolset_arg}')
+            cmake.append('-T v143')
     elif vsArch != '':
         print("[ERROR] x86/x64/arm switch is supported only with Visual Studio.")
         return 1
@@ -88,9 +54,7 @@ def run(project, arguments, buildType=''):
                 if len(target) > 0:
                     cmake.append('-DDESKTOP_APP_SPECIAL_TARGET=' + target)
 
-    if sys.platform != 'win32':
-        cmake.extend(['-Werror=dev', '-Werror=deprecated', '--warn-uninitialized'])
-    cmake.extend(['..' if not buildType else '../..'])
+    cmake.extend(['-Werror=dev', '-Werror=deprecated', '--warn-uninitialized', '..' if not buildType else '../..'])
     command = '"' + '" "'.join(cmake) + '"'
 
     if not os.path.exists(basePath):

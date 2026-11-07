@@ -11,6 +11,7 @@
 #include <QtCore/QMap>
 #include <QtCore/QDir>
 #include <QtCore/QRegularExpression>
+#include <QtCore/QTextStream>
 #include "codegen/common/basic_tokenized_file.h"
 #include "codegen/common/logging.h"
 #include "base/qt/qt_string_view.h"
@@ -86,6 +87,7 @@ bool ParsedFile::read() {
 	if (!file_.read()) {
 		return false;
 	}
+	loadTagOrder();
 
 	do {
 		if (auto keyToken = file_.getToken(BasicType::String)) {
@@ -114,6 +116,20 @@ bool ParsedFile::read() {
 	fillPluralTags();
 
 	return !failed();
+}
+
+void ParsedFile::loadTagOrder() {
+	auto file = QFile(options_.outputPath + "/lang_auto.tags");
+	if (!file.open(QIODevice::ReadOnly)) {
+		return;
+	}
+	auto stream = QTextStream(&file);
+	while (!stream.atEnd()) {
+		const auto tag = stream.readLine().trimmed();
+		if (!tag.isEmpty()) {
+			result_.tags.push_back({ tag });
+		}
+	}
 }
 
 void ParsedFile::fillPluralTags() {

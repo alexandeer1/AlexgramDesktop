@@ -5,6 +5,9 @@
 # https://github.com/desktop-app/legal/blob/master/LEGAL
 
 if (APPLE AND NOT DESKTOP_APP_DISABLE_SWIFT6)
+    if (CMAKE_GENERATOR MATCHES "Ninja" AND DESKTOP_APP_MAC_ARCH)
+        set(CMAKE_OSX_ARCHITECTURES "${DESKTOP_APP_MAC_ARCH}")
+    endif()
     enable_language(Swift)
 
     set(CMAKE_Swift_LANGUAGE_VERSION 6)
@@ -15,6 +18,17 @@ if (APPLE AND NOT DESKTOP_APP_DISABLE_SWIFT6)
     add_library(lib_translate STATIC
         translate_provider_mac_swift.swift
     )
+
+    if (CMAKE_GENERATOR MATCHES "Ninja" AND DESKTOP_APP_MAC_ARCH)
+        set(swift_deployment_target "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+        if (DESKTOP_APP_MAC_ARCH STREQUAL "arm64"
+            AND swift_deployment_target VERSION_LESS 11.0)
+            set(swift_deployment_target 11.0)
+        endif()
+        target_compile_options(lib_translate PRIVATE
+            -target "${DESKTOP_APP_MAC_ARCH}-apple-macosx${swift_deployment_target}"
+        )
+    endif()
 
     target_include_directories(lib_translate
     PUBLIC

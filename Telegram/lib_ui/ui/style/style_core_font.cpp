@@ -9,7 +9,9 @@
 #include "base/algorithm.h"
 #include "base/debug_log.h"
 #include "base/base_file_utilities.h"
-#include "ui/integration.h"
+#include "ui/text/text_shaper.h"
+
+#include <atomic>
 
 #include <QtCore/QMap>
 #include <QtCore/QVector>
@@ -373,7 +375,7 @@ void StartFonts() {
 	const auto name = u"Open Sans"_q;
 
 	for (const auto &file : QDir(u":/gui/fonts/"_q).entryInfoList()) {
-		LoadCustomFont(file.canonicalFilePath());
+		LoadCustomFont(Ui::Text::FontPath(file.canonicalFilePath()));
 	}
 
 	if (!QFontInfo(name).family().trimmed().startsWith(
@@ -438,8 +440,8 @@ FontData::FontData(const FontResolveResult &result, FontVariants *modified)
 	spacew = width(QLatin1Char(' '));
 	elidew = width(u"..."_q);
 
-	fascent = QFixed::fromReal(result.ascent);
-	fleading = QFixed::fromReal(_m.leading());
+	fascent = Ui::Fixed::FromReal(result.ascent);
+	fleading = Ui::Fixed::FromReal(_m.leading());
 }
 
 Font FontData::bold(bool set) const {
@@ -523,12 +525,44 @@ void Font::init(
 	_data = &i->second->data;
 }
 
+QString FontData::elided(
+		const QString &str,
+		int width,
+		Qt::TextElideMode mode) const {
+	auto result = _m.elidedText(str, mode, width);
+	if (result != str) {
+		NotifyElided(str, width);
+	}
+	return result;
+}
+
 OwnedFont::OwnedFont(const QString &custom, FontFlags flags, int size)
 : _data(ResolveFont(custom, flags, size), nullptr) {
 	_font._data = &_data;
 }
 
 } // namespace internal
+
+namespace {
+
+std::atomic<ElisionObserver> ElisionObserverInstance = nullptr;
+
+} // namespace
+
+void SetElisionObserver(ElisionObserver observer) {
+	ElisionObserverInstance.store(observer, std::memory_order_release);
+}
+
+bool ElisionObserved() {
+	return ElisionObserverInstance.load(std::memory_order_acquire) != nullptr;
+}
+
+void NotifyElided(const QString &text, int width) {
+	if (const auto observer = ElisionObserverInstance.load(
+			std::memory_order_acquire)) {
+		observer(text, width);
+	}
+}
 
 const FontResolveResult *FindAdjustResult(const QFont &font) {
 	const auto key = internal::QtFontKey(font);

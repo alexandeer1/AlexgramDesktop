@@ -34,6 +34,11 @@ void ResizeFitChild(
 	not_null<RpWidget*> child,
 	int heightMin = 0);
 
+// Rewire the visual Tab order of every container above this widget that keeps
+// one - for a Tab-focusable widget created or replaced deeper in the tree than
+// those containers watch. See RpWidget::setVisualTabOrder.
+void RefreshVisualTabOrder(not_null<QWidget*> widget);
+
 template <typename Widget, typename Traits>
 class RpWidgetBase;
 
@@ -45,6 +50,12 @@ public:
 	[[nodiscard]] virtual const QWidget *rpWidget() const = 0;
 
 	[[nodiscard]] rpl::producer<not_null<QEvent*>> events() const;
+	// Existing subscriptions to geometryValue(), sizeValue(), heightValue(),
+	// widthValue(), positionValue(), leftValue(), and topValue() are fed by
+	// delivered move/resize events. While hidden, a geometry change may leave
+	// the last emitted value unchanged until pending events are delivered.
+	// Use naturalWidthValue() for width maintained by setNaturalWidth() when
+	// that value must emit synchronously while hidden.
 	[[nodiscard]] rpl::producer<QRect> geometryValue() const;
 	[[nodiscard]] rpl::producer<QSize> sizeValue() const;
 	[[nodiscard]] rpl::producer<int> heightValue() const;
@@ -372,8 +383,11 @@ private:
 struct AccessibilityState {
 	bool checkable : 1 = false;
 	bool checked : 1 = false;
+	bool extSelectable : 1 = false;
+	bool multiSelectable : 1 = false;
 	bool pressed : 1 = false;
 	bool readOnly : 1 = false;
+	bool selectable : 1 = false;
 	bool selected : 1 = false;
 
 	void writeTo(QAccessible::State &state);
@@ -390,7 +404,9 @@ public:
 	// Resize to minimum of natural width and available width.
 	void resizeToNaturalWidth(int newWidth) {
 		const auto natural = naturalWidth();
-		resizeToWidth((natural >= 0) ? qMin(newWidth, natural) : newWidth);
+		resizeToWidth((natural >= 0)
+			? std::min(newWidth, natural)
+			: newWidth);
 	}
 
 	// Updates the area that is visible inside the scroll container.
@@ -415,6 +431,24 @@ public:
 	[[nodiscard]] virtual QStringList accessibilityActionNames();
 	virtual void accessibilityDoAction(const QString &name);
 	[[nodiscard]] virtual int accessibilityChildCount() const;
+
+	// Real child widgets in accessibility (visual) order, when it differs from
+	// the QObject child order (e.g. a reorderable VerticalLayout). Empty means
+	// use the default QWidget enumeration.
+	[[nodiscard]] virtual std::vector<not_null<QWidget*>> accessibilityChildWidgets() const;
+
+	// Orientation of an ordered container (e.g. a list), exposed to UIA so a
+	// screen reader can announce a horizontal/vertical arrangement. nullopt (the
+	// default) means the widget reports no orientation.
+	[[nodiscard]] virtual std::optional<Qt::Orientation> accessibilityOrientation() const;
+
+	// Opt-in for a single-selection list whose accessible focus tracks its
+	// selected item: the accessible wrapper exposes QAccessibleSelectionInterface
+	// and forwards container SetFocus/focusChild to the selected child. Default
+	// false - a plain list (e.g. message history, which keeps focus and selection
+	// separate) must not get this behaviour just from reporting the List role.
+	[[nodiscard]] virtual bool accessibilitySelectionList() const;
+
 	[[nodiscard]] virtual RpWidget *accessibilityParent() const;
 	[[nodiscard]] virtual QAccessibleInterface* accessibilityChildInterface(int index) const;
 	[[nodiscard]] virtual QString accessibilityChildName(int index) const;
@@ -425,13 +459,101 @@ public:
 	void accessibilityChildValueChanged(int index);
 	[[nodiscard]] virtual QAccessible::State accessibilityChildState(int index) const;
 	void accessibilityChildStateChanged(int index, AccessibilityState changes);
+	// Replaces the selected-state notification after the owner updates its state.
+	void accessibilityChildSelectionChanged(int index);
 	[[nodiscard]] virtual QAccessible::Role accessibilityChildRole() const;
+
+	// The role of one child where it differs from the list-wide one above:
+	// a divider row between the items of a list is a Separator, not one
+	// more item. Defaults to accessibilityChildRole().
+	[[nodiscard]] virtual QAccessible::Role accessibilityChildRoleAt(
+		int index) const;
+
 	[[nodiscard]] virtual QRect accessibilityChildRect(int index) const;
 	[[nodiscard]] virtual int accessibilityChildColumnCount(int row) const;
 	[[nodiscard]] virtual QAccessible::Role accessibilityChildSubItemRole() const;
 	[[nodiscard]] virtual QString accessibilityChildSubItemName(int row, int column) const;
 	[[nodiscard]] virtual QString accessibilityChildSubItemValue(int row, int column) const;
+
+	// Announces a child as the one holding accessible focus. Meant for a
+	// browse position that moves while keyboard focus stays put - arrow keys
+	// inside a painted list, say. Taking keyboard focus needs no call: that
+	// raises a focus event of its own which the platform resolves through
+	// focusChild(), so announcing the child here as well reads it twice; make
+	// sure focusChild() points at the right one before focus-in returns
+	// instead. (On Windows that resolution needs Qt 6.2 or the focus child
+	// notification backported into the 5.15 build.)
 	void accessibilityChildFocused(int index);
+
+	// Per-child opt-in for the accessibility action interface (SetFocus /
+	// Invoke / SelectionItem.Select). Returns false by default, so painted
+	// lists do not advertise actions they cannot perform. A widget that
+	// returns true must support all three meaningfully, because the Windows
+	// UIA bridge exposes SetFocus and SelectionItem regardless of
+	// actionNames() once an action interface is present.
+	[[nodiscard]] virtual bool accessibilityChildSupportsActions(
+		int index) const;
+
+	// Stable identity of a child, used to keep an action bound to the row the
+	// assistive technology actually referenced even if the model reorders or
+	// replaces the row at that index. Returns 0 ("no stable identity") by
+	// default; a widget opting into actions must provide a non-zero token and
+	// implement accessibilityChildIndexByIdentity().
+	[[nodiscard]] virtual quintptr accessibilityChildIdentity(
+		int index) const;
+	[[nodiscard]] virtual int accessibilityChildIndexByIdentity(
+		quintptr identity) const;
+
+	// Actions are dispatched by stable identity (resolved on the main thread
+	// by the owner) rather than by index, so a queued action never operates
+	// on a replacement row.
+	virtual void accessibilityChildSetFocus(quintptr identity);
+	virtual void accessibilityChildActivate(quintptr identity);
+
+	// The showMenu action of a child that reports itself expandable: the
+	// assistive technology expands it with it when collapsed, and
+	// collapses it when expanded - a picker of variants opened over an
+	// item, say. Advertised only with the expandable state.
+	virtual void accessibilityChildShowMenu(quintptr identity);
+
+	// Keep this widget's Tab-focusable children ordered in the focus chain
+	// by visual position (row bands top-to-bottom, left-to-right within a
+	// band, mirrored in RTL) instead of widget creation order. The chain is
+	// rewired only among this widget's own children, lazily on Tab handling
+	// and after layout changes - and then only when the order came out
+	// different from the last wiring, so a scroll step or an animation
+	// frame that keeps it costs next to nothing. Traversal is still done by
+	// the default implementation - so the existing focusNextPrevChild
+	// overloads (like the layer blocking in base::FocusNextPrevChildBlocked)
+	// keep working: they walk the focus chain and simply see the visual
+	// order in it.
+	//
+	// A child may hold any number of Tab stops - all of them are placed,
+	// keeping the order they already have in the chain, so a nested
+	// container that orders its own children composes with this one and
+	// isn't undone by it.
+	//
+	// The state this needs is attached to the widget only when it is enabled,
+	// so widgets that never ask for it store nothing.
+	void setVisualTabOrder(bool enabled);
+
+	// Mark this widget as floating over its siblings instead of being laid
+	// out next to them, so the container above places it after the content
+	// it covers. Position alone can't say that - "on top of" is not a
+	// direction - and leaving it to geometry makes the order depend on where
+	// the overlay happens to sit: one covering the whole child, or sitting
+	// on the side the reading order starts from, would come before it.
+	void setVisualTabOrderOverlay(bool overlay);
+
+	// The lazy rewiring above triggers on Tab handling inside this widget,
+	// on layout and visibility changes of its children, and when the screen
+	// reader mode changes. A container that changes which widget is
+	// Tab-focusable outside of those - like a list moving its roving
+	// Tab-stop from the arrow keys - must call this right after such a
+	// change, or a Tab entering from outside still sees the old chain. For
+	// a widget created deeper in the tree, where the container sees
+	// nothing, call Ui::RefreshVisualTabOrder with it instead.
+	void refreshVisualTabOrder();
 
 protected:
 	// e - from enterEvent() of child RpWidget
@@ -458,6 +580,8 @@ protected:
 		int visibleTop,
 		int visibleBottom) {
 	}
+
+	bool focusNextPrevChild(bool next) override;
 
 	template <typename OtherWidget, typename OtherTraits>
 	friend class RpWidgetBase;

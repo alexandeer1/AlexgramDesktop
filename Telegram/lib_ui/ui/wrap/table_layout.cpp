@@ -225,6 +225,13 @@ void TableLayout::insertRow(
 			labelMargin,
 			valueMargin,
 		});
+		// heightValue() emits at subscribe time, for a row nothing has
+		// positioned yet, so rowVerticalSkip() would measure the new
+		// widgets at their natural width rather than their column width
+		// and publish a short height outward. The pass below positions and
+		// sizes the row, so that one echo is suppressed the way
+		// VerticalLayout::subscribeToWidth() suppresses its own.
+		const auto taken = std::exchange(_inResize, true);
 		if (wlabel) {
 			wlabel->heightValue(
 			) | rpl::on_next_done([=] {
@@ -233,6 +240,11 @@ void TableLayout::insertRow(
 				}
 			}, [=] {
 				removeChild(wlabel);
+			}, _rowsLifetime);
+
+			wlabel->naturalWidthValue(
+			) | rpl::skip(1) | rpl::on_next([=] {
+				childNaturalWidthUpdated();
 			}, _rowsLifetime);
 		}
 		if (wvalue) {
@@ -244,7 +256,15 @@ void TableLayout::insertRow(
 			}, [=] {
 				removeChild(wvalue);
 			}, _rowsLifetime);
+
+			wvalue->naturalWidthValue(
+			) | rpl::skip(1) | rpl::on_next([=] {
+				childNaturalWidthUpdated();
+			}, _rowsLifetime);
 		}
+		_inResize = taken;
+
+		childNaturalWidthUpdated();
 	}
 }
 
@@ -255,7 +275,13 @@ void TableLayout::childHeightUpdated(RpWidget *child) {
 	const auto end = _rows.end();
 	Assert(it != end);
 
-	auto top = it->top;
+	auto top = [&] {
+		if (it == _rows.begin()) {
+			return _st.border;
+		}
+		const auto prev = it - 1;
+		return prev->top + rowVerticalSkip(*prev);
+	}();
 	const auto outer = width();
 	for (; it != end; ++it) {
 		const auto &row = *it;
@@ -263,6 +289,14 @@ void TableLayout::childHeightUpdated(RpWidget *child) {
 		top += rowVerticalSkip(row);
 	}
 	resize(width(), _rows.empty() ? 0 : top);
+}
+
+void TableLayout::childNaturalWidthUpdated() {
+	if (_inResize || width() <= 0) {
+		return;
+	}
+	resizeToWidth(width(), true);
+	update();
 }
 
 void TableLayout::removeChild(RpWidget *child) {

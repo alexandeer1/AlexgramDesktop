@@ -33,8 +33,8 @@ constexpr auto kUniversalSize = 72;
 constexpr auto kImagesPerRow = 32;
 constexpr auto kImageRowsPerSprite = 16;
 
-constexpr auto kSetVersion = uint32(7);
-constexpr auto kCacheVersion = uint32(9);
+constexpr auto kSetVersion = uint32(8);
+constexpr auto kCacheVersion = uint32(10);
 constexpr auto kMaxId = uint32(1 << 8);
 
 #ifdef Q_OS_MAC
@@ -55,6 +55,9 @@ public:
 	explicit Instance(int size);
 
 	bool cached() const;
+#ifdef Q_OS_MAC
+	bool generating() const;
+#endif // Q_OS_MAC
 	void draw(QPainter &p, EmojiPtr emoji, int x, int y);
 
 private:
@@ -362,13 +365,23 @@ std::vector<QImage> LoadAndValidateSprites(int id) {
 	return result;
 }
 
+[[nodiscard]] bool UniversalInUse() {
+#ifdef Q_OS_MAC
+	// WHY: UniversalImages::generate() reads Universal sprites
+	// on a background thread until TouchbarInstance is cached.
+	return TouchbarInstance && TouchbarInstance->generating();
+#else // Q_OS_MAC
+	return false;
+#endif // Q_OS_MAC
+}
+
 void ClearUniversalChecked() {
 	Expects(InstanceNormal != nullptr && InstanceLarge != nullptr);
 
 	if (Universal
 		&& InstanceNormal->cached()
 		&& InstanceLarge->cached()) {
-		if (CanClearUniversal) {
+		if (CanClearUniversal && !UniversalInUse()) {
 			Universal->clear();
 		}
 		ClearIrrelevantCache();
@@ -815,6 +828,14 @@ bool Instance::cached() const {
 
 	return (Universal->id() == _id) && (_sprites.size() == SpritesCount);
 }
+
+#ifdef Q_OS_MAC
+bool Instance::generating() const {
+	// WHY: the guard lives until the on_main() callback ends,
+	// and in the last one cached() is already true.
+	return !cached() && _generating.alive();
+}
+#endif // Q_OS_MAC
 
 void Instance::draw(QPainter &p, EmojiPtr emoji, int x, int y) {
 	if (_unsupported) {

@@ -19,6 +19,8 @@ PRIVATE
     lottie/details/lottie_frame_provider_shared.h
     lottie/details/lottie_frame_renderer.cpp
     lottie/details/lottie_frame_renderer.h
+    lottie/details/lottie_instance.cpp
+    lottie/details/lottie_instance.h
     lottie/lottie_animation.cpp
     lottie/lottie_animation.h
     lottie/lottie_common.cpp
@@ -56,10 +58,6 @@ if (DESKTOP_APP_LOTTIE_USE_CACHE)
     )
 endif()
 
-if (DESKTOP_APP_LOTTIE_DISABLE_RECOLORING)
-    target_compile_definitions(lib_lottie PRIVATE LOTTIE_DISABLE_RECOLORING)
-endif()
-
 target_include_directories(lib_lottie
 PUBLIC
     ${src_loc}
@@ -69,5 +67,5 @@ target_link_libraries(lib_lottie
 PUBLIC
     desktop-app::lib_ui
 PRIVATE
-    desktop-app::external_rlottie
+    desktop-app::external_tlottie
 )

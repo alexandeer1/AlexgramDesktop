@@ -14,24 +14,20 @@
 #define CRL_USE_LINUX_TIME
 #endif // !_MSC_VER && !__APPLE__
 
-#if defined _MSC_VER && !defined CRL_FORCE_QT
+#if defined _MSC_VER
 
 #if defined _WIN64
-#define CRL_USE_WINAPI
 #define CRL_WINAPI_X64
 #elif defined _M_IX86 // _WIN64
-#define CRL_USE_WINAPI
 #define CRL_WINAPI_X86
 //#define CRL_THROW_FP_EXCEPTIONS
 #else // _M_IX86
 #error "Configuration is not supported."
 #endif // !_WIN64 && !_M_IX86
 
-#ifndef CRL_FORCE_COMMON_LIST
-#define CRL_USE_WINAPI_LIST
-#endif // !CRL_FORCE_COMMON_LIST
+#endif // _MSC_VER
 
-#elif __has_include(<dispatch/dispatch.h>) && !defined CRL_FORCE_QT // _MSC_VER && !CRL_FORCE_QT
+#ifdef CRL_USE_DISPATCH
 
 // gcc compatibility
 #ifndef __has_feature
@@ -42,13 +38,7 @@
 #define __has_extension __has_feature
 #endif // !__has_extension
 
-#define CRL_USE_DISPATCH
-
-#elif __has_include(<QtCore/QThreadPool>) // dispatch && !CRL_FORCE_QT
-
-#define CRL_USE_QT
-
-#endif // !_MSC_VER && !dispatch && Qt
+#endif // CRL_USE_DISPATCH
 
 #if __has_include(<rpl/producer.h>)
 #define CRL_ENABLE_RPL_INTEGRATION

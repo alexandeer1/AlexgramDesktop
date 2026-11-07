@@ -10,7 +10,7 @@
 
 #include <crl/common/crl_common_list.h>
 #include <crl/common/crl_common_utils.h>
-#include <atomic>
+#include <crl/crl_semaphore.h>
 
 #ifndef CRL_USE_COMMON_QUEUE
 #define CRL_USE_COMMON_QUEUE
@@ -55,8 +55,8 @@ private:
 	void process();
 
 	main_queue_processor _main_processor = nullptr;
+	[[maybe_unused]] char _refcountPadding[details::kQueueCacheSeparation] = {};
 	details::list _list;
-	std::atomic_flag _queued = ATOMIC_FLAG_INIT;
 
 };
 

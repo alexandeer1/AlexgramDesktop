@@ -6,19 +6,22 @@
 //
 #include "webview/webview_embed.h"
 
+#include "base/platform/base_platform_info.h"
+#include "base/debug_log.h"
+#include "base/event_filter.h"
+#include "base/integration.h"
+#include "base/invoke_queued.h"
+#include "base/options.h"
 #include "webview/webview_data_stream.h"
 #include "webview/webview_dialog.h"
 #include "webview/webview_interface.h"
-#include "base/debug_log.h"
-#include "base/event_filter.h"
-#include "base/options.h"
-#include "base/invoke_queued.h"
-#include "base/platform/base_platform_info.h"
-#include "base/integration.h"
 
-#include <QtWidgets/QWidget>
-#include <QtGui/QWindow>
+#include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
+#include <QtCore/QTemporaryDir>
+#include <QtCore/QUrl>
+#include <QtGui/QWindow>
+#include <QtWidgets/QWidget>
 
 #include <charconv>
 
@@ -39,6 +42,80 @@ base::options::toggle OptionWebviewLegacyEdge({
 	.restartRequired = true,
 });
 
+struct RestrictedContent {
+	QByteArray policy;
+	QByteArray script;
+};
+
+[[nodiscard]] RestrictedContent MakeRestrictedContent(const QString &origin) {
+	const auto url = QUrl(origin, QUrl::StrictMode);
+	if (!url.isValid()
+		|| url.scheme() != u"https"_q
+		|| url.host().isEmpty()
+		|| !url.path().isEmpty()
+		|| !url.query().isEmpty()
+		|| !url.fragment().isEmpty()
+		|| !url.userInfo().isEmpty()
+		|| url.port(-1) != -1) {
+		return {};
+	}
+
+	auto websocket = url;
+	websocket.setScheme(u"wss"_q);
+	const auto policy = u"default-src 'none'; "_q
+		+ u"base-uri 'none'; "_q
+		+ u"child-src 'none'; "_q
+		+ u"connect-src "_q
+		+ origin
+		+ u" "_q
+		+ websocket.toString(QUrl::FullyEncoded)
+		+ u"; font-src 'none'; "_q
+		+ u"form-action 'none'; "_q
+		+ u"frame-src 'none'; "_q
+		+ u"img-src 'none'; "_q
+		+ u"manifest-src 'none'; "_q
+		+ u"media-src 'none'; "_q
+		+ u"object-src 'none'; "_q
+		+ u"script-src 'unsafe-inline'; "_q
+		+ u"style-src 'none'; "_q
+		+ u"worker-src 'none'"_q;
+	const auto encoded = QJsonDocument(QJsonArray{ policy }).toJson(
+		QJsonDocument::Compact);
+	const auto literal = encoded.mid(1, encoded.size() - 2);
+	return {
+		.policy = policy.toUtf8(),
+		.script = "(()=>{const policy="
+			+ literal
+			+ R"JS(;
+const applyPolicy=()=>{
+ const head=document.head;if(!head)return false;
+ const dns=document.createElement('meta');
+ dns.httpEquiv='x-dns-prefetch-control';
+ dns.content='off';
+ head.insertBefore(dns,head.firstChild);
+ const meta=document.createElement('meta');
+ meta.httpEquiv='Content-Security-Policy';
+ meta.content=policy;
+ head.insertBefore(meta,head.firstChild);
+ return true;
+};
+if(!applyPolicy()){
+ const observer=new MutationObserver(()=>{if(applyPolicy())observer.disconnect()});
+ observer.observe(document,{childList:true,subtree:true});
+}
+const lock=(object,name,value)=>{try{Object.defineProperty(object,name,{value,configurable:false,writable:false})}catch(error){}};
+for(const name of ['localStorage','sessionStorage','indexedDB','caches','Worker','SharedWorker','BroadcastChannel','Audio','AudioContext','webkitAudioContext','OfflineAudioContext','webkitOfflineAudioContext','speechSynthesis','SpeechSynthesisUtterance','RTCPeerConnection','webkitRTCPeerConnection','mozRTCPeerConnection','RTCDataChannel','RTCIceGatherer','RTCSessionDescription','RTCIceCandidate','WebTransport','WebAssembly','Notification','PresentationRequest','PaymentRequest','MediaRecorder','ImageCapture','SpeechRecognition','webkitSpeechRecognition','EyeDropper','showOpenFilePicker','showSaveFilePicker','showDirectoryPicker'])lock(globalThis,name,undefined);
+for(const name of ['serviceWorker','clipboard','geolocation','mediaDevices','usb','serial','hid','bluetooth','credentials','getUserMedia','webkitGetUserMedia','wakeLock','share','presentation','xr','getGamepads','storage','locks','sendBeacon','permissions'])lock(navigator,name,undefined);
+lock(globalThis,'open',()=>null);
+lock(globalThis,'print',()=>{});
+lock(globalThis,'alert',()=>{});
+lock(globalThis,'confirm',()=>false);
+lock(globalThis,'prompt',()=>null);
+try{Object.defineProperty(document,'cookie',{get:()=>'',set:()=>true,configurable:false})}catch(error){}
+})())JS",
+	};
+}
+
 } // namespace
 
 const char kOptionWebviewDebugEnabled[] = "webview-debug-enabled";
@@ -46,46 +123,79 @@ const char kOptionWebviewDebugEnabled[] = "webview-debug-enabled";
 const char kOptionWebviewLegacyEdge[] = "webview-legacy-edge";
 
 Window::Window(QWidget *parent, WindowConfig config) {
-	if (createWebView(parent, config)) {
+	if (createWebView(parent, config)
+		&& config.mode != WindowMode::Hidden) {
 		setDialogHandler(nullptr);
 	}
 }
 
-Window::~Window() = default;
+Window::~Window() {
+	if (_temporaryStorage
+		&& DeferTemporaryStorageRemoval(_temporaryStorage->path())) {
+		_temporaryStorage->setAutoRemove(false);
+	}
+}
+
+bool Window::valid() const {
+	return (_webview != nullptr);
+}
 
 bool Window::createWebView(QWidget *parent, const WindowConfig &config) {
 	Expects(!_webview);
+	const auto restricted = !config.restrictedOrigin.isEmpty();
+	const auto restrictedContent = restricted
+		? MakeRestrictedContent(config.restrictedOrigin)
+		: RestrictedContent();
+	if (restricted && restrictedContent.policy.isEmpty()) {
+		return false;
+	}
+	auto userDataPath = config.storageId.path;
+	if (restricted) {
+		_temporaryStorage = std::make_unique<QTemporaryDir>();
+		if (!_temporaryStorage->isValid()) {
+			_temporaryStorage = nullptr;
+			return false;
+		}
+		userDataPath = _temporaryStorage->path();
+	}
 
 	_webview = CreateInstance({
 		.parent = parent,
 		.opaqueBg = config.opaqueBg,
 		.messageHandler = messageHandler(),
+		.navigationPolicyHandler = navigationPolicyHandler(),
 		.navigationStartHandler = navigationStartHandler(),
 		.navigationDoneHandler = navigationDoneHandler(),
 		.externalWindowCloseHandler = externalWindowCloseHandler(),
+		.fullscreenChangedHandler = fullscreenChangedHandler(),
 		.dialogHandler = dialogHandler(),
 		.asyncDialogHandler = asyncDialogHandler(),
+		.permissionHandler = permissionHandler(),
 		.dataRequestHandler = dataRequestHandler(),
 		.dataProtocolOverride = config.dataProtocolOverride.toStdString(),
-		.userDataPath = config.storageId.path.toStdString(),
+		.dataRequestRedirectHost = config.dataRequestRedirectHost.toStdString(),
+		.userDataPath = userDataPath.toStdString(),
 		.userDataToken = config.storageId.token.toStdString(),
 		.debug = OptionWebviewDebugEnabled.value(),
 		.safe = config.safe,
+		.allowThirdPartyCookies = config.allowThirdPartyCookies,
 		.mode = config.mode,
 		.windowStyle = config.windowStyle,
 		.windowMargins = config.windowMargins,
 		.initialSize = config.initialSize,
 		.shellMessageToken = config.shellMessageToken.toStdString(),
+		.restrictedOrigin = config.restrictedOrigin.toStdString(),
+		.restrictedContentSecurityPolicy
+			= restrictedContent.policy.toStdString(),
 	});
+	if (_webview && restricted) {
+		_webview->initAllFrames(restrictedContent.script.toStdString());
+	}
 	return (_webview != nullptr);
 }
 
 QWidget *Window::widget() const {
 	return _webview ? _webview->widget() : nullptr;
-}
-
-void *Window::winId() const {
-	return _webview ? _webview->winId() : nullptr;
 }
 
 PopupAnchor Window::popupAnchor() const {
@@ -157,6 +267,12 @@ void Window::navigateToData(const QString &id) {
 	_webview->navigateToData(id.toStdString());
 }
 
+void Window::loadHtml(const QString &html, const QString &baseUrl) {
+	Expects(_webview != nullptr);
+
+	_webview->loadHtml(html.toStdString(), baseUrl.toStdString());
+}
+
 void Window::reload() {
 	Expects(_webview != nullptr);
 
@@ -181,16 +297,22 @@ void Window::focus() {
 	_webview->focus();
 }
 
-void Window::resize(QSize size) {
-	Expects(_webview != nullptr);
-
-	_webview->resize(size.width(), size.height());
-}
-
 void Window::setFullscreen(bool fullscreen) {
 	Expects(_webview != nullptr);
 
 	_webview->setFullscreen(fullscreen);
+}
+
+void Window::setInputBlocked(bool blocked) {
+	Expects(_webview != nullptr);
+
+	_webview->setInputBlocked(blocked);
+}
+
+void Window::setVisible(bool visible) {
+	Expects(_webview != nullptr);
+
+	_webview->setVisible(visible);
 }
 
 void Window::setInteractionHandler(Fn<void()> handler) {
@@ -276,14 +398,18 @@ Fn<void(Message)> Window::messageHandler() const {
 	};
 }
 
-void Window::setNavigationStartHandler(Fn<bool(QString,bool)> handler) {
+void Window::setNavigationPolicyHandler(Fn<bool(QString,bool)> handler) {
 	if (!handler) {
-		_navigationStartHandler = nullptr;
+		_navigationPolicyHandler = nullptr;
 		return;
 	}
-	_navigationStartHandler = [=](std::string uri, bool newWindow) {
+	_navigationPolicyHandler = [=](std::string uri, bool newWindow) {
 		return handler(QString::fromStdString(uri), newWindow);
 	};
+}
+
+void Window::setNavigationStartHandler(Fn<void()> handler) {
+	_navigationStartHandler = std::move(handler);
 }
 
 void Window::setNavigationDoneHandler(Fn<void(bool)> handler) {
@@ -294,6 +420,10 @@ void Window::setExternalWindowCloseHandler(Fn<void()> handler) {
 	_externalWindowCloseHandler = std::move(handler);
 }
 
+void Window::setFullscreenChangedHandler(Fn<void(bool)> handler) {
+	_fullscreenChangedHandler = std::move(handler);
+}
+
 void Window::setDialogHandler(Fn<DialogResult(DialogArgs)> handler) {
 	_dialogHandler = handler ? handler : DefaultDialogHandler;
 }
@@ -302,11 +432,15 @@ void Window::setAsyncDialogHandler(AsyncDialogHandler handler) {
 	_asyncDialogHandler = std::move(handler);
 }
 
+void Window::setPermissionHandler(PermissionHandler handler) {
+	_permissionHandler = std::move(handler);
+}
+
 void Window::setDataRequestHandler(Fn<DataResult(DataRequest)> handler) {
 	_dataRequestHandler = std::move(handler);
 }
 
-Fn<bool(std::string,bool)> Window::navigationStartHandler() const {
+Fn<bool(std::string,bool)> Window::navigationPolicyHandler() const {
 	return [=](std::string message, bool newWindow) {
 		const auto lower = QString::fromStdString(message).toLower();
 		if (!lower.startsWith(u"http://"_q)
@@ -316,14 +450,24 @@ Fn<bool(std::string,bool)> Window::navigationStartHandler() const {
 			return false;
 		}
 		auto result = true;
-		if (_navigationStartHandler) {
+		if (_navigationPolicyHandler) {
 			base::Integration::Instance().enterFromEventLoop([&] {
-				result = _navigationStartHandler(
+				result = _navigationPolicyHandler(
 					std::move(message),
 					newWindow);
 			});
 		}
 		return result;
+	};
+}
+
+Fn<void()> Window::navigationStartHandler() const {
+	return [=] {
+		if (_navigationStartHandler) {
+			base::Integration::Instance().enterFromEventLoop([&] {
+				_navigationStartHandler();
+			});
+		}
 	};
 }
 
@@ -342,6 +486,16 @@ Fn<void()> Window::externalWindowCloseHandler() const {
 		if (_externalWindowCloseHandler) {
 			base::Integration::Instance().enterFromEventLoop([&] {
 				_externalWindowCloseHandler();
+			});
+		}
+	};
+}
+
+Fn<void(bool)> Window::fullscreenChangedHandler() const {
+	return [=](bool fullscreen) {
+		if (_fullscreenChangedHandler) {
+			base::Integration::Instance().enterFromEventLoop([&] {
+				_fullscreenChangedHandler(fullscreen);
 			});
 		}
 	};
@@ -373,6 +527,18 @@ AsyncDialogHandler Window::asyncDialogHandler() const {
 			result = _asyncDialogHandler(std::move(args), std::move(done));
 		});
 		return result;
+	};
+}
+
+PermissionHandler Window::permissionHandler() const {
+	return [=](PermissionType type, std::function<void(bool)> done) {
+		if (!_permissionHandler) {
+			done(false);
+			return;
+		}
+		base::Integration::Instance().enterFromEventLoop([&] {
+			_permissionHandler(type, std::move(done));
+		});
 	};
 }
 

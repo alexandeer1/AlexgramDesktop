@@ -178,7 +178,7 @@ SpellingHighlighter::SpellingHighlighter(
 
 	_cachedRanges = MisspelledWords();
 
-	// Use the patched SpellCheckUnderline style.
+#ifdef QT_SPELLCHECK_UNDERLINE_FROM_CHROME
 	_misspelledFormat.setUnderlineStyle(QTextCharFormat::SpellCheckUnderline);
 	style::PaletteChanged(
 	) | rpl::on_next([=] {
@@ -186,6 +186,15 @@ SpellingHighlighter::SpellingHighlighter(
 		rehighlight();
 	}, _lifetime);
 	updatePalette();
+#else // QT_SPELLCHECK_UNDERLINE_FROM_CHROME
+	// Marked for the field to draw the mark itself: what vanilla Qt draws
+	// for SpellCheckUnderline is a plain wave, not the mark of Chrome.
+	_misspelledFormat.setProperty(Ui::InputField::kMisspelledProperty, true);
+	style::PaletteChanged(
+	) | rpl::on_next([=] {
+		rehighlight();
+	}, _lifetime);
+#endif // QT_SPELLCHECK_UNDERLINE_FROM_CHROME
 
 	_field->documentContentsChanges(
 	) | rpl::on_next([=](const auto &value) {
@@ -230,11 +239,27 @@ SpellingHighlighter::SpellingHighlighter(
 	) | rpl::on_next([=] {
 		checkCurrentText();
 	}, _lifetime);
+
+	_field->addContextMenuHook([=](
+			Ui::InputField::ContextMenuRequest request) {
+		if (!_enabled) {
+			return;
+		}
+		// Spell operations may run in another thread (Windows system
+		// spellchecker), so we defer showing the menu until they finish.
+		addSpellcheckerActions(
+			request.menu,
+			_textEdit->cursorForPosition(request.event->pos()),
+			request.awaitAsyncWork(),
+			request.event->globalPos());
+	});
 }
 
+#ifdef QT_SPELLCHECK_UNDERLINE_FROM_CHROME
 void SpellingHighlighter::updatePalette() {
 	_misspelledFormat.setUnderlineColor(st::spellUnderline->c);
 }
+#endif // QT_SPELLCHECK_UNDERLINE_FROM_CHROME
 
 void SpellingHighlighter::contentsChange(int pos, int removed, int added) {
 	if (!_enabled) {
@@ -247,9 +272,11 @@ void SpellingHighlighter::contentsChange(int pos, int removed, int added) {
 	}
 
 	{
-		const auto oldText = documentText().mid(
+		const auto whole = documentText();
+		const auto sepIndex = whole.indexOf(QChar::ParagraphSeparator, pos);
+		const auto oldText = whole.mid(
 			pos,
-			documentText().indexOf(QChar::ParagraphSeparator, pos));
+			(sepIndex == -1) ? -1 : (sepIndex - pos));
 		updateDocumentText();
 
 		const auto b = findBlock(pos);
@@ -455,6 +482,12 @@ bool SpellingHighlighter::isSkippableWord(int position, int length) {
 }
 
 void SpellingHighlighter::checkCurrentText() {
+	_lastPosition = 0;
+	_addedSymbols = 0;
+	_removedSymbols = 0;
+	if (_coldSpellcheckingTimer.isActive()) {
+		_coldSpellcheckingTimer.cancel();
+	}
 	if (document()->isEmpty()) {
 		_cachedRanges.clear();
 		return;
@@ -476,96 +509,87 @@ void SpellingHighlighter::invokeCheckText(
 	const auto text = partDocumentText(textPosition, textLength);
 	const auto weak = base::make_weak(this);
 	_countOfCheckingTextAsync++;
-	crl::async([=,
-		text = std::move(text),
-		callback = std::move(callback)]() mutable {
-		MisspelledWords misspelledWordRanges;
-		Platform::Spellchecker::CheckSpellingText(
-			text,
-			&misspelledWordRanges);
+	Platform::Spellchecker::CheckSpellingText(text, [=,
+			callback = std::move(callback)](MisspelledWords &&ranges) mutable {
+		if (!weak) {
+			return;
+		}
 		if (rangesOffset) {
-			ranges::for_each(misspelledWordRanges, [&](auto &&range) {
+			ranges::for_each(ranges, [&](auto &&range) {
 				range.first += rangesOffset;
 			});
 		}
-		crl::on_main(weak, [=,
-				text = std::move(text),
-				ranges = std::move(misspelledWordRanges),
-				callback = std::move(callback)]() mutable {
-			_countOfCheckingTextAsync--;
-			// Checking a large part of text can take an unknown amount of
-			// time. So we have to compare the text before and after async
-			// work.
-			// If the text has changed during async and we have more async,
-			// we don't perform further refreshing of cache and underlines.
-			// But if it was the last async, we should invoke a new one.
-			if (compareDocumentText(text, textPosition, textLength)) {
-				if (!_countOfCheckingTextAsync) {
-					checkCurrentText();
-				}
-				return;
+		_countOfCheckingTextAsync--;
+		// Checking a large part of text can take an unknown amount of
+		// time. So we have to compare the text before and after async
+		// work.
+		// If the text has changed during async and we have more async,
+		// we don't perform further refreshing of cache and underlines.
+		// But if it was the last async, we should invoke a new one.
+		if (compareDocumentText(text, textPosition, textLength)) {
+			if (!_countOfCheckingTextAsync) {
+				checkCurrentText();
 			}
-			auto filtered = filterSkippableWords(ranges);
+			return;
+		}
+		auto filtered = filterSkippableWords(ranges);
 
-			// When we finish checking the text, the user can
-			// supplement the last word and there may be a situation where
-			// a part of the last word may not be underlined correctly.
-			// Example:
-			// 1. We insert a text with an incomplete last word.
-			// "Time in a bottl".
-			// 2. We don't wait for the check to be finished
-			// and end the last word with the letter "e".
-			// 3. invokeCheckText() will mark the last word "bottl" as
-			// misspelled.
-			// 4. checkSingleWord() will mark the "bottle" as correct and
-			// leave it as it is.
-			// 5. The first five letters of the "bottle" will be underlined
-			// and the sixth will not be underlined.
-			// We can fix it with a check of completeness of the last word.
-			if (filtered.size()) {
-				const auto lastWord = filtered.back();
-				if (const auto endOfText = textPosition + textLength;
-					EndOfWord(lastWord) == endOfText) {
-					const auto word = getWordUnderPosition(endOfText);
-					if (EndOfWord(word) != endOfText) {
-						filtered.pop_back();
-						checkSingleWord(word);
-					}
+		// When we finish checking the text, the user can
+		// supplement the last word and there may be a situation where
+		// a part of the last word may not be underlined correctly.
+		// Example:
+		// 1. We insert a text with an incomplete last word.
+		// "Time in a bottl".
+		// 2. We don't wait for the check to be finished
+		// and end the last word with the letter "e".
+		// 3. invokeCheckText() will mark the last word "bottl" as
+		// misspelled.
+		// 4. checkSingleWord() will mark the "bottle" as correct and
+		// leave it as it is.
+		// 5. The first five letters of the "bottle" will be underlined
+		// and the sixth will not be underlined.
+		// We can fix it with a check of completeness of the last word.
+		if (filtered.size()) {
+			const auto lastWord = filtered.back();
+			if (const auto endOfText = textPosition + textLength;
+				EndOfWord(lastWord) == endOfText) {
+				const auto word = getWordUnderPosition(endOfText);
+				if (EndOfWord(word) != endOfText) {
+					filtered.pop_back();
+					checkSingleWord(word);
 				}
 			}
+		}
 
-			callback(std::move(filtered));
-			for (const auto &b : blocksFromRange(textPosition, textLength)) {
-				rehighlightBlock(b);
-			}
-		});
+		callback(std::move(filtered));
+		for (const auto &b : blocksFromRange(textPosition, textLength)) {
+			rehighlightBlock(b);
+		}
 	});
 }
 
 void SpellingHighlighter::checkSingleWord(const MisspelledWord &singleWord) {
 	const auto weak = base::make_weak(this);
-	auto w = partDocumentText(singleWord.first, singleWord.second);
+	auto w = NormalizeApostrophes(
+		partDocumentText(singleWord.first, singleWord.second));
 	if (isSkippableWord(singleWord)) {
 		return;
 	}
-	crl::async([=,
-		w = std::move(w),
-		singleWord = std::move(singleWord)]() mutable {
-		if (Platform::Spellchecker::CheckSpelling(std::move(w))) {
+	Platform::Spellchecker::CheckSpelling(w, [=](bool correct) {
+		if (!weak || correct) {
 			return;
 		}
-
-		crl::on_main(weak, [=,
-				singleWord = std::move(singleWord)]() mutable {
-			const auto posOfWord = singleWord.first;
-			ranges::insert(
-				_cachedRanges,
-				ranges::find_if(_cachedRanges, [&](auto &&w) {
-					return w.first >= posOfWord;
-				}),
-				singleWord);
-			rehighlightBlock(findBlock(posOfWord));
-		});
+		if (compareDocumentText(w, singleWord.first, singleWord.second)) {
+			return;
+		}
+		const auto posOfWord = singleWord.first;
+		ranges::insert(
+			_cachedRanges,
+			ranges::find_if(_cachedRanges, [&](auto &&word) {
+				return word.first >= posOfWord;
+			}),
+			singleWord);
+		rehighlightBlock(findBlock(posOfWord));
 	});
 }
 
@@ -598,30 +622,43 @@ bool SpellingHighlighter::hasUnspellcheckableTag(int begin, int length) {
 }
 
 MisspelledWord SpellingHighlighter::getWordUnderPosition(int position) {
-	_cursor.setPosition(std::clamp(position, 0, std::max(0, size() - 1)));
-	_cursor.select(QTextCursor::WordUnderCursor);
-	return RangeFromCursorSelection(_cursor);
+	const auto clamped = std::clamp(position, 0, std::max(0, size() - 1));
+	const auto block = findBlock(clamped);
+	const auto shift = block.position();
+	const auto raw = document();
+	const auto word = WordAtPosition(
+		[raw, shift](int index) { return raw->characterAt(shift + index); },
+		block.length() - 1,
+		clamped - shift);
+	return { word.first + shift, word.second };
 }
 
 void SpellingHighlighter::highlightBlock(const QString &text) {
 	if (_cachedRanges.empty() || !_enabled || text.isEmpty()) {
 		return;
 	}
-	const auto entities = FindEntities(text);
 	const auto bPos = currentBlock().position();
 	const auto bLen = currentBlock().length();
-	ranges::for_each((
+
+	auto blockRanges = ranges::views::all(
 		_cachedRanges
 	// Skip the all words outside the current block.
 	) | ranges::views::filter([&](const auto &range) {
 		return IntersectsWordRanges(range, bPos, bLen);
-	}), [&](const auto &range) {
+	}) | ranges::to_vector;
+	if (blockRanges.empty()) {
+		setCurrentBlockState(0);
+		return;
+	}
+
+	const auto entities = FindEntities(text);
+	for (const auto &range : blockRanges) {
 		const auto posInBlock = range.first - bPos;
 		if (IntersectsAnyOfEntities(posInBlock, range.second, entities)) {
-			return;
+			continue;
 		}
 		setFormat(posInBlock, range.second, _misspelledFormat);
-	});
+	}
 
 	setCurrentBlockState(0);
 }
@@ -640,27 +677,7 @@ bool SpellingHighlighter::eventFilter(QObject *o, QEvent *e) {
 		return false;
 	}
 
-	if (e->type() == QEvent::ContextMenu) {
-		const auto c = static_cast<QContextMenuEvent*>(e);
-		const auto menu = _textEdit->createStandardContextMenu();
-		if (!menu || !c) {
-			return false;
-		}
-		// Copy of QContextMenuEvent.
-		auto copyEvent = std::make_shared<QContextMenuEvent>(
-			c->reason(),
-			c->pos(),
-			c->globalPos());
-		auto showMenu = [=, copyEvent = std::move(copyEvent)] {
-			_contextMenuCreated.fire({ menu, copyEvent });
-		};
-		addSpellcheckerActions(
-			std::move(menu),
-			_textEdit->cursorForPosition(c->pos()),
-			std::move(showMenu),
-			c->globalPos());
-		return true;
-	} else if (e->type() == QEvent::KeyPress) {
+	if (e->type() == QEvent::KeyPress) {
 		const auto k = static_cast<QKeyEvent*>(e);
 		if (ranges::contains(kKeysToCheck, k->key())) {
 			if (_addedSymbols + _removedSymbols + _lastPosition) {
@@ -825,15 +842,22 @@ void SpellingHighlighter::fillSpellcheckerMenu(
 	const auto customItem = !Platform::Spellchecker::IsSystemSpellchecker()
 		&& _customContextMenuItem.has_value();
 
-	cursorForPosition.select(QTextCursor::WordUnderCursor);
+	{
+		const auto word = getWordUnderPosition(cursorForPosition.position());
+		cursorForPosition.setPosition(word.first);
+		cursorForPosition.setPosition(
+			word.first + word.second,
+			QTextCursor::KeepAnchor);
+	}
 
 	// There is no reason to call async work if the word is skippable.
 	const auto skippable = [&] {
 		const auto &[p, l] = RangeFromCursorSelection(cursorForPosition);
-		const auto e = FindEntities(findBlock(p).text());
+		const auto block = findBlock(p);
+		const auto e = FindEntities(block.text());
 		return (!l
 			|| isSkippableWord(p, l)
-			|| IntersectsAnyOfEntities(p, l, e));
+			|| IntersectsAnyOfEntities(p - block.position(), l, e));
 	}();
 
 	if (customItem) {
@@ -847,7 +871,8 @@ void SpellingHighlighter::fillSpellcheckerMenu(
 		return;
 	}
 
-	const auto word = cursorForPosition.selectedText();
+	const auto word = NormalizeApostrophes(
+		cursorForPosition.selectedText());
 
 	auto fillMenu = [
 		=,
@@ -918,27 +943,17 @@ void SpellingHighlighter::fillSpellcheckerMenu(
 	};
 
 	const auto weak = base::make_weak(this);
-	crl::async([=,
+	Platform::Spellchecker::LookupWord(word, [=,
 		newTextCursor = std::move(cursorForPosition),
-		fillMenu = std::move(fillMenu),
-		word = std::move(word)
-	]() mutable {
-		const auto isCorrect = Platform::Spellchecker::CheckSpelling(word);
-		auto suggestions = std::vector<QString>();
-		if (!isCorrect) {
-			Platform::Spellchecker::FillSuggestionList(word, &suggestions);
+		fillMenu = std::move(fillMenu)
+	](bool correct, std::vector<QString> &&suggestions) mutable {
+		if (!weak) {
+			return;
 		}
-
-		crl::on_main(weak, [=,
-			newTextCursor = std::move(newTextCursor),
-			suggestions = std::move(suggestions),
-			fillMenu = std::move(fillMenu)
-		]() mutable {
-			fillMenu(
-				isCorrect,
-				std::move(suggestions),
-				std::move(newTextCursor));
-		});
+		fillMenu(
+			correct,
+			std::move(suggestions),
+			std::move(newTextCursor));
 	});
 }
 

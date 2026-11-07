@@ -1,3 +1,0 @@
-[submodule "expected-lite"]
-	path = expected-lite
-	url = https://github.com/martinmoene/expected-lite.git

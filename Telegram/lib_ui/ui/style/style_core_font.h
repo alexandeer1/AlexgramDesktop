@@ -6,13 +6,14 @@
 //
 #pragma once
 
+#include "ui/ui_fixed.h"
+
 #include "base/basic_types.h"
 #include "base/flags.h"
 
 #include <QtGui/QFont>
 #include <QtGui/QFontMetrics>
 
-#include <private/qfixed_p.h>
 
 #include <cmath>
 
@@ -45,6 +46,14 @@ struct FontResolveResult {
 };
 [[nodiscard]] const FontResolveResult *FindAdjustResult(const QFont &font);
 
+// WHY: a localization check sees every text cut with an ellipsis, so it
+// can report phrases that do not fit; null outside such checks.
+using ElisionObserver = void(*)(const QString &text, int width);
+// It runs on any layout thread; removing it does not wait for running calls.
+void SetElisionObserver(ElisionObserver observer);
+[[nodiscard]] bool ElisionObserved();
+void NotifyElided(const QString &text, int width);
+
 } // namespace style
 
 namespace style::internal {
@@ -62,7 +71,7 @@ using FontVariants = std::array<Font, kFontVariants>;
 class FontData;
 class Font final {
 public:
-	Font(Qt::Initialization = Qt::Uninitialized) {
+	constexpr Font(Qt::Initialization = Qt::Uninitialized) {
 	}
 	Font(int size, FontFlags flags, const QString &family);
 	Font(int size, FontFlags flags, int family);
@@ -107,11 +116,9 @@ public:
 		return int(std::ceil(_m.horizontalAdvance(ch)));
 	}
 	[[nodiscard]] QString elided(
-			const QString &str,
-			int width,
-			Qt::TextElideMode mode = Qt::ElideRight) const {
-		return _m.elidedText(str, mode, width);
-	}
+		const QString &str,
+		int width,
+		Qt::TextElideMode mode = Qt::ElideRight) const;
 	[[nodiscard]] const QFontMetricsF &metrics() const {
 		return _m;
 	}
@@ -134,8 +141,8 @@ public:
 	int spacew = 0;
 	int elidew = 0;
 
-	QFixed fascent = 0;
-	QFixed fleading = 0;
+	Ui::Fixed fascent = 0;
+	Ui::Fixed fleading = 0;
 
 private:
 	friend class OwnedFont;

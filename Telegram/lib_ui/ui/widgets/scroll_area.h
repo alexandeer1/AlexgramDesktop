@@ -7,6 +7,7 @@
 #pragma once
 
 #include "ui/rp_widget.h"
+#include "ui/ui_utility.h"
 #include "ui/effects/animations.h"
 #include "base/object_ptr.h"
 #include "base/timer.h"
@@ -71,6 +72,8 @@ public:
 
 	void recountSize();
 	void updateBar(bool force = false);
+	void setTopSkip(int skip);
+	void setBottomSkip(int skip);
 
 	void hideTimeout(crl::time dt);
 
@@ -105,6 +108,8 @@ private:
 	bool _moving = false;
 	bool _topSh = false;
 	bool _bottomSh = false;
+	int _topSkip = 0;
+	int _bottomSkip = 0;
 
 	QPoint _dragStart;
 	QScrollBar *_connected;
@@ -150,6 +155,8 @@ public:
 	void rangeChanged(int oldMax, int newMax, bool vertical);
 
 	void updateBars();
+	void setVerticalBarTopSkip(int skip);
+	void setVerticalBarBottomSkip(int skip);
 
 	bool focusNextPrevChild(bool next) override;
 	void setMovingByScrollBar(bool movingByScrollBar);
@@ -180,6 +187,22 @@ public:
 	}
 	void setCustomTouchProcess(Fn<bool(not_null<QTouchEvent*>)> process) {
 		_customTouchProcess = std::move(process);
+	}
+
+	// Receives wheel input on the axis this scroll doesn't handle
+	// (horizontal): without lockWheelDirection() every event where that
+	// axis dominates, with it whole gestures locked to that axis.
+	void setCrossAxisWheelProcess(
+			Fn<bool(QPoint, Qt::ScrollPhase)> process) {
+		_crossAxisWheelProcess = std::move(process);
+	}
+
+	// Locks each phased wheel gesture to the axis chosen at its start:
+	// cross-axis gestures go whole to the cross-axis process (or are
+	// discarded) and never scroll this area; NoScrollPhase (classic
+	// wheel) events keep per-event routing.
+	void lockWheelDirection() {
+		_wheelDirectionLocked = true;
 	}
 
 	[[nodiscard]] rpl::producer<> scrolls() const;
@@ -242,6 +265,9 @@ private:
 
 	Fn<bool(not_null<QWheelEvent*>)> _customWheelProcess;
 	Fn<bool(not_null<QTouchEvent*>)> _customTouchProcess;
+	Fn<bool(QPoint, Qt::ScrollPhase)> _crossAxisWheelProcess;
+	ScrollDirectionLock _wheelDirectionLock;
+	bool _wheelDirectionLocked = false;
 	bool _widgetAcceptsTouch = false;
 
 	object_ptr<QWidget> _widget = { nullptr };

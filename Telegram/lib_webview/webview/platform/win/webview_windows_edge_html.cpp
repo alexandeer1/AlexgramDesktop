@@ -49,6 +49,7 @@ public:
 	void reload() override;
 
 	void init(std::string js) override;
+	void initAllFrames(std::string js) override;
 	void eval(std::string js) override;
 
 	void focus() override;
@@ -182,7 +183,7 @@ void Instance::ready(WebViewControl webview) {
 			});
 		}
 	});
-	_webview.NavigationStarting([=, handler = _config.navigationStartHandler](
+	_webview.NavigationStarting([=, handler = _config.navigationPolicyHandler](
 			const auto &sender,
 			const WebViewControlNavigationStartingEventArgs &args) {
 		if (handler
@@ -190,6 +191,9 @@ void Instance::ready(WebViewControl webview) {
 			args.Cancel(true);
 		} else {
 			_webview.AddInitializeScript(winrt::to_hstring(_initScript));
+			if (_config.navigationStartHandler) {
+				_config.navigationStartHandler();
+			}
 		}
 		updateHistoryStates();
 	});
@@ -207,7 +211,7 @@ void Instance::ready(WebViewControl webview) {
 		}
 		updateHistoryStates();
 	});
-	_webview.NewWindowRequested([=, handler = _config.navigationStartHandler](
+	_webview.NewWindowRequested([=, handler = _config.navigationPolicyHandler](
 			const auto &sender,
 			const WebViewControlNewWindowRequestedEventArgs &args) {
 		const auto url = winrt::to_string(args.Uri().AbsoluteUri());
@@ -370,6 +374,10 @@ void Instance::init(std::string js) {
 	_initScript = _initScript + "(function(){" + js + "})();";
 }
 
+void Instance::initAllFrames(std::string js) {
+	Unexpected("Restricted profile is not supported by legacy Edge.");
+}
+
 void Instance::eval(std::string js) {
 	if (!ready()) {
 		_waitingForReady.push_back(EvalScript{ std::move(js) });
@@ -448,6 +456,9 @@ bool Supported() {
 }
 
 std::unique_ptr<Interface> CreateInstance(Config config) {
+	if (!config.restrictedOrigin.empty()) {
+		return nullptr;
+	}
 	return Try([&]() -> std::unique_ptr<Interface> {
 		return std::make_unique<Instance>(std::move(config));
 	}).value_or(nullptr);
